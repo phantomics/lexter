@@ -59,11 +59,15 @@
    #:workspace-name
    #:workspace-panes
    #:workspace-decorations
+   #:workspace-decorations-dirty
    #:workspace-focus-index
    #:focused-pane
    #:focus-next
    #:focus-prev
    #:flush-workspace
+   #:mark-decorations-dirty
+   ;; Grid utilities (for decoration functions)
+   #:clear-grid
    ;; Compositor entry point
    #:run-paned-terminal
    #:*prefix-key*))

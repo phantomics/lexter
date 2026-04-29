@@ -19,9 +19,13 @@
                 :documentation "List of pane objects in this workspace.")
    (decorations :initarg :decorations
                 :accessor workspace-decorations
-                :initform '()
-                :type list
-                :documentation "List of (col row glyph swatch) for borders/separators.")
+                :initform nil
+                :documentation "Decoration source: NIL, list of (col row glyph swatch), 
+                 or function (workspace grid) that draws borders/separators.")
+   (decorations-dirty :accessor workspace-decorations-dirty
+                      :initform t
+                      :type boolean
+                      :documentation "T when decorations need redrawing (resize, init).")
    (focus-index :accessor workspace-focus-index
                 :initform 0
                 :type fixnum
@@ -85,10 +89,27 @@
   ;; Flush each pane
   (dolist (pane (workspace-panes workspace))
     (pane-flush pane grid))
-  ;; Render decorations (border characters, separators)
-  (dolist (dec (workspace-decorations workspace))
-    (destructuring-bind (col row glyph swatch) dec
-      (lexter/grid:set-simple-cell grid col row glyph swatch))))
+  ;; Render decorations (only when dirty)
+  (when (workspace-decorations-dirty workspace)
+    (render-decorations workspace grid)
+    (setf (workspace-decorations-dirty workspace) nil)))
+
+(defun render-decorations (workspace grid)
+  "Render workspace decorations to GRID.
+   Decorations can be NIL, a list of (col row glyph swatch), or a function."
+  (let ((dec (workspace-decorations workspace)))
+    (etypecase dec
+      (null nil)
+      (list 
+       (dolist (d dec)
+         (destructuring-bind (col row glyph swatch) d
+           (lexter/grid:set-simple-cell grid col row glyph swatch))))
+      (function
+       (funcall dec workspace grid)))))
+
+(defun mark-decorations-dirty (workspace)
+  "Mark workspace decorations for redraw (call after resize or layout change)."
+  (setf (workspace-decorations-dirty workspace) t))
 
 (defun workspace-any-dirty-p (workspace)
   "Return T if any pane in WORKSPACE needs re-flushing."

@@ -77,21 +77,32 @@
   ;; UTF-8 decoding state
   (utf8-bytes-needed 0 :type (integer 0 3))      ; remaining bytes expected
   (utf8-codepoint    0 :type (unsigned-byte 32)) ; accumulated codepoint
+  ;; Encoding mode: :utf8 (default) or :cp437 (for BBS/DOS compatibility)
+  (encoding        :utf8 :type keyword)
+  ;; Bold-as-bright: when T, bold attribute promotes fg colors 0-7 to 8-15
+  ;; Classic BBS behavior (ESC[1;31m = bright red, not bold dark red)
+  (bold-as-bright  nil :type boolean)
+  ;; CP437 translation table (nil = use default from lexter/telnet)
+  (cp437-table     nil :type (or null (simple-array (unsigned-byte 32) (256))))
   )
 
 ;;; --------------------------------------------------------------------------
 ;;; Constructor
 ;;; --------------------------------------------------------------------------
 
-(defun make-vt-handler (screen atlas &key callback)
+(defun make-vt-handler (screen atlas &key callback (encoding :utf8) bold-as-bright)
   "Create a VT handler for SCREEN using ATLAS for codepoint mapping.
-   CALLBACK is called for unhandled sequences: (funcall callback :type data)."
+   CALLBACK is called for unhandled sequences: (funcall callback :type data).
+   ENCODING is :utf8 (default) or :cp437 (for BBS/DOS compatibility).
+   BOLD-AS-BRIGHT when T promotes fg colors 0-7 to 8-15 when bold is set."
   (let* ((cols (screen-cols screen))
          (tab-stops (make-array cols :element-type 'bit :initial-element 0))
          (handler (%make-vt-handler :screen screen
                                     :atlas atlas
                                     :callback callback
-                                    :tab-stops tab-stops)))
+                                    :tab-stops tab-stops
+                                    :encoding encoding
+                                    :bold-as-bright bold-as-bright)))
     ;; Set the blank glyph on the screen (atlas index for space character)
     ;; and fill the screen with blank glyphs
     (when atlas
@@ -162,16 +173,25 @@
       (when *debug-vt*
         (format t "~&[PRINT] SKIPPED (no glyph for U+~4,'0X)~%" codepoint))
       (return-from %print-codepoint))
-    (let (;; Create swatch from current colors
-          (swatch-idx (intern-swatch (lexter/model::screen-swatches screen)
-                                     (vt-handler-current-bg handler)
-                                     (vt-handler-current-fg handler)
-                                     (vt-handler-current-fg handler)
-                                     0)))
+    ;; Calculate effective foreground color
+    ;; Bold-as-bright: promote fg 0-7 to 8-15 when bold is active
+    (let* ((attrs (vt-handler-current-attrs handler))
+           (base-fg (vt-handler-current-fg handler))
+           (effective-fg (if (and (vt-handler-bold-as-bright handler)
+                                  (logtest attrs +attr-bold+)
+                                  (<= 0 base-fg 7))
+                             (+ base-fg 8)
+                             base-fg))
+           ;; Create swatch from current colors
+           (swatch-idx (intern-swatch (lexter/model::screen-swatches screen)
+                                      (vt-handler-current-bg handler)
+                                      effective-fg
+                                      effective-fg
+                                      0)))
       ;; Write character at cursor position
       (write-char-at screen col row glyph-idx
                    :swatch swatch-idx
-                   :attrs (vt-handler-current-attrs handler))
+                   :attrs attrs)
       ;; Advance cursor
       (let ((new-col (1+ col)))
         (cond
@@ -189,9 +209,19 @@
            (set-cursor-position screen (1- cols) row)))))))
 
 (defun handle-print (handler byte)
-  "Handle a printable byte, decoding UTF-8 sequences into codepoints."
+  "Handle a printable byte, decoding UTF-8 sequences into codepoints.
+   In CP437 mode, bytes are translated directly via the CP437 table."
   (when *debug-vt*
-    (format t "~&[PRINT-BYTE] byte=~D (#x~X)~%" byte byte))
+    (format t "~&[PRINT-BYTE] byte=~D (#x~X) encoding=~S~%" 
+            byte byte (vt-handler-encoding handler)))
+  ;; CP437 mode: direct byte-to-codepoint translation (no UTF-8 decoding)
+  (when (eq (vt-handler-encoding handler) :cp437)
+    (let* ((table (or (vt-handler-cp437-table handler)
+                      lexter/telnet:+cp437-to-unicode+))
+           (codepoint (aref table byte)))
+      (%print-codepoint handler codepoint))
+    (return-from handle-print))
+  ;; UTF-8 mode below
   ;; Ignore DEL (0x7F) - it should not reach here but just in case
   (when (= byte #x7F)
     (return-from handle-print))

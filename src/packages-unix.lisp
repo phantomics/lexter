@@ -35,6 +35,9 @@
            #:vt-handler-atlas
            #:vt-handler-parser
            #:vt-handler-callback
+           #:vt-handler-encoding
+           #:vt-handler-bold-as-bright
+           #:vt-handler-cp437-table
            #:process-output
            ;; Debug
            #:*debug-vt*))

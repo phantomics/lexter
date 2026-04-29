@@ -9,6 +9,7 @@
    #:telnet-pane-port
    #:telnet-pane-mode
    #:telnet-pane-encoding
+   #:telnet-pane-bold-as-bright
    #:telnet-pane-ttype
    #:telnet-pane-client
    ;; Constructor helper

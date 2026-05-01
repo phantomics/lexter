@@ -118,6 +118,9 @@
   (cols      80  :type fixnum)
   (rows      24  :type fixnum)
   (mode      :unix :type keyword)  ; :unix, :3270, :application
+  ;; The glyph index to use for "blank" cells (space character in the atlas)
+  ;; This must be set by the caller after atlas lookup.
+  (blank-glyph 0 :type fixnum)
   ;; --- Cell data (simple path) ---
   ;; Indexed by (row * cols + col)
   (glyphs        #() :type (simple-array (unsigned-byte 16) (*)))
@@ -398,16 +401,17 @@
 
 (defun %erase-cell (screen col row)
   "Erase a single cell on the topmost layer."
-  (let ((layers (%get-layered screen col row)))
+  (let ((layers (%get-layered screen col row))
+        (blank (screen-blank-glyph screen)))
     (if layers
-        ;; Write space to topmost layer
+        ;; Write blank to topmost layer
         (let* ((ln (model-cell-layers-topmost layers))
                (lobj (aref (model-cell-layers-layers layers) ln)))
           (when lobj
-            (setf (model-layer-glyph-idx lobj) 32)))
+            (setf (model-layer-glyph-idx lobj) blank)))
         ;; Simple cell
         (let ((i (%idx screen col row)))
-          (setf (aref (screen-glyphs screen) i) 32
+          (setf (aref (screen-glyphs screen) i) blank
                 (aref (screen-attrs screen) i) 0)))))
 
 (defun erase-in-display (screen mode)

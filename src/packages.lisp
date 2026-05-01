@@ -90,6 +90,7 @@
            #:screen-cols
            #:screen-rows
            #:screen-mode
+           #:screen-blank-glyph
            ;; Swatch interning
            #:intern-swatch
            #:default-swatch
@@ -185,7 +186,9 @@
            #:vt-handler-atlas
            #:vt-handler-parser
            #:vt-handler-callback
-           #:process-output))
+           #:process-output
+           ;; Debug
+           #:*debug-vt*))
 
 (defpackage #:pcf-gl/unix-term
   (:use #:cl #:pcf-gl/pcf #:pcf-gl/atlas #:pcf-gl/grid

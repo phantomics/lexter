@@ -1,5 +1,8 @@
 (in-package #:pcf-gl/vt-handler)
 
+;;; Debug flag
+(defvar *debug-vt* nil "Set to T to enable VT debug output.")
+
 ;;;; VT Handler: translates cl-vt parser callbacks into terminal model operations.
 ;;;;
 ;;;; Medium scope implementation:
@@ -85,6 +88,14 @@
                                     :atlas atlas
                                     :callback callback
                                     :tab-stops tab-stops)))
+    ;; Set the blank glyph on the screen (atlas index for space character)
+    ;; and fill the screen with blank glyphs
+    (when atlas
+      (let ((space-glyph (pcf-gl/atlas:atlas-glyph-index atlas 32)))
+        (when space-glyph
+          (setf (screen-blank-glyph screen) space-glyph)
+          ;; Fill screen with proper blank glyph (not codepoint 32)
+          (fill (pcf-gl/model::screen-glyphs screen) space-glyph))))
     ;; Set default tab stops every 8 columns
     (loop :for i :from 0 :below cols :by 8
           :do (setf (sbit tab-stops i) 1))
@@ -111,6 +122,8 @@
 (defun dispatch-action (handler parser action byte)
   "Dispatch a parser action to the appropriate handler."
   (declare (ignore parser))
+  (when *debug-vt*
+    (format t "~&[DISPATCH] action=~S byte=~D (#x~X)~%" action byte byte))
   (case action
     (:print       (handle-print handler byte))
     (:execute     (handle-execute handler byte))
@@ -129,9 +142,13 @@
 
 (defun handle-print (handler byte)
   "Handle a printable character (BYTE is a codepoint/character code)."
+  (when *debug-vt*
+    (format t "~&[PRINT] byte=~D (#x~X) char=~S~%" byte byte (code-char byte)))
   ;; Ignore DEL (0x7F) and C1 control range that might slip through
   (when (or (= byte #x7F)
             (<= #x80 byte #x9F))
+    (when *debug-vt*
+      (format t "~&[PRINT] IGNORED (control char)~%"))
     (return-from handle-print))
   (let* ((screen (vt-handler-screen handler))
          (atlas (vt-handler-atlas handler))
@@ -141,8 +158,12 @@
          ;; Look up glyph index from codepoint
          (glyph-idx (when atlas
                       (pcf-gl/atlas:atlas-glyph-index atlas byte))))
+    (when *debug-vt*
+      (format t "~&[PRINT] glyph-idx=~S~%" glyph-idx))
     ;; Only print if we have a valid glyph
     (unless glyph-idx
+      (when *debug-vt*
+        (format t "~&[PRINT] SKIPPED (no glyph)~%"))
       (return-from handle-print))
     (let (;; Create swatch from current colors
           (swatch-idx (intern-swatch (pcf-gl/model::screen-swatches screen)
@@ -176,12 +197,16 @@
 
 (defun handle-execute (handler byte)
   "Handle C0 control characters."
+  (when *debug-vt*
+    (format t "~&[EXECUTE] byte=~D (#x~X)~%" byte byte))
   (let ((screen (vt-handler-screen handler)))
     (case byte
       (#x07 ; BEL - bell
        (when (vt-handler-callback handler)
          (funcall (vt-handler-callback handler) :bell nil)))
       (#x08 ; BS - backspace
+       (when *debug-vt*
+         (format t "~&[EXECUTE] BS: moving cursor left~%"))
        (let ((col (cursor-col screen)))
          (when (> col 0)
            (set-cursor-position screen (1- col) (cursor-row screen)))))

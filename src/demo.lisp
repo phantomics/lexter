@@ -135,49 +135,79 @@
         (write-string-simple grid atlas "  <- cursor glyphs: block, underline, bar" 4 7 100)))))
 
 ;;; --------------------------------------------------------------------------
+;;; HiDPI / scaling helpers
+;;; --------------------------------------------------------------------------
+
+(defun detect-hidpi-scale ()
+  "Detect a reasonable pixel scale based on primary monitor DPI.
+   Returns 1 for standard displays, 2+ for HiDPI.
+   Falls back to 1 if detection fails."
+  ;; Try to use GLFW's content scale API (GLFW 3.3+)
+  ;; Different cl-glfw3 versions may have different bindings
+  (handler-case
+      (let ((monitor (glfw:get-primary-monitor)))
+        (when monitor
+          ;; cl-glfw3's binding returns multiple values or a list
+          ;; Try the multiple-value approach first
+          (multiple-value-bind (xscale yscale)
+              (glfw:get-monitor-content-scale monitor)
+            (when (and xscale yscale)
+              (return-from detect-hidpi-scale
+                (max 1 (round (max xscale yscale))))))))
+    (error () nil))
+  ;; Fallback: return 1 (no scaling)
+  1)
+
+;;; --------------------------------------------------------------------------
 ;;; Entry point
 ;;; --------------------------------------------------------------------------
 
-(defun run-demo (&key (font-path "../terminus-18n.pcf"))
-  "Open a GLFW window and render the demo. Press Escape or close to quit."
+(defun run-demo (&key (font-path "../terminus-18n.pcf") (pixel-scale nil))
+  "Open a GLFW window and render the demo. Press Escape or close to quit.
+   PIXEL-SCALE: integer multiplier for nearest-neighbor scaling (1-16).
+                If NIL, auto-detects based on monitor DPI."
   ;; Load font and determine window size
   (format t "~&Loading font ~a ...~%" font-path)
   (let* ((font     (load-pcf font-path))
          (cell-w   (pcf-font-cell-width  font))
          (cell-h   (pcf-font-cell-height font))
          (cols     50)
-         (rows     10)
-         (win-w    (* cols cell-w))
-         (win-h    (* rows cell-h)))
-    (format t "~&Cell ~dx~d, window ~dx~d (~dx~d cells)~%"
-            cell-w cell-h win-w win-h cols rows)
-    (glfw:with-init-window
-        (:title "pcf-gl demo"
-         :width win-w :height win-h
-         :resizable nil
-         :context-version-major 3
-         :context-version-minor 3
-         :opengl-profile :opengl-core-profile
-         :opengl-forward-compat t)
-      (gl:viewport 0 0 win-w win-h)
-      ;; Build atlas, add cursor glyphs, then grid & renderer
-      (let* ((atlas    (build-atlas (list font)))
-             (_        (add-cursor-glyphs atlas))
-             (grid     (make-display-grid :cols cols :rows rows))
-             (renderer (make-renderer atlas win-w win-h))
-             (palette  (make-xterm-palette)))
-        (declare (ignore _))
-        (set-palette renderer palette)
-        (setup-demo-grid grid atlas)
-        ;; Register key callback for Escape
-        (glfw:def-key-callback quit-on-escape (window key scancode action mods)
-          (declare (ignore scancode mods))
-          (when (and (eq key :escape) (eq action :press))
-            (glfw:set-window-should-close window t)))
-        (glfw:set-key-callback 'quit-on-escape)
-        ;; Main loop
-        (loop :until (glfw:window-should-close-p)
-              :do (render-frame renderer grid)
-                  (glfw:swap-buffers)
-                  (glfw:poll-events))
-        (destroy-renderer renderer)))))
+         (rows     10))
+    (format t "~&Cell ~dx~d (native)~%" cell-w cell-h)
+    ;; Initialize GLFW to detect HiDPI before creating window
+    (glfw:initialize)
+    (let* ((scale   (or pixel-scale (detect-hidpi-scale) 1))
+           (win-w   (* cols cell-w scale))
+           (win-h   (* rows cell-h scale)))
+      (format t "~&Pixel scale: ~dx, window ~dx~d (~dx~d cells)~%"
+              scale win-w win-h cols rows)
+      (glfw:with-init-window
+          (:title (format nil "pcf-gl demo (~dx scale)" scale)
+           :width win-w :height win-h
+           :resizable nil
+           :context-version-major 3
+           :context-version-minor 3
+           :opengl-profile :opengl-core-profile
+           :opengl-forward-compat t)
+        (gl:viewport 0 0 win-w win-h)
+        ;; Build atlas, add cursor glyphs, then grid & renderer
+        (let* ((atlas    (build-atlas (list font)))
+               (_        (add-cursor-glyphs atlas))
+               (grid     (make-display-grid :cols cols :rows rows))
+               (renderer (make-renderer atlas win-w win-h :pixel-scale scale))
+               (palette  (make-xterm-palette)))
+          (declare (ignore _))
+          (set-palette renderer palette)
+          (setup-demo-grid grid atlas)
+          ;; Register key callback for Escape
+          (glfw:def-key-callback quit-on-escape (window key scancode action mods)
+            (declare (ignore scancode mods))
+            (when (and (eq key :escape) (eq action :press))
+              (glfw:set-window-should-close window t)))
+          (glfw:set-key-callback 'quit-on-escape)
+          ;; Main loop
+          (loop :until (glfw:window-should-close-p)
+                :do (render-frame renderer grid)
+                    (glfw:swap-buffers)
+                    (glfw:poll-events))
+          (destroy-renderer renderer))))))

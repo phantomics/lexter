@@ -28,7 +28,8 @@
   palette-ubo
   atlas
   (win-w 640 :type fixnum)
-  (win-h 480 :type fixnum))
+  (win-h 480 :type fixnum)
+  (pixel-scale 1 :type (integer 1 16)))  ; integer scale factor for HiDPI
 
 ;;; --------------------------------------------------------------------------
 ;;; Shader helpers
@@ -168,10 +169,13 @@
 ;;; Uniform helpers
 ;;; --------------------------------------------------------------------------
 
-(defun %set-uniforms (prog atlas win-w win-h)
+(defun %set-uniforms (prog atlas win-w win-h pixel-scale)
+  "Set shader uniforms. PIXEL-SCALE multiplies the cell size for nearest-neighbor scaling."
   (gl:use-program prog)
+  ;; Scale cell size by pixel-scale for integer scaling
   (gl:uniformi (gl:get-uniform-location prog "u_cell_size")
-               (atlas-cell-width atlas) (atlas-cell-height atlas))
+               (* (atlas-cell-width atlas) pixel-scale)
+               (* (atlas-cell-height atlas) pixel-scale))
   (gl:uniformi (gl:get-uniform-location prog "u_viewport") win-w win-h)
   (gl:uniformi (gl:get-uniform-location prog "u_atlas_size")
                (atlas-cols atlas) (atlas-rows atlas))
@@ -181,8 +185,11 @@
 ;;; Public constructor
 ;;; --------------------------------------------------------------------------
 
-(defun make-renderer (atlas win-w win-h)
-  "Create a RENDER-STATE.  A GL 3.3 core context must already be current."
+(defun make-renderer (atlas win-w win-h &key (pixel-scale 1))
+  "Create a RENDER-STATE.  A GL 3.3 core context must already be current.
+   PIXEL-SCALE is an integer multiplier for nearest-neighbor scaling (1-16)."
+  (assert (<= 1 pixel-scale 16) (pixel-scale)
+          "Pixel scale must be between 1 and 16, got ~d" pixel-scale)
   (let* ((sp  (%link-program +simple-vert+  +simple-frag+))
          (lp  (%link-program +layered-vert+ +layered-frag+))
          (cv  (%make-corner-vbo))
@@ -191,14 +198,15 @@
       (multiple-value-bind (lvao lvbo) (%make-layered-vao cv)
         (%bind-ubo-to-prog sp pu)
         (%bind-ubo-to-prog lp pu)
-        (%set-uniforms sp atlas win-w win-h)
-        (%set-uniforms lp atlas win-w win-h)
+        (%set-uniforms sp atlas win-w win-h pixel-scale)
+        (%set-uniforms lp atlas win-w win-h pixel-scale)
         (gl:use-program 0)
         (make-render-state :simple-prog  sp  :layered-prog lp
                            :corner-vbo   cv  :simple-vao   svao
                            :simple-vbo   svbo :layered-vao  lvao
                            :layered-vbo  lvbo :palette-ubo  pu
-                           :atlas        atlas :win-w win-w :win-h win-h)))))
+                           :atlas        atlas :win-w win-w :win-h win-h
+                           :pixel-scale  pixel-scale)))))
 
 ;;; --------------------------------------------------------------------------
 ;;; Per-frame render
@@ -265,18 +273,42 @@
   (gl:use-program 0)))
 
 ;;; --------------------------------------------------------------------------
-;;; Viewport update (for window resize)
+;;; Viewport and scale update
 ;;; --------------------------------------------------------------------------
 
 (defun update-viewport (rs win-w win-h)
-  "Update renderer viewport after a window resize."
+  "Update renderer viewport after a window resize. Preserves current pixel-scale."
   (setf (render-state-win-w rs) win-w
         (render-state-win-h rs) win-h)
   (gl:viewport 0 0 win-w win-h)
-  (let ((atlas (render-state-atlas rs)))
-    (%set-uniforms (render-state-simple-prog rs)  atlas win-w win-h)
-    (%set-uniforms (render-state-layered-prog rs) atlas win-w win-h)
+  (let ((atlas (render-state-atlas rs))
+        (scale (render-state-pixel-scale rs)))
+    (%set-uniforms (render-state-simple-prog rs)  atlas win-w win-h scale)
+    (%set-uniforms (render-state-layered-prog rs) atlas win-w win-h scale)
     (gl:use-program 0)))
+
+(defun set-pixel-scale (rs scale)
+  "Change the pixel scale factor. Requires re-setting uniforms."
+  (assert (<= 1 scale 16) (scale)
+          "Pixel scale must be between 1 and 16, got ~d" scale)
+  (setf (render-state-pixel-scale rs) scale)
+  (let ((atlas (render-state-atlas rs))
+        (win-w (render-state-win-w rs))
+        (win-h (render-state-win-h rs)))
+    (%set-uniforms (render-state-simple-prog rs)  atlas win-w win-h scale)
+    (%set-uniforms (render-state-layered-prog rs) atlas win-w win-h scale)
+    (gl:use-program 0)))
+
+(defun pixel-scale (rs)
+  "Return the current pixel scale factor."
+  (render-state-pixel-scale rs))
+
+(defun scaled-cell-size (rs)
+  "Return the effective cell size (width . height) after scaling."
+  (let ((atlas (render-state-atlas rs))
+        (scale (render-state-pixel-scale rs)))
+    (cons (* (atlas-cell-width atlas) scale)
+          (* (atlas-cell-height atlas) scale))))
 
 ;;; --------------------------------------------------------------------------
 ;;; Cleanup

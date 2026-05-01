@@ -44,6 +44,8 @@
   "Handler that connects cl-vt parser to terminal model."
   ;; The terminal screen model
   (screen nil :type (or null pcf-gl/model:screen))
+  ;; The glyph atlas (for codepoint -> glyph index mapping)
+  (atlas nil)
   ;; The cl-vt parser instance  
   (parser nil)
   ;; Current SGR state (for new characters)
@@ -74,12 +76,13 @@
 ;;; Constructor
 ;;; --------------------------------------------------------------------------
 
-(defun make-vt-handler (screen &key callback)
-  "Create a VT handler for SCREEN.
+(defun make-vt-handler (screen atlas &key callback)
+  "Create a VT handler for SCREEN using ATLAS for codepoint mapping.
    CALLBACK is called for unhandled sequences: (funcall callback :type data)."
   (let* ((cols (screen-cols screen))
          (tab-stops (make-array cols :element-type 'bit :initial-element 0))
          (handler (%make-vt-handler :screen screen
+                                    :atlas atlas
                                     :callback callback
                                     :tab-stops tab-stops)))
     ;; Set default tab stops every 8 columns
@@ -125,36 +128,47 @@
 ;;; --------------------------------------------------------------------------
 
 (defun handle-print (handler byte)
-  "Handle a printable character."
+  "Handle a printable character (BYTE is a codepoint/character code)."
+  ;; Ignore DEL (0x7F) and C1 control range that might slip through
+  (when (or (= byte #x7F)
+            (<= #x80 byte #x9F))
+    (return-from handle-print))
   (let* ((screen (vt-handler-screen handler))
+         (atlas (vt-handler-atlas handler))
          (cols (screen-cols screen))
          (col (cursor-col screen))
          (row (cursor-row screen))
-         ;; Create swatch from current colors
-         (swatch-idx (intern-swatch (pcf-gl/model::screen-swatches screen)
-                                    (vt-handler-current-bg handler)
-                                    (vt-handler-current-fg handler)
-                                    (vt-handler-current-fg handler)
-                                    0)))
-    ;; Write character at cursor position
-    (write-char-at screen col row byte
-                   :swatch swatch-idx
-                   :attrs (vt-handler-current-attrs handler))
-    ;; Advance cursor
-    (let ((new-col (1+ col)))
-      (cond
-        ((< new-col cols)
-         (set-cursor-position screen new-col row))
-        ((vt-handler-autowrap handler)
-         ;; Wrap to next line
-         (if (< row (1- (screen-rows screen)))
-             (set-cursor-position screen 0 (1+ row))
-             (progn
-               (scroll-up screen)
-               (set-cursor-position screen 0 row))))
-        (t
-         ;; Stay at right edge
-         (set-cursor-position screen (1- cols) row))))))
+         ;; Look up glyph index from codepoint
+         (glyph-idx (when atlas
+                      (pcf-gl/atlas:atlas-glyph-index atlas byte))))
+    ;; Only print if we have a valid glyph
+    (unless glyph-idx
+      (return-from handle-print))
+    (let (;; Create swatch from current colors
+          (swatch-idx (intern-swatch (pcf-gl/model::screen-swatches screen)
+                                     (vt-handler-current-bg handler)
+                                     (vt-handler-current-fg handler)
+                                     (vt-handler-current-fg handler)
+                                     0)))
+      ;; Write character at cursor position
+      (write-char-at screen col row glyph-idx
+                     :swatch swatch-idx
+                     :attrs (vt-handler-current-attrs handler))
+      ;; Advance cursor
+      (let ((new-col (1+ col)))
+        (cond
+          ((< new-col cols)
+           (set-cursor-position screen new-col row))
+          ((vt-handler-autowrap handler)
+           ;; Wrap to next line
+           (if (< row (1- (screen-rows screen)))
+               (set-cursor-position screen 0 (1+ row))
+               (progn
+                 (scroll-up screen)
+                 (set-cursor-position screen 0 row))))
+          (t
+           ;; Stay at right edge
+           (set-cursor-position screen (1- cols) row)))))))
 
 ;;; --------------------------------------------------------------------------
 ;;; C0 control handlers

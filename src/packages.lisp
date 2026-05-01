@@ -182,6 +182,7 @@
   (:export #:make-vt-handler
            #:vt-handler
            #:vt-handler-screen
+           #:vt-handler-atlas
            #:vt-handler-parser
            #:vt-handler-callback
            #:process-output))

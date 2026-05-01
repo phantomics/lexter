@@ -46,37 +46,44 @@
 ;;; Keyboard input handling
 ;;; --------------------------------------------------------------------------
 
+(defun bytes (&rest values)
+  "Create a (simple-array (unsigned-byte 8) (*)) from VALUES."
+  (make-array (length values)
+              :element-type '(unsigned-byte 8)
+              :initial-contents values))
+
 (defparameter *key-sequences*
-  '(;; Arrow keys
-    (:up        . #(#x1B #x5B #x41))      ; ESC [ A
-    (:down      . #(#x1B #x5B #x42))      ; ESC [ B
-    (:right     . #(#x1B #x5B #x43))      ; ESC [ C
-    (:left      . #(#x1B #x5B #x44))      ; ESC [ D
-    ;; Navigation
-    (:home      . #(#x1B #x5B #x48))      ; ESC [ H
-    (:end       . #(#x1B #x5B #x46))      ; ESC [ F
-    (:page-up   . #(#x1B #x5B #x35 #x7E)) ; ESC [ 5 ~
-    (:page-down . #(#x1B #x5B #x36 #x7E)) ; ESC [ 6 ~
-    (:insert    . #(#x1B #x5B #x32 #x7E)) ; ESC [ 2 ~
-    (:delete    . #(#x1B #x5B #x33 #x7E)) ; ESC [ 3 ~
-    ;; Function keys
-    (:f1        . #(#x1B #x4F #x50))      ; ESC O P
-    (:f2        . #(#x1B #x4F #x51))      ; ESC O Q
-    (:f3        . #(#x1B #x4F #x52))      ; ESC O R
-    (:f4        . #(#x1B #x4F #x53))      ; ESC O S
-    (:f5        . #(#x1B #x5B #x31 #x35 #x7E)) ; ESC [ 1 5 ~
-    (:f6        . #(#x1B #x5B #x31 #x37 #x7E)) ; ESC [ 1 7 ~
-    (:f7        . #(#x1B #x5B #x31 #x38 #x7E)) ; ESC [ 1 8 ~
-    (:f8        . #(#x1B #x5B #x31 #x39 #x7E)) ; ESC [ 1 9 ~
-    (:f9        . #(#x1B #x5B #x32 #x30 #x7E)) ; ESC [ 2 0 ~
-    (:f10       . #(#x1B #x5B #x32 #x31 #x7E)) ; ESC [ 2 1 ~
-    (:f11       . #(#x1B #x5B #x32 #x33 #x7E)) ; ESC [ 2 3 ~
-    (:f12       . #(#x1B #x5B #x32 #x34 #x7E)) ; ESC [ 2 4 ~
-    ;; Special
-    (:backspace . #(#x7F))
-    (:tab       . #(#x09))
-    (:enter     . #(#x0D))
-    (:escape    . #(#x1B)))
+  (list
+   ;; Arrow keys
+   (cons :up        (bytes #x1B #x5B #x41))      ; ESC [ A
+   (cons :down      (bytes #x1B #x5B #x42))      ; ESC [ B
+   (cons :right     (bytes #x1B #x5B #x43))      ; ESC [ C
+   (cons :left      (bytes #x1B #x5B #x44))      ; ESC [ D
+   ;; Navigation
+   (cons :home      (bytes #x1B #x5B #x48))      ; ESC [ H
+   (cons :end       (bytes #x1B #x5B #x46))      ; ESC [ F
+   (cons :page-up   (bytes #x1B #x5B #x35 #x7E)) ; ESC [ 5 ~
+   (cons :page-down (bytes #x1B #x5B #x36 #x7E)) ; ESC [ 6 ~
+   (cons :insert    (bytes #x1B #x5B #x32 #x7E)) ; ESC [ 2 ~
+   (cons :delete    (bytes #x1B #x5B #x33 #x7E)) ; ESC [ 3 ~
+   ;; Function keys
+   (cons :f1        (bytes #x1B #x4F #x50))      ; ESC O P
+   (cons :f2        (bytes #x1B #x4F #x51))      ; ESC O Q
+   (cons :f3        (bytes #x1B #x4F #x52))      ; ESC O R
+   (cons :f4        (bytes #x1B #x4F #x53))      ; ESC O S
+   (cons :f5        (bytes #x1B #x5B #x31 #x35 #x7E)) ; ESC [ 1 5 ~
+   (cons :f6        (bytes #x1B #x5B #x31 #x37 #x7E)) ; ESC [ 1 7 ~
+   (cons :f7        (bytes #x1B #x5B #x31 #x38 #x7E)) ; ESC [ 1 8 ~
+   (cons :f8        (bytes #x1B #x5B #x31 #x39 #x7E)) ; ESC [ 1 9 ~
+   (cons :f9        (bytes #x1B #x5B #x32 #x30 #x7E)) ; ESC [ 2 0 ~
+   (cons :f10       (bytes #x1B #x5B #x32 #x31 #x7E)) ; ESC [ 2 1 ~
+   (cons :f11       (bytes #x1B #x5B #x32 #x33 #x7E)) ; ESC [ 2 3 ~
+   (cons :f12       (bytes #x1B #x5B #x32 #x34 #x7E)) ; ESC [ 2 4 ~
+   ;; Special
+   (cons :backspace (bytes #x7F))
+   (cons :tab       (bytes #x09))
+   (cons :enter     (bytes #x0D))
+   (cons :escape    (bytes #x1B)))
   "Mapping from GLFW key symbols to byte sequences.")
 
 (defun key-to-bytes (key mods)
@@ -94,7 +101,7 @@
            ;; Ctrl+A = 0x01, Ctrl+B = 0x02, etc.
            (let ((code (- (char-code (char-upcase (char name 0))) 64)))
              (when (<= 1 code 26)
-               (vector code))))))
+               (bytes code))))))
       ;; Alt+key - send ESC prefix
       ((and alt-p (symbolp key))
        (let ((name (symbol-name key)))
@@ -103,7 +110,7 @@
            (let ((ch (if shift-p
                          (char-upcase (char name 0))
                          (char-downcase (char name 0)))))
-             (vector #x1B (char-code ch))))))
+             (bytes #x1B (char-code ch))))))
       ;; Special keys
       ((assoc key *key-sequences*)
        (cdr (assoc key *key-sequences*)))
@@ -125,10 +132,14 @@
         (pty-write (unix-terminal-pty term) bytes)))))
 
 (defun handle-char-input (term codepoint)
-  "Handle a GLFW character callback (for regular text input)."
+  "Handle a GLFW character callback (for regular text input).
+   CODEPOINT may be a character or an integer depending on cl-glfw3 version."
   (when (pty-alive-p (unix-terminal-pty term))
-    (let ((bytes (babel:string-to-octets (string (code-char codepoint))
-                                         :encoding :utf-8)))
+    (let* ((code (if (characterp codepoint)
+                     (char-code codepoint)
+                     codepoint))
+           (bytes (babel:string-to-octets (string (code-char code))
+                                          :encoding :utf-8)))
       (pty-write (unix-terminal-pty term) bytes))))
 
 ;;; --------------------------------------------------------------------------
@@ -294,9 +305,9 @@
                        :cols cols
                        :rows rows
                        :pixel-scale scale)))
-            ;; Create VT handler
+            ;; Create VT handler (pass atlas for codepoint -> glyph mapping)
             (setf (unix-terminal-vt-handler term)
-                  (make-vt-handler screen :callback (make-vt-callback term)))
+                  (make-vt-handler screen atlas :callback (make-vt-callback term)))
             ;; Spawn child process
             (format t "~&Spawning: ~a~{ ~a~}~%" command args)
             (setf (unix-terminal-pty term)

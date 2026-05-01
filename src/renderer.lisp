@@ -4,8 +4,8 @@
 ;;;;
 ;;;; Two render paths:
 ;;;;   Simple  — one instanced draw call, blending off.
-;;;; Layered  — up to four instanced draw calls (one per layer depth);
-;;;;             layer 0 is opaque, layers 1-3 use SRC_ALPHA blending.
+;;;;   Layered — up to three instanced draw calls (one per layer depth);
+;;;;             layer 0 is opaque, layers 1-2 use SRC_ALPHA blending.
 
 ;;; --------------------------------------------------------------------------
 ;;; Constants (must match grid.lisp)
@@ -240,7 +240,7 @@
           ;; GL 3.3 has no glDrawArraysInstancedBaseInstance, so we slide
           ;; the vertex attrib pointers to the correct byte offset instead.
           (let ((byte-off 0))
-            (dotimes (ln 4)
+            (dotimes (ln 3)
               (let ((count (aref lc ln)))
                 (when (> count 0)
                   (if (= ln 0)
@@ -263,6 +263,20 @@
                   (incf byte-off (* count +layered-stride+)))))))))
   (gl:bind-vertex-array 0)
   (gl:use-program 0)))
+
+;;; --------------------------------------------------------------------------
+;;; Viewport update (for window resize)
+;;; --------------------------------------------------------------------------
+
+(defun update-viewport (rs win-w win-h)
+  "Update renderer viewport after a window resize."
+  (setf (render-state-win-w rs) win-w
+        (render-state-win-h rs) win-h)
+  (gl:viewport 0 0 win-w win-h)
+  (let ((atlas (render-state-atlas rs)))
+    (%set-uniforms (render-state-simple-prog rs)  atlas win-w win-h)
+    (%set-uniforms (render-state-layered-prog rs) atlas win-w win-h)
+    (gl:use-program 0)))
 
 ;;; --------------------------------------------------------------------------
 ;;; Cleanup

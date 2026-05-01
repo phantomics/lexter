@@ -6,9 +6,9 @@
 ;;;;
 ;;;; Row 0  — simple path: "Hello from pcf-gl!"  white-on-black
 ;;;; Row 1  — simple path: a sampling of glyph indices, coloured
-;;;; Row 3  — layered path demonstration:
-;;;;            layer 0: '#' in colour 2 (dark-green) on colour 0 (black)
-;;;;            layer 1: 'X' in colour 9 (red) with :bg transparent
+;;;; Row 3  — layered path demonstration (3-layer model: base + 2 overlays):
+;;;;            layer 0: '#' in colour slot 1 (dark-green) on slot 0 (black)
+;;;;            layer 1: 'X' in colour slot 2 (red) with :bg transparent
 ;;;;                     → red X pixels overlay the green #
 
 ;;; --------------------------------------------------------------------------
@@ -25,22 +25,22 @@
                    (aref p (+ (* i 4) 3)) 1.0))
            (comp6 (v) (if (zerop v) 0 (+ 55 (* 40 v)))))
       ;; Colours 0-15: standard ANSI
-      (loop :for (r g b) :in '((0   0   0)     ; 0  black
-                                (170 0   0)    ; 1  dark red
-                                (0   170 0)    ; 2  dark green
-                                (170 85  0)    ; 3  dark yellow
-                                (0   0   170)  ; 4  dark blue
-                                (170 0   170)  ; 5  dark magenta
-                                (0   170 170)  ; 6  dark cyan
-                                (170 170 170)  ; 7  light grey
-                                (85  85  85)   ; 8  dark grey
-                                (255 85  85)   ; 9  bright red
-                                (85  255 85)   ; 10 bright green
-                                (255 255 85)   ; 11 bright yellow
-                                (85  85  255)  ; 12 bright blue
-                                (255 85  255)  ; 13 bright magenta
-                                (85  255 255)  ; 14 bright cyan
-                                (255 255 255)) ; 15 white
+      (loop :for (r g b) :in '((0   0   0)    ; 0  black
+                               (170 0   0)    ; 1  dark red
+                               (0   170 0)    ; 2  dark green
+                               (170 85  0)    ; 3  dark yellow
+                               (0   0   170)  ; 4  dark blue
+                               (170 0   170)  ; 5  dark magenta
+                               (0   170 170)  ; 6  dark cyan
+                               (170 170 170)  ; 7  light grey
+                               (85  85  85)   ; 8  dark grey
+                               (255 85  85)   ; 9  bright red
+                               (85  255 85)   ; 10 bright green
+                               (255 255 85)   ; 11 bright yellow
+                               (85  85  255)  ; 12 bright blue
+                               (255 85  255)  ; 13 bright magenta
+                               (85  255 255)  ; 14 bright cyan
+                               (255 255 255)) ; 15 white
             :for i :from 0
             :do (set-rgb i r g b))
       ;; Colours 16-231: 6x6x6 cube
@@ -60,52 +60,79 @@
 ;;; Grid population helpers
 ;;; --------------------------------------------------------------------------
 
-(defun write-string-simple (grid atlas str col row fg bg)
-  "Write STR into GRID starting at (COL, ROW) using the simple path."
+(defun write-string-simple (grid atlas str col row swatch-idx)
+  "Write STR into GRID starting at (COL, ROW) using the simple path.
+   SWATCH-IDX is the swatch table index (fg/bg are defined in the swatch)."
   (loop :for ch :across str
         :for c :from col
         :for glyph-idx = (atlas-glyph-index atlas (char-code ch))
         :when glyph-idx
-        :do (set-simple-cell grid c row glyph-idx fg bg)))
+        :do (set-simple-cell grid c row glyph-idx swatch-idx)))
+
+(defun setup-demo-swatches (grid)
+  "Set up swatch table for the demo.
+   Swatch 0: black bg, white fg (default)
+   Swatches 1-32: black bg, palette colours 1-32 as fg (for colour sampler)
+   Swatch 100: black bg, grey fg (for labels)"
+  ;; Default swatch 0: black bg (palette 0), white fg (palette 15)
+  (set-swatch grid 0  0 15 0 0)
+  ;; Colour sampler swatches 1-32
+  (loop :for i :from 1 :to 32
+        :do (set-swatch grid i  0 i 0 0))
+  ;; Grey label text
+  (set-swatch grid 100  0 7 0 0))
 
 (defun setup-demo-grid (grid atlas)
   "Populate GRID with the demo scene."
-  (let ((cols (terminal-grid-cols grid)))
-    ;; Row 0: simple white-on-black text
-    (write-string-simple grid atlas "Hello from pcf-gl!" 1 0 15 0)
-    ;; Row 1: colour sampler — each character in a different palette colour
+  (let ((cols (display-grid-cols grid)))
+    ;; Initialize swatches
+    (setup-demo-swatches grid)
+    ;; Row 0: simple white-on-black text (swatch 0)
+    (write-string-simple grid atlas "Hello from pcf-gl!" 1 0 0)
+    ;; Row 1: colour sampler — each character in a different swatch
     (loop :for i :from 0 :below (min 32 (- cols 1))
           :for ch-code = (+ 65 (mod i 26))       ; A-Z cycling
           :for glyph-idx = (atlas-glyph-index atlas ch-code)
           :when glyph-idx
-          :do (set-simple-cell grid (1+ i) 1 glyph-idx (+ 1 i) 0))
+          :do (set-simple-cell grid (1+ i) 1 glyph-idx (1+ i)))
     ;; Row 3: layered demonstration
     ;; Cell (1,3): '#' on layer 0 in dark-green/black,
     ;;             'X' on layer 1 in bright-red with transparent background
     (let ((hash-glyph (atlas-glyph-index atlas (char-code #\#)))
           (x-glyph    (atlas-glyph-index atlas (char-code #\X))))
       (when (and hash-glyph x-glyph)
-        ;; Local palette: slot 0=black(0) slot 1=dark-green(2)
-        ;;                slot 2=bright-red(9) slot 3=unused
-        (set-cell-palette grid 1 3 '(0 2 9 0))
+        ;; Per-cell swatch: slot 0=black(0) slot 1=dark-green(2)
+        ;;                  slot 2=bright-red(9) slot 3=unused
+        (set-cell-swatch grid 1 3 #(0 2 9 0))
         ;; Layer 0: '#' — ink=slot1(dark-green), bg=slot0(black)
         (set-cell-layer grid 1 3 0 hash-glyph 1 :bg-idx 0 :transparent-side :none)
         ;; Layer 1: 'X' — ink=slot2(bright-red), bg transparent
         (set-cell-layer grid 1 3 1 x-glyph    2 :transparent-side :bg)))
-    ;; Row 3 label
-    (write-string-simple grid atlas "  <- layered: # + X overlay" 2 3 7 0)
+    ;; Row 3 label (swatch 100 = grey text)
+    (write-string-simple grid atlas "  <- layered: # + X overlay" 2 3 100)
     ;; Row 5: a second layered example — block on layer 0, letter cut-out on layer 1 (:fg)
     (let ((block-glyph  (atlas-glyph-index atlas (char-code #\@)))
           (letter-glyph (atlas-glyph-index atlas (char-code #\A))))
       (when (and block-glyph letter-glyph)
-        ;; slot 0=black slot 1=bright-cyan(14) slot 2=dark-blue(4) slot 3=unused
-        (set-cell-palette grid 1 5 '(0 14 4 0))
+        ;; Per-cell swatch: slot 0=black slot 1=bright-cyan(14) slot 2=dark-blue(4) slot 3=unused
+        (set-cell-swatch grid 1 5 #(0 14 4 0))
         ;; Layer 0: '@' solid, cyan-on-black
         (set-cell-layer grid 1 5 0 block-glyph 1 :bg-idx 0 :transparent-side :none)
         ;; Layer 1: 'A' with :fg transparent — the letter pixels are cut out,
         ;;          revealing black from layer 0 through the letter shape
         (set-cell-layer grid 1 5 1 letter-glyph 2 :transparent-side :fg)))
-    (write-string-simple grid atlas "  <- layered: @ with A cut-out (:fg)" 2 5 7 0)))
+    (write-string-simple grid atlas "  <- layered: @ with A cut-out (:fg)" 2 5 100)
+    ;; Row 7: cursor glyph demo (if cursor glyphs were added)
+    (let ((block-cursor (atlas-glyph-index atlas +cursor-block-glyph+))
+          (underline-cursor (atlas-glyph-index atlas +cursor-underline-glyph+))
+          (bar-cursor (atlas-glyph-index atlas +cursor-bar-glyph+)))
+      (when block-cursor
+        ;; Swatch 101: black bg, bright green fg (for cursor display)
+        (set-swatch grid 101  0 10 0 0)
+        (set-simple-cell grid 1 7 block-cursor 101)
+        (set-simple-cell grid 2 7 underline-cursor 101)
+        (set-simple-cell grid 3 7 bar-cursor 101)
+        (write-string-simple grid atlas "  <- cursor glyphs: block, underline, bar" 4 7 100)))))
 
 ;;; --------------------------------------------------------------------------
 ;;; Entry point
@@ -118,7 +145,7 @@
   (let* ((font     (load-pcf font-path))
          (cell-w   (pcf-font-cell-width  font))
          (cell-h   (pcf-font-cell-height font))
-         (cols     40)
+         (cols     50)
          (rows     10)
          (win-w    (* cols cell-w))
          (win-h    (* rows cell-h)))
@@ -133,11 +160,13 @@
          :opengl-profile :opengl-core-profile
          :opengl-forward-compat t)
       (gl:viewport 0 0 win-w win-h)
-      ;; Build atlas, grid, renderer
+      ;; Build atlas, add cursor glyphs, then grid & renderer
       (let* ((atlas    (build-atlas (list font)))
-             (grid     (make-terminal-grid :cols cols :rows rows))
+             (_        (add-cursor-glyphs atlas))
+             (grid     (make-display-grid :cols cols :rows rows))
              (renderer (make-renderer atlas win-w win-h))
              (palette  (make-xterm-palette)))
+        (declare (ignore _))
         (set-palette renderer palette)
         (setup-demo-grid grid atlas)
         ;; Register key callback for Escape

@@ -13,27 +13,47 @@
 (defpackage #:pcf-gl/atlas
   (:use #:cl #:pcf-gl/pcf)
   (:export #:build-atlas
+           #:add-cursor-glyphs
            #:atlas
            #:atlas-texture-id
            #:atlas-cell-width
            #:atlas-cell-height
            #:atlas-cols
            #:atlas-rows
-           #:atlas-glyph-index   ; codepoint -> glyph-idx or nil
-           ))
+           #:atlas-glyph-index
+           #:+cursor-block-glyph+
+           #:+cursor-underline-glyph+
+           #:+cursor-bar-glyph+))
 
 (defpackage #:pcf-gl/grid
   (:use #:cl)
-  (:export #:make-terminal-grid
-           #:terminal-grid
-           #:terminal-grid-cols
-           #:terminal-grid-rows
+  (:export ;; Grid creation and access
+           #:make-display-grid
+           #:display-grid
+           #:display-grid-cols
+           #:display-grid-rows
+           #:resize-grid
+           ;; Swatch API
+           #:set-swatch
+           #:get-swatch
+           #:swatch-as-array
+           ;; Simple cell API
            #:set-simple-cell
-           #:set-cell-palette
+           ;; Layered cell API
+           #:set-cell-swatch
            #:set-cell-layer
            #:clear-cell-layers
            #:cell-layered-p
-           #:build-render-data))
+           ;; Dirty tracking
+           #:mark-row-dirty
+           #:mark-all-dirty
+           #:clear-dirty-flags
+           #:row-dirty-p
+           ;; Render data
+           #:build-render-data
+           ;; Constants
+           #:+max-layers+
+           #:+swatch-slots+))
 
 (defpackage #:pcf-gl/shaders
   (:use #:cl)
@@ -46,9 +66,81 @@
   (:use #:cl #:pcf-gl/atlas #:pcf-gl/grid #:pcf-gl/shaders)
   (:export #:make-renderer
            #:render-state
+           #:render-state-atlas
+           #:render-state-win-w
+           #:render-state-win-h
            #:set-palette
            #:render-frame
+           #:update-viewport
            #:destroy-renderer))
+
+;;; ---------------------------------------------------------------------------
+;;; Terminal Model (Phase 2)
+;;; ---------------------------------------------------------------------------
+
+(defpackage #:pcf-gl/model
+  (:use #:cl)
+  (:export ;; Screen creation
+           #:make-screen
+           #:screen
+           #:screen-cols
+           #:screen-rows
+           #:screen-mode
+           ;; Swatch interning
+           #:intern-swatch
+           #:default-swatch
+           ;; Cursor
+           #:cursor-col
+           #:cursor-row
+           #:cursor-visible-p
+           #:cursor-style
+           #:cursor-blink-p
+           #:set-cursor-position
+           #:set-cursor-style
+           #:set-cursor-visible
+           ;; Cell access (for application use)
+           #:cell-glyph
+           #:cell-swatch
+           #:cell-attrs
+           #:topmost-layer
+           ;; Write operations
+           #:write-char-at
+           #:write-string-at
+           #:erase-in-display
+           #:erase-in-line
+           #:erase-chars
+            ;; Cursor-relative write (targets topmost layer)
+            #:put-char
+            #:delete-char
+           #:insert-chars
+           #:delete-chars
+           ;; Line operations
+           #:insert-lines
+           #:delete-lines
+           ;; Scrolling
+           #:scroll-up
+           #:scroll-down
+           #:set-scrolling-region
+           ;; Modes and state
+           #:set-mode
+           #:get-mode
+           #:resize-screen
+           ;; Scrollback
+           #:scrollback-lines
+           #:scrollback-line
+           #:scrollback-viewport-offset
+           #:set-scrollback-viewport
+           ;; Layer management
+           #:set-layer
+           #:clear-overlay-layers
+           ;; Display flush
+           #:flush-to-display
+           ;; Attribute word bits (universal)
+           #:+attr-bold+
+           #:+attr-underline+
+           #:+attr-blink+
+           #:+attr-reverse+
+           #:+attr-invisible+))
 
 (defpackage #:pcf-gl/demo
   (:use #:cl #:pcf-gl/pcf #:pcf-gl/atlas #:pcf-gl/grid #:pcf-gl/renderer)

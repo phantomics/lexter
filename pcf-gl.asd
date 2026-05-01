@@ -9,4 +9,5 @@
                (:file "src/grid")
                (:file "src/shaders")
                (:file "src/renderer")
+               (:file "src/model")
                (:file "src/demo")))

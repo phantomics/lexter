@@ -78,16 +78,18 @@ void main() {
 ;;; Layered cell shaders
 ;;; --------------------------------------------------------------------------
 ;;;
-;;; Per-instance (locations 1-6, divisor=1):
+;;; Per-instance (locations 1-5, divisor=1):
 ;;;   location 1  ivec2  i_cell     col (int16), row (int16)
 ;;;   location 2  uint   i_glyph    glyph index (uint16)
 ;;;   location 3  uvec2  i_ink_bg   ink-idx (uint8), bg-idx (uint8)
 ;;;   location 4  uint   i_ts       transparent-side: 0=:bg, 1=:fg, 2=:none
-;;;   location 5  uvec4  i_palette  4 global palette indices for this cell
+;;;   location 5  uvec4  i_palette  4-slot colour scheme for this cell
 ;;;
-;;; The per-cell 4-colour palette is carried inline in the instance record
-;;; (4 x uint8 global palette indices) and used directly in the fragment
-;;; shader via a double-indirection into the global Palette UBO.
+;;; The cell's 4-slot colour scheme (slots 0-3 are palette indices mapping to
+;;; bg, fg, primary-overlay, secondary-overlay) is carried inline in the
+;;; instance record and resolved in the fragment shader via the Palette UBO.
+;;; 3 layers map cleanly to 4 slots: layer 0 uses slots 0+1, layers 1-2
+;;; each use one slot (2 and 3 respectively by convention).
 
 (defparameter +layered-vert+
 "#version 330 core

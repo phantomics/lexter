@@ -1,5 +1,6 @@
 (asdf:defsystem #:lexter
   :description "Lexter — Lisp-Emergent eXtensible Terminal Emulator Runtime"
+  :license "BSD"
   :version "0.1.0"
   :depends-on (#:cl-glfw3 #:cl-opengl #:cffi #:alexandria #:babel)
   :serial t
@@ -15,6 +16,7 @@
 ;;; Unix terminal subsystem (requires cl-vt)
 (asdf:defsystem #:lexter/unix
   :description "Unix terminal backend for Lexter"
+  :license "BSD"
   :version "0.1.0"
   :depends-on (#:lexter #:cl-vt #:babel)
   :serial t
@@ -26,6 +28,7 @@
 ;;; Pane multiplexer subsystem
 (asdf:defsystem #:lexter/panes
   :description "Pane multiplexer for Lexter"
+  :license "BSD"
   :version "0.1.0"
   :depends-on (#:lexter/unix)
   :serial t
@@ -39,6 +42,7 @@
 ;;; TN3270 client library (standalone, no pane dependency)
 (asdf:defsystem #:lexter/tn3270
   :description "TN3270/TN3270E client library for Lexter"
+  :license "BSD"
   :version "0.1.0"
   :depends-on (#:usocket #:babel #:tacle.tn3270/lexicon #:specops/format.ebcdic)
   :serial t
@@ -51,6 +55,7 @@
 ;;; TN3270 pane (requires panes system)
 (asdf:defsystem #:lexter/tn3270-pane
   :description "TN3270 pane for Lexter"
+  :license "BSD"
   :version "0.1.0"
   :depends-on (#:lexter/panes #:lexter/tn3270)
   :serial t

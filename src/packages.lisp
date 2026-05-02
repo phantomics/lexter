@@ -49,6 +49,8 @@
            #:mark-all-dirty
            #:clear-dirty-flags
            #:row-dirty-p
+           ;; Swatch sync tracking
+           #:swatch-generation
            ;; Render data
            #:build-render-data
            ;; Constants
@@ -142,6 +144,8 @@
            #:clear-overlay-layers
            ;; Display flush
            #:flush-to-display
+           ;; Dirty tracking
+           #:any-row-dirty-p
            ;; Attribute word bits (universal)
            #:+attr-bold+
            #:+attr-underline+

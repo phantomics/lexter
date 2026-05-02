@@ -61,7 +61,9 @@
   (count   1 :type fixnum)   ; next free slot (0 is pre-allocated)
   (capacity 256 :type fixnum)
   ;; Hash: (s0 s1 s2 s3) -> index
-  (index   (%make-initial-swatch-index) :type hash-table))
+  (index   (%make-initial-swatch-index) :type hash-table)
+  ;; Generation counter: incremented on each new swatch
+  (generation 1 :type fixnum))
 
 (defun %swatch-key (s0 s1 s2 s3)
   (logior s0 (ash s1 8) (ash s2 16) (ash s3 24)))
@@ -88,6 +90,7 @@
                   (aref data (+ base 3)) s3))
           (setf (gethash key (swatch-table-index table)) idx)
           (incf (swatch-table-count table))
+          (incf (swatch-table-generation table))
           idx))))
 
 (defun get-swatch-values (table idx)
@@ -219,6 +222,10 @@
 (defun %mark-dirty (screen row)
   (when (< row (screen-rows screen))
     (setf (sbit (screen-row-dirty screen) row) 1)))
+
+(defun any-row-dirty-p (screen)
+  "Return T if any row in SCREEN is marked dirty."
+  (not (zerop (count 1 (screen-row-dirty screen)))))
 
 (defun default-swatch (screen)
   (screen-default-swatch screen))
@@ -744,16 +751,20 @@
     ;; This ensures cursor blink and movement are always rendered
     (when (< cr rows)
       (setf (sbit (screen-row-dirty screen) cr) 1))
-    ;; First, sync the swatch table
-    (let ((sw-data (swatch-table-data swatches))
-          (sw-count (swatch-table-count swatches)))
-      (loop :for i :from 0 :below sw-count
-            :for base = (* i +swatch-slots+)
-            :do (pcf-gl/grid:set-swatch display-grid i
-                                        (aref sw-data (+ base 0))
-                                        (aref sw-data (+ base 1))
-                                        (aref sw-data (+ base 2))
-                                        (aref sw-data (+ base 3)))))
+    ;; Sync swatch table only if generation changed
+    (let ((model-gen (swatch-table-generation swatches))
+          (grid-gen (pcf-gl/grid:swatch-generation display-grid)))
+      (when (/= model-gen grid-gen)
+        (let ((sw-data (swatch-table-data swatches))
+              (sw-count (swatch-table-count swatches)))
+          (loop :for i :from 0 :below sw-count
+                :for base = (* i +swatch-slots+)
+                :do (pcf-gl/grid:set-swatch display-grid i
+                                            (aref sw-data (+ base 0))
+                                            (aref sw-data (+ base 1))
+                                            (aref sw-data (+ base 2))
+                                            (aref sw-data (+ base 3)))))
+        (setf (pcf-gl/grid:swatch-generation display-grid) model-gen)))
     ;; Copy cells (including clearing old cursor position)
     (loop :for row :from 0 :below (min rows (pcf-gl/grid:display-grid-rows display-grid))
           :when (= 1 (sbit (screen-row-dirty screen) row))

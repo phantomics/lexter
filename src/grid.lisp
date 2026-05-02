@@ -66,6 +66,8 @@
   (layered-flags #*  :type simple-bit-vector)
   ;; --- Dirty tracking (per-row) ---
   (row-dirty     #*  :type simple-bit-vector)
+  ;; --- Swatch sync tracking ---
+  (swatch-generation 0 :type fixnum)  ; last synced generation from model
   ;; --- Cached render buffers (persistent, updated incrementally) ---
   (simple-buffer   nil)
   (simple-count    0   :type fixnum)
@@ -166,6 +168,14 @@
 
 (defun row-dirty-p (grid row)
   (= 1 (sbit (display-grid-row-dirty grid) row)))
+
+(defun swatch-generation (grid)
+  "Return the last-synced swatch generation for GRID."
+  (display-grid-swatch-generation grid))
+
+(defun (setf swatch-generation) (value grid)
+  "Set the last-synced swatch generation for GRID."
+  (setf (display-grid-swatch-generation grid) value))
 
 ;;; --------------------------------------------------------------------------
 ;;; Simple path API

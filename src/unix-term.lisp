@@ -224,13 +224,15 @@
            (return)))))))
 
 (defun update-cursor-blink (term dt)
-  "Update cursor blink state based on elapsed time DT (seconds)."
+  "Update cursor blink state based on elapsed time DT (seconds).
+   Returns T if the blink state toggled, NIL otherwise."
   (incf (unix-terminal-cursor-blink-time term) dt)
   (when (>= (unix-terminal-cursor-blink-time term)
             (unix-terminal-cursor-blink-interval term))
-    (setf (unix-terminal-cursor-blink-time term) 0.0)
-    (setf (unix-terminal-cursor-blink-on term)
-          (not (unix-terminal-cursor-blink-on term)))))
+    (setf (unix-terminal-cursor-blink-time term) 0.0
+          (unix-terminal-cursor-blink-on term)
+          (not (unix-terminal-cursor-blink-on term)))
+    t))
 
 (defun run-terminal-loop (term)
   "Main event loop."
@@ -241,34 +243,42 @@
           :do
           ;; Calculate delta time for cursor blink
           (let* ((current-time (glfw:get-time))
-                 (dt (- current-time last-time)))
+                 (dt (- current-time last-time))
+                 (blink-toggled (update-cursor-blink term (coerce dt 'single-float))))
             (setf last-time current-time)
-            (update-cursor-blink term (coerce dt 'single-float)))
-          ;; 1. Process PTY output
-          (process-pty-output term)
-          ;; 2. Check if child is still alive
-          (unless (pty-check-child (unix-terminal-pty term))
-            (setf (unix-terminal-running term) nil)
-            (return))
-          ;; 3. Handle any pending resize
-          (when (unix-terminal-resize-pending term)
-            (handle-resize term
-                           (unix-terminal-resize-cols term)
-                           (unix-terminal-resize-rows term))
-            (setf (unix-terminal-resize-pending term) nil))
-          ;; 4. Poll GLFW events (handles input callbacks)
-          (glfw:poll-events)
-          ;; 5. Flush model to display grid (with cursor state)
-          (flush-to-display (unix-terminal-screen term)
-                            (unix-terminal-display term)
-                            :atlas (unix-terminal-atlas term)
-                            :space-glyph (screen-blank-glyph (unix-terminal-screen term))
-                            :cursor-blink-on (unix-terminal-cursor-blink-on term))
-          ;; 6. Render frame
-          (render-frame (unix-terminal-renderer term)
-                        (unix-terminal-display term))
-          ;; 7. Swap buffers
-          (glfw:swap-buffers)
+            ;; 1. Process PTY output
+            (process-pty-output term)
+            ;; 2. Check if child is still alive
+            (unless (pty-check-child (unix-terminal-pty term))
+              (setf (unix-terminal-running term) nil)
+              (return))
+            ;; 3. Handle any pending resize (always needs render)
+            (let ((resized nil))
+              (when (unix-terminal-resize-pending term)
+                (handle-resize term
+                               (unix-terminal-resize-cols term)
+                               (unix-terminal-resize-rows term))
+                (setf (unix-terminal-resize-pending term) nil
+                      resized t))
+              ;; 4. Poll GLFW events (handles input callbacks)
+              (glfw:poll-events)
+              ;; 5. Check if we need to render
+              ;; Render if: any dirty rows, cursor blink toggled, or resized
+              (let ((needs-render (or resized
+                                      blink-toggled
+                                      (any-row-dirty-p (unix-terminal-screen term)))))
+                (when needs-render
+                  ;; 6. Flush model to display grid (with cursor state)
+                  (flush-to-display (unix-terminal-screen term)
+                                    (unix-terminal-display term)
+                                    :atlas (unix-terminal-atlas term)
+                                    :space-glyph (screen-blank-glyph (unix-terminal-screen term))
+                                    :cursor-blink-on (unix-terminal-cursor-blink-on term))
+                  ;; 7. Render frame
+                  (render-frame (unix-terminal-renderer term)
+                                (unix-terminal-display term))
+                  ;; 8. Swap buffers
+                  (glfw:swap-buffers)))))
           ;; Small sleep to avoid burning CPU when idle
           (sleep 0.001))))
 

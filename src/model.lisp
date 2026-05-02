@@ -34,17 +34,34 @@
 ;;; Swatch table with interning
 ;;; --------------------------------------------------------------------------
 
+(defun %make-initial-swatch-data ()
+  "Create swatch data array with slot 0 initialized to (0, 7, 7, 0)."
+  (let ((data (make-array (* 256 +swatch-slots+)
+                          :element-type '(unsigned-byte 8)
+                          :initial-element 0)))
+    ;; Initialize slot 0: bg=0 (black), fg=7 (white), ov=7, sec=0
+    (setf (aref data 0) 0    ; bg
+          (aref data 1) 7    ; fg
+          (aref data 2) 7    ; overlay
+          (aref data 3) 0)   ; secondary
+    data))
+
+(defun %make-initial-swatch-index ()
+  "Create swatch index hash with slot 0 pre-registered."
+  (let ((ht (make-hash-table :test 'equal)))
+    ;; Register the key for (0, 7, 7, 0) -> index 0
+    (setf (gethash (%swatch-key 0 7 7 0) ht) 0)
+    ht))
+
 (defstruct swatch-table
   "Table of swatches with hash-based interning."
   ;; Flat array: swatch i occupies bytes [i*4 .. i*4+3]
-  (data    (make-array (* 256 +swatch-slots+)
-                       :element-type '(unsigned-byte 8)
-                       :initial-element 0)
+  (data    (%make-initial-swatch-data)
            :type (simple-array (unsigned-byte 8) (*)))
-  (count   1 :type fixnum)   ; next free slot (0 is default)
+  (count   1 :type fixnum)   ; next free slot (0 is pre-allocated)
   (capacity 256 :type fixnum)
   ;; Hash: (s0 s1 s2 s3) -> index
-  (index   (make-hash-table :test 'equal) :type hash-table))
+  (index   (%make-initial-swatch-index) :type hash-table))
 
 (defun %swatch-key (s0 s1 s2 s3)
   (logior s0 (ash s1 8) (ash s2 16) (ash s3 24)))
@@ -776,7 +793,7 @@
                   (pcf-gl/grid:get-swatch display-grid sw-idx)
                 ;; Intern a reversed swatch (fg becomes bg, bg becomes fg)
                 (let ((rev-sw (intern-swatch swatches fg bg ov sec)))
-                  ;; IMPORTANT: sync this new swatch to display grid immediately
+                  ;; Sync this new swatch to display grid immediately
                   (let* ((sw-data (swatch-table-data swatches))
                          (base (* rev-sw +swatch-slots+)))
                     (pcf-gl/grid:set-swatch display-grid rev-sw

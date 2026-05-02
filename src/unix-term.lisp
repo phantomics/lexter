@@ -283,6 +283,7 @@
    COLS, ROWS: terminal dimensions in characters
    PIXEL-SCALE: integer scaling factor (nil = auto-detect)
    TITLE: window title"
+  (format t "~&=== pcf-gl terminal v0.5 ===~%")
   (format t "~&Loading font ~a ...~%" font-path)
   (let* ((font   (load-pcf font-path))
          (cell-w (pcf-font-cell-width font))

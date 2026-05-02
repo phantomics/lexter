@@ -708,14 +708,21 @@
 ;;; Flush to display grid
 ;;; --------------------------------------------------------------------------
 
-(defun flush-to-display (screen display-grid &key (atlas nil) (space-glyph 32))
+(defun flush-to-display (screen display-grid &key (atlas nil) (space-glyph 32)
+                                                   (cursor-blink-on t))
   "Copy screen state to the display grid for rendering.
-   ATLAS is used to look up cursor glyph indices if provided.
-   SPACE-GLYPH is the atlas index for space character."
-  (declare (ignore atlas))  ; cursor glyphs to be added later
+   ATLAS is used to look up cursor glyph indices.
+   SPACE-GLYPH is the atlas index for space character.
+   CURSOR-BLINK-ON controls whether a blinking cursor is currently visible."
   (let ((cols (screen-cols screen))
         (rows (screen-rows screen))
-        (swatches (screen-swatches screen)))
+        (swatches (screen-swatches screen))
+        (cc (screen-cursor-col screen))
+        (cr (screen-cursor-row screen)))
+    ;; Always mark cursor row dirty so it gets updated every frame
+    ;; This ensures cursor blink and movement are always rendered
+    (when (< cr rows)
+      (setf (sbit (screen-row-dirty screen) cr) 1))
     ;; First, sync the swatch table
     (let ((sw-data (swatch-table-data swatches))
           (sw-count (swatch-table-count swatches)))
@@ -726,7 +733,7 @@
                                         (aref sw-data (+ base 1))
                                         (aref sw-data (+ base 2))
                                         (aref sw-data (+ base 3)))))
-    ;; Copy cells
+    ;; Copy cells (including clearing old cursor position)
     (loop :for row :from 0 :below (min rows (pcf-gl/grid:display-grid-rows display-grid))
           :when (= 1 (sbit (screen-row-dirty screen) row))
           :do (loop :for col :from 0 :below (min cols (pcf-gl/grid:display-grid-cols display-grid))
@@ -744,20 +751,50 @@
                                          (model-layer-ink-slot lobj)
                                          :bg-idx (model-layer-bg-slot lobj)
                                          :transparent-side (model-layer-transparent-side lobj))))
-                            ;; Simple cell
-                            (let ((i (%idx screen col row)))
-                              (pcf-gl/grid:set-simple-cell
-                               display-grid col row
-                               (let ((g (aref (screen-glyphs screen) i)))
-                                 (if (zerop g) space-glyph g))
-                               (aref (screen-swatch-indices screen) i))))))
-    ;; Handle cursor overlay
-    (when (screen-cursor-visible screen)
-      (let ((cc (screen-cursor-col screen))
-            (cr (screen-cursor-row screen)))
-        (when (and (< cc cols) (< cr rows))
-          ;; For now, use reverse video effect via swatch manipulation
-          ;; Full cursor glyph rendering will be added in Phase 1.3
-          (pcf-gl/grid:mark-row-dirty display-grid cr))))
+                            ;; Simple cell - clear any overlay layers first
+                            (progn
+                              (pcf-gl/grid:clear-cell-layers display-grid col row)
+                              (let ((i (%idx screen col row)))
+                                (pcf-gl/grid:set-simple-cell
+                                 display-grid col row
+                                 (let ((g (aref (screen-glyphs screen) i)))
+                                   (if (zerop g) space-glyph g))
+                                 (aref (screen-swatch-indices screen) i)))))))
+    ;; Handle cursor rendering - ALWAYS draw cursor when visible, regardless of dirty state
+    (let ((cursor-visible (and (screen-cursor-visible screen)
+                               (or (not (screen-cursor-blink screen))
+                                   cursor-blink-on))))
+      (when (and (< cc cols) (< cr rows))
+        (if (not atlas)
+            ;; No atlas - just clear any cursor layers
+            (pcf-gl/grid:clear-cell-layers display-grid cc cr)
+            ;; Have atlas - render cursor
+            (let* ((cursor-codepoint (ecase (screen-cursor-style screen)
+                                       (:block     pcf-gl/atlas:+cursor-block-glyph+)
+                                       (:underline pcf-gl/atlas:+cursor-underline-glyph+)
+                                       (:bar       pcf-gl/atlas:+cursor-bar-glyph+)))
+                   (cursor-glyph (pcf-gl/atlas:atlas-glyph-index atlas cursor-codepoint)))
+              (if (and cursor-visible cursor-glyph)
+                  (progn
+                    ;; Ensure layer 0 has the base character
+                    ;; (This copies from simple glyph array if not already layered)
+                    (pcf-gl/grid:set-cell-layer display-grid cc cr 0
+                                                (let* ((i (+ (* cr cols) cc))
+                                                       (g (aref (pcf-gl/grid::display-grid-glyphs display-grid) i)))
+                                                  (if (zerop g) space-glyph g))
+                                                1  ; ink-slot = foreground
+                                                :bg-idx 0
+                                                :transparent-side :none)
+                    ;; Draw cursor on layer 1 with foreground color (ink slot 1)
+                    ;; The cursor glyph is solid where the cursor should appear
+                    (pcf-gl/grid:set-cell-layer display-grid cc cr 1
+                                                cursor-glyph
+                                                1  ; ink-slot = foreground
+                                                :bg-idx 0
+                                                :transparent-side :bg))
+                  ;; When cursor is NOT visible (blink off), clear cursor cell to simple
+                  (pcf-gl/grid:clear-cell-layers display-grid cc cr))))
+        ;; Always mark cursor row dirty so renderer updates it
+        (pcf-gl/grid:mark-row-dirty display-grid cr)))
     ;; Clear model dirty flags
     (fill (screen-row-dirty screen) 0)))

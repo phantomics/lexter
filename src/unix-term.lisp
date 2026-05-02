@@ -37,6 +37,10 @@
                :type (simple-array (unsigned-byte 8) (*)))
   ;; State
   (running    nil :type boolean)
+  ;; Cursor blink state
+  (cursor-blink-on t :type boolean)
+  (cursor-blink-time 0.0 :type single-float)  ; time since last toggle
+  (cursor-blink-interval 0.5 :type single-float)  ; seconds per blink phase
   ;; Pending resize
   (resize-pending nil :type boolean)
   (resize-cols    0   :type fixnum)
@@ -186,36 +190,54 @@
           (otherwise
            (return)))))))
 
+(defun update-cursor-blink (term dt)
+  "Update cursor blink state based on elapsed time DT (seconds)."
+  (incf (unix-terminal-cursor-blink-time term) dt)
+  (when (>= (unix-terminal-cursor-blink-time term)
+            (unix-terminal-cursor-blink-interval term))
+    (setf (unix-terminal-cursor-blink-time term) 0.0)
+    (setf (unix-terminal-cursor-blink-on term)
+          (not (unix-terminal-cursor-blink-on term)))))
+
 (defun run-terminal-loop (term)
   "Main event loop."
   (setf (unix-terminal-running term) t)
-  (loop :while (and (unix-terminal-running term)
-                    (not (glfw:window-should-close-p)))
-        :do
-        ;; 1. Process PTY output
-        (process-pty-output term)
-        ;; 2. Check if child is still alive
-        (unless (pty-check-child (unix-terminal-pty term))
-          (setf (unix-terminal-running term) nil)
-          (return))
-        ;; 3. Handle any pending resize
-        (when (unix-terminal-resize-pending term)
-          (handle-resize term
-                         (unix-terminal-resize-cols term)
-                         (unix-terminal-resize-rows term))
-          (setf (unix-terminal-resize-pending term) nil))
-        ;; 4. Poll GLFW events (handles input callbacks)
-        (glfw:poll-events)
-        ;; 5. Flush model to display grid
-        (flush-to-display (unix-terminal-screen term)
-                          (unix-terminal-display term))
-        ;; 6. Render frame
-        (render-frame (unix-terminal-renderer term)
-                      (unix-terminal-display term))
-        ;; 7. Swap buffers
-        (glfw:swap-buffers)
-        ;; Small sleep to avoid burning CPU when idle
-        (sleep 0.001)))
+  (let ((last-time (glfw:get-time)))
+    (loop :while (and (unix-terminal-running term)
+                      (not (glfw:window-should-close-p)))
+          :do
+          ;; Calculate delta time for cursor blink
+          (let* ((current-time (glfw:get-time))
+                 (dt (- current-time last-time)))
+            (setf last-time current-time)
+            (update-cursor-blink term (coerce dt 'single-float)))
+          ;; 1. Process PTY output
+          (process-pty-output term)
+          ;; 2. Check if child is still alive
+          (unless (pty-check-child (unix-terminal-pty term))
+            (setf (unix-terminal-running term) nil)
+            (return))
+          ;; 3. Handle any pending resize
+          (when (unix-terminal-resize-pending term)
+            (handle-resize term
+                           (unix-terminal-resize-cols term)
+                           (unix-terminal-resize-rows term))
+            (setf (unix-terminal-resize-pending term) nil))
+          ;; 4. Poll GLFW events (handles input callbacks)
+          (glfw:poll-events)
+          ;; 5. Flush model to display grid (with cursor state)
+          (flush-to-display (unix-terminal-screen term)
+                            (unix-terminal-display term)
+                            :atlas (unix-terminal-atlas term)
+                            :space-glyph (screen-blank-glyph (unix-terminal-screen term))
+                            :cursor-blink-on (unix-terminal-cursor-blink-on term))
+          ;; 6. Render frame
+          (render-frame (unix-terminal-renderer term)
+                        (unix-terminal-display term))
+          ;; 7. Swap buffers
+          (glfw:swap-buffers)
+          ;; Small sleep to avoid burning CPU when idle
+          (sleep 0.001))))
 
 ;;; --------------------------------------------------------------------------
 ;;; Resize handling

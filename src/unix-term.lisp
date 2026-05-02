@@ -250,8 +250,9 @@
         (pty (unix-terminal-pty term)))
     ;; Resize model
     (resize-screen screen new-cols new-rows)
-    ;; Resize display grid
-    (resize-grid display new-cols new-rows)
+    ;; Resize display grid (use the screen's blank glyph)
+    (resize-grid display new-cols new-rows
+                 :blank-glyph (screen-blank-glyph screen))
     ;; Update PTY window size
     (pty-set-size pty new-cols new-rows)
     ;; Update dimensions

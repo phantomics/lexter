@@ -180,6 +180,8 @@
 
 (defpackage #:pcf-gl/vt-handler
   (:use #:cl #:pcf-gl/model)
+  (:shadowing-import-from #:cl-vt #:vt-parser-params-list 
+                          #:vt-parser-get-param #:vt-parser-intermediate-chars-list)
   (:export #:make-vt-handler
            #:vt-handler
            #:vt-handler-screen

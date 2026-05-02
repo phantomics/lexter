@@ -21,23 +21,23 @@
 ;;; cl-vt accessor helpers (these aren't exported, so we define them here)
 ;;; --------------------------------------------------------------------------
 
-(defun parser-get-param (parser index &optional default)
-  "Get parameter at INDEX, returning DEFAULT if not present or empty."
-  (if (< index (cl-vt:vt-parser-num-params parser))
-      (let ((p (aref (cl-vt:vt-parser-params parser) index)))
-        (if (= p -1) default p))
-      default))
+;; (defun parser-get-param (parser index &optional default)
+;;   "Get parameter at INDEX, returning DEFAULT if not present or empty."
+;;   (if (< index (cl-vt:vt-parser-num-params parser))
+;;       (let ((p (aref (cl-vt:vt-parser-params parser) index)))
+;;         (if (= p -1) default p))
+;;       default))
 
-(defun parser-params-list (parser)
-  "Return the collected parameters as a list."
-  (loop :for i :below (cl-vt:vt-parser-num-params parser)
-        :collect (let ((p (aref (cl-vt:vt-parser-params parser) i)))
-                   (if (= p -1) nil p))))
+;; (defun parser-params-list (parser)
+;;   "Return the collected parameters as a list."
+;;   (loop :for i :below (cl-vt:vt-parser-num-params parser)
+;;         :collect (let ((p (aref (cl-vt:vt-parser-params parser) i)))
+;;                    (if (= p -1) nil p))))
 
-(defun parser-intermediate-chars-list (parser)
-  "Return the collected intermediate characters as a list of bytes."
-  (loop :for i :below (cl-vt:vt-parser-num-intermediate-chars parser)
-        :collect (aref (cl-vt:vt-parser-intermediate-chars parser) i)))
+;; (defun parser-intermediate-chars-list (parser)
+;;   "Return the collected intermediate characters as a list of bytes."
+;;   (loop :for i :below (cl-vt:vt-parser-num-intermediate-chars parser)
+;;         :collect (aref (cl-vt:vt-parser-intermediate-chars parser) i)))
 
 ;;; --------------------------------------------------------------------------
 ;;; VT handler structure
@@ -73,7 +73,11 @@
   ;; OSC string accumulator
   (osc-string      ""  :type string)
   ;; Window title (set via OSC)
-  (window-title    ""  :type string))
+  (window-title    ""  :type string)
+  ;; UTF-8 decoding state
+  (utf8-bytes-needed 0 :type (integer 0 3))      ; remaining bytes expected
+  (utf8-codepoint    0 :type (unsigned-byte 32)) ; accumulated codepoint
+  )
 
 ;;; --------------------------------------------------------------------------
 ;;; Constructor
@@ -137,19 +141,11 @@
     (otherwise    nil)))
 
 ;;; --------------------------------------------------------------------------
-;;; Print handler
+;;; Print handler with UTF-8 decoding
 ;;; --------------------------------------------------------------------------
 
-(defun handle-print (handler byte)
-  "Handle a printable character (BYTE is a codepoint/character code)."
-  (when *debug-vt*
-    (format t "~&[PRINT] byte=~D (#x~X) char=~S~%" byte byte (code-char byte)))
-  ;; Ignore DEL (0x7F) and C1 control range that might slip through
-  (when (or (= byte #x7F)
-            (<= #x80 byte #x9F))
-    (when *debug-vt*
-      (format t "~&[PRINT] IGNORED (control char)~%"))
-    (return-from handle-print))
+(defun %print-codepoint (handler codepoint)
+  "Actually print a fully-decoded Unicode codepoint to the screen."
   (let* ((screen (vt-handler-screen handler))
          (atlas (vt-handler-atlas handler))
          (cols (screen-cols screen))
@@ -157,14 +153,15 @@
          (row (cursor-row screen))
          ;; Look up glyph index from codepoint
          (glyph-idx (when atlas
-                      (pcf-gl/atlas:atlas-glyph-index atlas byte))))
+                      (pcf-gl/atlas:atlas-glyph-index atlas codepoint))))
     (when *debug-vt*
-      (format t "~&[PRINT] glyph-idx=~S~%" glyph-idx))
+      (format t "~&[PRINT] codepoint=~D (#x~X) glyph-idx=~S~%" 
+              codepoint codepoint glyph-idx))
     ;; Only print if we have a valid glyph
     (unless glyph-idx
       (when *debug-vt*
-        (format t "~&[PRINT] SKIPPED (no glyph)~%"))
-      (return-from handle-print))
+        (format t "~&[PRINT] SKIPPED (no glyph for U+~4,'0X)~%" codepoint))
+      (return-from %print-codepoint))
     (let (;; Create swatch from current colors
           (swatch-idx (intern-swatch (pcf-gl/model::screen-swatches screen)
                                      (vt-handler-current-bg handler)
@@ -173,8 +170,8 @@
                                      0)))
       ;; Write character at cursor position
       (write-char-at screen col row glyph-idx
-                     :swatch swatch-idx
-                     :attrs (vt-handler-current-attrs handler))
+                   :swatch swatch-idx
+                   :attrs (vt-handler-current-attrs handler))
       ;; Advance cursor
       (let ((new-col (1+ col)))
         (cond
@@ -190,6 +187,51 @@
           (t
            ;; Stay at right edge
            (set-cursor-position screen (1- cols) row)))))))
+
+(defun handle-print (handler byte)
+  "Handle a printable byte, decoding UTF-8 sequences into codepoints."
+  (when *debug-vt*
+    (format t "~&[PRINT-BYTE] byte=~D (#x~X)~%" byte byte))
+  ;; Ignore DEL (0x7F) - it should not reach here but just in case
+  (when (= byte #x7F)
+    (return-from handle-print))
+  (cond
+    ;; Continuation byte (10xxxxxx)?
+    ((= (logand byte #xC0) #x80)
+     (if (> (vt-handler-utf8-bytes-needed handler) 0)
+         ;; Expected continuation: accumulate
+         (progn
+           (setf (vt-handler-utf8-codepoint handler)
+                 (logior (ash (vt-handler-utf8-codepoint handler) 6)
+                         (logand byte #x3F)))
+           (decf (vt-handler-utf8-bytes-needed handler))
+           ;; If complete, print it
+           (when (zerop (vt-handler-utf8-bytes-needed handler))
+             (%print-codepoint handler (vt-handler-utf8-codepoint handler))))
+         ;; Unexpected continuation byte - skip it
+         (when *debug-vt*
+           (format t "~&[PRINT] Unexpected UTF-8 continuation byte~%"))))
+    ;; ASCII (0xxxxxxx)?
+    ((< byte #x80)
+     ;; Reset any pending UTF-8 state and print directly
+     (setf (vt-handler-utf8-bytes-needed handler) 0)
+     (%print-codepoint handler byte))
+    ;; 2-byte sequence start (110xxxxx)?
+    ((= (logand byte #xE0) #xC0)
+     (setf (vt-handler-utf8-codepoint handler) (logand byte #x1F)
+           (vt-handler-utf8-bytes-needed handler) 1))
+    ;; 3-byte sequence start (1110xxxx)?
+    ((= (logand byte #xF0) #xE0)
+     (setf (vt-handler-utf8-codepoint handler) (logand byte #x0F)
+           (vt-handler-utf8-bytes-needed handler) 2))
+    ;; 4-byte sequence start (11110xxx)?
+    ((= (logand byte #xF8) #xF0)
+     (setf (vt-handler-utf8-codepoint handler) (logand byte #x07)
+           (vt-handler-utf8-bytes-needed handler) 3))
+    ;; Invalid UTF-8 lead byte - ignore
+    (t
+     (when *debug-vt*
+       (format t "~&[PRINT] Invalid UTF-8 lead byte: ~D~%" byte)))))
 
 ;;; --------------------------------------------------------------------------
 ;;; C0 control handlers
@@ -239,10 +281,10 @@
   "Handle CSI sequence with final BYTE."
   (let* ((parser (vt-handler-parser handler))
          (screen (vt-handler-screen handler))
-         (intermediates (parser-intermediate-chars-list parser))
+         (intermediates (vt-parser-intermediate-chars-list parser))
          (private-p (and intermediates (= (first intermediates) #x3F))))  ; '?'
     (flet ((param (n &optional (default 1))
-             (or (parser-get-param parser n) default)))
+             (or (vt-parser-get-param parser n) default)))
       (cond
         ;; Private mode sequences (CSI ? ... h/l)
         (private-p
@@ -341,7 +383,7 @@
            (otherwise
             (when (vt-handler-callback handler)
               (funcall (vt-handler-callback handler) :unknown-csi
-                       (list :final byte :params (parser-params-list parser)))))))))))
+                       (list :final byte :params (vt-parser-params-list parser)))))))))))
 
 ;;; --------------------------------------------------------------------------
 ;;; SGR (Select Graphic Rendition) handler
@@ -350,7 +392,7 @@
 (defun handle-sgr (handler)
   "Handle SGR sequence for text attributes and colors."
   (let* ((parser (vt-handler-parser handler))
-         (params (parser-params-list parser)))
+         (params (vt-parser-params-list parser)))
     ;; Empty SGR = reset
     (when (null params)
       (setf params '(0)))
@@ -534,7 +576,7 @@
 (defun handle-esc (handler byte)
   "Handle ESC sequence with final BYTE."
   (let* ((parser (vt-handler-parser handler))
-         (intermediates (parser-intermediate-chars-list parser))
+         (intermediates (vt-parser-intermediate-chars-list parser))
          (screen (vt-handler-screen handler)))
     (cond
       ;; No intermediates

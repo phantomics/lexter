@@ -316,13 +316,13 @@
 ;;; Resize
 ;;; --------------------------------------------------------------------------
 
-(defun resize-grid (grid new-cols new-rows)
+(defun resize-grid (grid new-cols new-rows &key (blank-glyph 0))
   "Resize the grid to NEW-COLS x NEW-ROWS. Existing content is preserved
-   where possible; new cells are initialized to swatch 0, glyph 0."
+   where possible; new cells are initialized to swatch 0 and BLANK-GLYPH."
   (let* ((old-cols (display-grid-cols grid))
          (old-rows (display-grid-rows grid))
          (new-n    (* new-cols new-rows))
-         (new-glyphs (make-array new-n :element-type '(unsigned-byte 16) :initial-element 0))
+         (new-glyphs (make-array new-n :element-type '(unsigned-byte 16) :initial-element blank-glyph))
          (new-swatch-indices (make-array new-n :element-type '(unsigned-byte 16) :initial-element 0))
          (new-layered-flags  (make-array new-n :element-type 'bit :initial-element 0))
          (new-row-dirty (make-array new-rows :element-type 'bit :initial-element 1))

@@ -18,6 +18,7 @@
   :version "0.1.0"
   :depends-on (#:pcf-gl #:cl-vt #:babel)
   :serial t
-  :components ((:file "src/pty")
+  :components ((:file "src/packages-unix")
+               (:file "src/pty")
                (:file "src/vt-handler")
                (:file "src/unix-term")))

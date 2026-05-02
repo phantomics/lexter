@@ -505,10 +505,11 @@
                     (aref (screen-swatch-indices screen) di) (aref (screen-swatch-indices screen) si)
                     (aref (screen-attrs screen) di) (aref (screen-attrs screen) si)))
     ;; Clear inserted positions
-    (loop :for c :from col :below (min (+ col n) cols)
-          :for i = (%idx screen c row)
-          :do (setf (aref (screen-glyphs screen) i) 32
-                    (aref (screen-attrs screen) i) 0))
+    (let ((blank (screen-blank-glyph screen)))
+      (loop :for c :from col :below (min (+ col n) cols)
+            :for i = (%idx screen c row)
+            :do (setf (aref (screen-glyphs screen) i) blank
+                      (aref (screen-attrs screen) i) 0)))
     (%mark-dirty screen row)))
 
 (defun delete-chars (screen n)
@@ -525,10 +526,11 @@
                     (aref (screen-swatch-indices screen) di) (aref (screen-swatch-indices screen) si)
                     (aref (screen-attrs screen) di) (aref (screen-attrs screen) si)))
     ;; Clear vacated positions
-    (loop :for c :from (max col (- cols n)) :below cols
-          :for i = (%idx screen c row)
-          :do (setf (aref (screen-glyphs screen) i) 32
-                    (aref (screen-attrs screen) i) 0))
+    (let ((blank (screen-blank-glyph screen)))
+      (loop :for c :from (max col (- cols n)) :below cols
+            :for i = (%idx screen c row)
+            :do (setf (aref (screen-glyphs screen) i) blank
+                      (aref (screen-attrs screen) i) 0)))
     (%mark-dirty screen row)))
 
 ;;; --------------------------------------------------------------------------
@@ -555,12 +557,13 @@
     (%mark-dirty screen dst-row)))
 
 (defun %clear-row (screen row)
-  "Clear a row to spaces."
+  "Clear a row to blank cells."
   (let ((cols (screen-cols screen))
+        (blank (screen-blank-glyph screen))
         (default-sw (screen-default-swatch screen)))
     (loop :for col :from 0 :below cols
           :for i = (%idx screen col row)
-          :do (setf (aref (screen-glyphs screen) i) 32
+          :do (setf (aref (screen-glyphs screen) i) blank
                     (aref (screen-swatch-indices screen) i) default-sw
                     (aref (screen-attrs screen) i) 0)
               (remhash (cons col row) (screen-layered-cells screen)))

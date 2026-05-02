@@ -494,6 +494,8 @@
       (7    ; Autowrap
        (setf (vt-handler-autowrap handler) t))
       (25   ; Cursor visible
+       (when *debug-vt*
+         (format t "~&[DECSET] Cursor SHOWN~%"))
        (set-cursor-visible screen t))
       (1049 ; Alternate screen buffer
        (unless (vt-handler-in-alt-screen handler)
@@ -513,6 +515,8 @@
       (7    ; Autowrap off
        (setf (vt-handler-autowrap handler) nil))
       (25   ; Cursor invisible
+       (when *debug-vt*
+         (format t "~&[DECRST] Cursor HIDDEN~%"))
        (set-cursor-visible screen nil))
       (1049 ; Restore main screen buffer
        (when (vt-handler-in-alt-screen handler)

@@ -761,13 +761,13 @@
                                    (if (zerop g) space-glyph g))
                                  (aref (screen-swatch-indices screen) i)))))))
     ;; Handle cursor rendering using reverse video (swap fg/bg)
-    ;; This is simpler than layers and more reliable
     (let ((cursor-visible (and (screen-cursor-visible screen)
                                (or (not (screen-cursor-blink screen))
                                    cursor-blink-on))))
       (when (and (< cc cols) (< cr rows))
-        ;; Get the current cell's swatch
-        (let* ((cell-idx (+ (* cr cols) cc))
+        ;; Use display grid dimensions for index calculation
+        (let* ((grid-cols (pcf-gl/grid:display-grid-cols display-grid))
+               (cell-idx (+ (* cr grid-cols) cc))
                (glyph (aref (pcf-gl/grid::display-grid-glyphs display-grid) cell-idx))
                (sw-idx (aref (pcf-gl/grid::display-grid-swatch-indices display-grid) cell-idx)))
           (if cursor-visible
@@ -776,6 +776,14 @@
                   (pcf-gl/grid:get-swatch display-grid sw-idx)
                 ;; Intern a reversed swatch (fg becomes bg, bg becomes fg)
                 (let ((rev-sw (intern-swatch swatches fg bg ov sec)))
+                  ;; IMPORTANT: sync this new swatch to display grid immediately
+                  (let* ((sw-data (swatch-table-data swatches))
+                         (base (* rev-sw +swatch-slots+)))
+                    (pcf-gl/grid:set-swatch display-grid rev-sw
+                                            (aref sw-data (+ base 0))
+                                            (aref sw-data (+ base 1))
+                                            (aref sw-data (+ base 2))
+                                            (aref sw-data (+ base 3))))
                   ;; Apply reversed swatch to display grid
                   (pcf-gl/grid:set-simple-cell display-grid cc cr
                                                (if (zerop glyph) space-glyph glyph)

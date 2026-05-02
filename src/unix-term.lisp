@@ -15,6 +15,8 @@
 ;;; Terminal structure
 ;;; --------------------------------------------------------------------------
 
+(defconstant +esc+ #x1B)
+
 (defstruct unix-terminal
   "Unix terminal emulator state."
   ;; Child process
@@ -35,6 +37,10 @@
   ;; I/O buffer
   (read-buffer (make-array 4096 :element-type '(unsigned-byte 8))
                :type (simple-array (unsigned-byte 8) (*)))
+  ;; Buffer to hold Unicode code points and escape codes for writing
+  (write-buffer (make-array 8 :element-type '(unsigned-byte 8)))
+  ;; Unicode character scratch string
+  (uc-scratch-string (make-string 1))
   ;; State
   (running    nil :type boolean)
   ;; Cursor blink state
@@ -59,43 +65,43 @@
 (defparameter *key-sequences*
   (list
    ;; Arrow keys
-   (cons :up        (bytes #x1B #x5B #x41))      ; ESC [ A
-   (cons :down      (bytes #x1B #x5B #x42))      ; ESC [ B
-   (cons :right     (bytes #x1B #x5B #x43))      ; ESC [ C
-   (cons :left      (bytes #x1B #x5B #x44))      ; ESC [ D
+   (cons :up        (bytes +esc+ #x5B #x41))           ; ESC [ A
+   (cons :down      (bytes +esc+ #x5B #x42))           ; ESC [ B
+   (cons :right     (bytes +esc+ #x5B #x43))           ; ESC [ C
+   (cons :left      (bytes +esc+ #x5B #x44))           ; ESC [ D
    ;; Navigation
-   (cons :home      (bytes #x1B #x5B #x48))      ; ESC [ H
-   (cons :end       (bytes #x1B #x5B #x46))      ; ESC [ F
-   (cons :page-up   (bytes #x1B #x5B #x35 #x7E)) ; ESC [ 5 ~
-   (cons :page-down (bytes #x1B #x5B #x36 #x7E)) ; ESC [ 6 ~
-   (cons :insert    (bytes #x1B #x5B #x32 #x7E)) ; ESC [ 2 ~
-   (cons :delete    (bytes #x1B #x5B #x33 #x7E)) ; ESC [ 3 ~
+   (cons :home      (bytes +esc+ #x5B #x48))           ; ESC [ H
+   (cons :end       (bytes +esc+ #x5B #x46))           ; ESC [ F
+   (cons :page-up   (bytes +esc+ #x5B #x35 #x7E))      ; ESC [ 5 ~
+   (cons :page-down (bytes +esc+ #x5B #x36 #x7E))      ; ESC [ 6 ~
+   (cons :insert    (bytes +esc+ #x5B #x32 #x7E))      ; ESC [ 2 ~
+   (cons :delete    (bytes +esc+ #x5B #x33 #x7E))      ; ESC [ 3 ~
    ;; Function keys
-   (cons :f1        (bytes #x1B #x4F #x50))      ; ESC O P
-   (cons :f2        (bytes #x1B #x4F #x51))      ; ESC O Q
-   (cons :f3        (bytes #x1B #x4F #x52))      ; ESC O R
-   (cons :f4        (bytes #x1B #x4F #x53))      ; ESC O S
-   (cons :f5        (bytes #x1B #x5B #x31 #x35 #x7E)) ; ESC [ 1 5 ~
-   (cons :f6        (bytes #x1B #x5B #x31 #x37 #x7E)) ; ESC [ 1 7 ~
-   (cons :f7        (bytes #x1B #x5B #x31 #x38 #x7E)) ; ESC [ 1 8 ~
-   (cons :f8        (bytes #x1B #x5B #x31 #x39 #x7E)) ; ESC [ 1 9 ~
-   (cons :f9        (bytes #x1B #x5B #x32 #x30 #x7E)) ; ESC [ 2 0 ~
-   (cons :f10       (bytes #x1B #x5B #x32 #x31 #x7E)) ; ESC [ 2 1 ~
-   (cons :f11       (bytes #x1B #x5B #x32 #x33 #x7E)) ; ESC [ 2 3 ~
-   (cons :f12       (bytes #x1B #x5B #x32 #x34 #x7E)) ; ESC [ 2 4 ~
+   (cons :f1        (bytes +esc+ #x4F #x50))           ; ESC O P
+   (cons :f2        (bytes +esc+ #x4F #x51))           ; ESC O Q
+   (cons :f3        (bytes +esc+ #x4F #x52))           ; ESC O R
+   (cons :f4        (bytes +esc+ #x4F #x53))           ; ESC O S
+   (cons :f5        (bytes +esc+ #x5B #x31 #x35 #x7E)) ; ESC [ 1 5 ~
+   (cons :f6        (bytes +esc+ #x5B #x31 #x37 #x7E)) ; ESC [ 1 7 ~
+   (cons :f7        (bytes +esc+ #x5B #x31 #x38 #x7E)) ; ESC [ 1 8 ~
+   (cons :f8        (bytes +esc+ #x5B #x31 #x39 #x7E)) ; ESC [ 1 9 ~
+   (cons :f9        (bytes +esc+ #x5B #x32 #x30 #x7E)) ; ESC [ 2 0 ~
+   (cons :f10       (bytes +esc+ #x5B #x32 #x31 #x7E)) ; ESC [ 2 1 ~
+   (cons :f11       (bytes +esc+ #x5B #x32 #x33 #x7E)) ; ESC [ 2 3 ~
+   (cons :f12       (bytes +esc+ #x5B #x32 #x34 #x7E)) ; ESC [ 2 4 ~
    ;; Special
    (cons :backspace (bytes #x7F))
    (cons :tab       (bytes #x09))
    (cons :enter     (bytes #x0D))
-   (cons :escape    (bytes #x1B)))
+   (cons :escape    (bytes +esc+)))
   "Mapping from GLFW key symbols to byte sequences.")
 
-(defun key-to-bytes (key mods)
+(defun key-to-bytes (key mods buffer)
   "Convert a GLFW key press to bytes to send to PTY.
    Returns a byte vector or NIL if the key should be ignored."
-  (let ((ctrl-p (member :control mods))
-        (shift-p (member :shift mods))
-        (alt-p (member :alt mods)))
+  (let ((ctrl-p  (member :control mods))
+        (shift-p (member :shift   mods))
+        (alt-p   (member :alt     mods)))
     (cond
       ;; Control+key combinations
       ((and ctrl-p (symbolp key))
@@ -105,21 +111,24 @@
            ;; Ctrl+A = 0x01, Ctrl+B = 0x02, etc.
            (let ((code (- (char-code (char-upcase (char name 0))) 64)))
              (when (<= 1 code 26)
-               (bytes code))))))
+               (setf (aref buffer 0) code)
+               1))))) ;; one-byte code
       ;; Alt+key - send ESC prefix
       ((and alt-p (symbolp key))
        (let ((name (symbol-name key)))
          (when (and (= (length name) 1)
                     (alpha-char-p (char name 0)))
-           (let ((ch (if shift-p
-                         (char-upcase (char name 0))
+           (let ((ch (if shift-p ;; shift key capitalizes letters
+                         (char-upcase   (char name 0))
                          (char-downcase (char name 0)))))
-             (bytes #x1B (char-code ch))))))
-      ;; Special keys
-      ((assoc key *key-sequences*)
-       (cdr (assoc key *key-sequences*)))
-      ;; Regular character keys are handled via char callback
-      (t nil))))
+             (setf (aref buffer 0) +esc+ ;; ESC prefix
+                   (aref buffer 1) (char-code ch))
+             2)))) ;; two-byte code
+      (t (let ((seq-form (assoc key *key-sequences*)))
+           ;; Special keys
+           (if seq-form (loop :for cx :from 0 :for char :across (rest seq-form)
+                              :do (setf (aref buffer cx) char) :finally (return cx))
+               0)))))) ;; Regular character keys are handled via char callback, thus return 0
 
 (defun handle-key-press (term key scancode action mods)
   "Handle a GLFW key callback."
@@ -131,26 +140,46 @@
       (setf (unix-terminal-running term) nil)
       (return-from handle-key-press))
     ;; Convert key to bytes
-    (let ((bytes (key-to-bytes key mods)))
-      (when bytes
-        (pty-write (unix-terminal-pty term) bytes)))))
+    (let ((n (key-to-bytes key mods (unix-terminal-write-buffer term))))
+      (unless (zerop n)
+        (pty-write (unix-terminal-pty term)
+                   (unix-terminal-write-buffer term)
+                   :end n)))))
+
+(defvar *utf8-mapping*
+  (babel::lookup-mapping babel::*string-vector-mappings* :utf-8))
 
 (defun handle-char-input (term codepoint)
   "Handle a GLFW character callback (for regular text input).
    CODEPOINT may be a character or an integer depending on cl-glfw3 version."
   (when (pty-alive-p (unix-terminal-pty term))
-    (let* ((code (if (characterp codepoint)
-                     (char-code codepoint)
-                     codepoint))
-           (bytes (babel:string-to-octets (string (code-char code))
-                                          :encoding :utf-8)))
-      (pty-write (unix-terminal-pty term) bytes))))
+    (setf (aref (unix-terminal-uc-scratch-string term) 0)
+          (code-char (if (characterp codepoint) (char-code codepoint) codepoint)))
+    ;; write the first character in scratch-string to the start of the buffer
+    (let ((n (funcall (babel::encoder *utf8-mapping*)
+                      ;; write the first (only) scratch string char...
+                      (unix-terminal-uc-scratch-string term) 0 1
+                      ;; into the buffer starting at 0 
+                      (unix-terminal-write-buffer term) 0)))
+      (pty-write (unix-terminal-pty term)
+                 (unix-terminal-write-buffer term) :end n))))
+
+;; (defun handle-char-input2 (term codepoint)
+;;   "Handle a GLFW character callback (for regular text input).
+;;    CODEPOINT may be a character or an integer depending on cl-glfw3 version."
+;;   (when (pty-alive-p (unix-terminal-pty term))
+;;     (let* ((code (if (characterp codepoint)
+;;                      (char-code codepoint)
+;;                      codepoint))
+;;            (bytes (babel:string-to-octets (string (code-char code))
+;;                                           :encoding :utf-8)))
+;;       (pty-write (unix-terminal-pty term) bytes))))
 
 ;;; --------------------------------------------------------------------------
 ;;; VT handler callbacks
 ;;; --------------------------------------------------------------------------
 
-(defun make-vt-callback (term)
+(defun make-vt-callback (term) ;; echo -e '\033[6n'
   "Create callback function for VT handler events."
   (lambda (type data)
     (case type
@@ -162,6 +191,10 @@
       (:report-cursor
        ;; Send cursor position report back to PTY
        (when (pty-alive-p (unix-terminal-pty term))
+         ;; (format nil "~c[~d;~dR" #\Escape
+         ;;         (1+ (cursor-row screen))
+         ;;         (1+ (cursor-col screen)))
+         ;; (pty-write-string )
          (pty-write-string (unix-terminal-pty term) data)))
       (otherwise
        ;; Log unknown sequences for debugging

@@ -374,7 +374,10 @@
                 (funcall (vt-handler-callback handler) :report-cursor
                          (format nil "~c[~d;~dR" #\Escape
                                  (1+ (cursor-row screen))
-                                 (1+ (cursor-col screen)))))))
+                                 (1+ (cursor-col screen)))
+                         ;; (list (cursor-row screen)
+                         ;;       (cursor-col screen))
+                         ))))
            ;; Modes
            (#x68 ; h - SM (Set Mode)
             nil) ; Standard modes not commonly used

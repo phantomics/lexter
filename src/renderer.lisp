@@ -216,9 +216,11 @@
   "Render one frame.  Call after making the GL context current."
   (gl:clear-color 0.0 0.0 0.0 1.0)
   (gl:clear :color-buffer-bit)
-  (multiple-value-bind (sdata sc ldata lc)
+  (multiple-value-bind (sdata sbytes ldata lc)
       (build-render-data grid)
-    (let ((atlas (render-state-atlas rs)))
+    (declare (type fixnum sbytes))
+    (let ((atlas (render-state-atlas rs))
+          (sc (floor sbytes +simple-stride+)))
       ;; Bind atlas texture to unit 0
       (gl:active-texture :texture0)
       (gl:bind-texture :texture-2d (atlas-texture-id atlas))
@@ -230,7 +232,7 @@
         (gl:disable :blend)
         (gl:bind-buffer :array-buffer (render-state-simple-vbo rs))
         (cffi:with-pointer-to-vector-data (ptr sdata)
-          (%gl:buffer-data :array-buffer (length sdata) ptr :stream-draw))
+          (%gl:buffer-data :array-buffer sbytes ptr :stream-draw))
         (gl:bind-vertex-array (render-state-simple-vao rs))
         (%gl:draw-arrays-instanced :triangle-strip 0 4 sc))
       ;; ---- Layered cells -----------------------------------------------
@@ -241,8 +243,9 @@
                              (render-state-palette-ubo rs))
           ;; Upload the full merged buffer once
           (gl:bind-buffer :array-buffer (render-state-layered-vbo rs))
-          (cffi:with-pointer-to-vector-data (ptr ldata)
-            (%gl:buffer-data :array-buffer (length ldata) ptr :stream-draw))
+          (let ((lbytes (* total-layered +layered-stride+)))
+            (cffi:with-pointer-to-vector-data (ptr ldata)
+              (%gl:buffer-data :array-buffer lbytes ptr :stream-draw)))
           (gl:bind-vertex-array (render-state-layered-vao rs))
           ;; Draw each layer depth in turn, updating attrib offsets.
           ;; GL 3.3 has no glDrawArraysInstancedBaseInstance, so we slide

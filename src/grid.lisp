@@ -76,25 +76,42 @@
 ;;; Constructor
 ;;; --------------------------------------------------------------------------
 
+(defun %allocate-render-buffers (grid)
+  "Allocate or reallocate render buffers for GRID's current size."
+  (let ((n (* (display-grid-cols grid) (display-grid-rows grid))))
+    (setf (display-grid-simple-buffer grid)
+          (make-array (* n +simple-stride+)
+                      :element-type '(unsigned-byte 8)
+                      :initial-element 0)
+          (display-grid-simple-count grid) 0
+          (display-grid-layered-buffer grid)
+          (make-array (* n +layered-stride+ +max-layers+)
+                      :element-type '(unsigned-byte 8)
+                      :initial-element 0)
+          (display-grid-layered-counts grid)
+          (make-array +max-layers+ :element-type 'fixnum :initial-element 0))))
+
 (defun make-display-grid (&key (cols 80) (rows 24) (swatch-count 256))
   "Create a display grid with COLS columns, ROWS rows, and SWATCH-COUNT swatches."
-  (let ((n (* cols rows)))
-    (%make-display-grid
-     :cols           cols
-     :rows           rows
-     :swatch-count   swatch-count
-     :swatch-data    (make-array (* swatch-count +swatch-slots+)
-                                 :element-type '(unsigned-byte 8)
-                                 :initial-element 0)
-     :glyphs         (make-array n :element-type '(unsigned-byte 16) :initial-element 0)
-     :swatch-indices (make-array n :element-type '(unsigned-byte 16) :initial-element 0)
-     :layered-cells  (make-hash-table :test 'equal :size 64)
-     :layered-flags  (make-array n :element-type 'bit :initial-element 0)
-     :row-dirty      (make-array rows :element-type 'bit :initial-element 1)
-     :simple-buffer  nil
-     :simple-count   0
-     :layered-buffer nil
-     :layered-counts (make-array +max-layers+ :element-type 'fixnum :initial-element 0))))
+  (let* ((n (* cols rows))
+         (grid (%make-display-grid
+                :cols           cols
+                :rows           rows
+                :swatch-count   swatch-count
+                :swatch-data    (make-array (* swatch-count +swatch-slots+)
+                                            :element-type '(unsigned-byte 8)
+                                            :initial-element 0)
+                :glyphs         (make-array n :element-type '(unsigned-byte 16) :initial-element 0)
+                :swatch-indices (make-array n :element-type '(unsigned-byte 16) :initial-element 0)
+                :layered-cells  (make-hash-table :test 'equal :size 64)
+                :layered-flags  (make-array n :element-type 'bit :initial-element 0)
+                :row-dirty      (make-array rows :element-type 'bit :initial-element 1)
+                :simple-buffer  nil
+                :simple-count   0
+                :layered-buffer nil
+                :layered-counts (make-array +max-layers+ :element-type 'fixnum :initial-element 0))))
+    (%allocate-render-buffers grid)
+    grid))
 
 ;;; --------------------------------------------------------------------------
 ;;; Swatch API
@@ -233,48 +250,58 @@
 ;;; Render data builder
 ;;; --------------------------------------------------------------------------
 
-(declaim (inline %u16-lo %u16-hi %emit-u16))
+(declaim (inline %u16-lo %u16-hi))
 
 (defun %u16-lo (v) (ldb (byte 8 0) v))
 (defun %u16-hi (v) (ldb (byte 8 8) v))
 
-(defun %emit-u16 (vec value)
-  (vector-push (%u16-lo value) vec)
-  (vector-push (%u16-hi value) vec))
-
 (defun build-render-data (grid &key force-full)
-  "Build GPU instance buffers.  If FORCE-FULL is true, rebuild everything.
-   Otherwise, only rebuild dirty rows.
-   Returns (values simple-data simple-count layered-data layered-layer-counts)."
-  ;; For now, always do a full rebuild. Incremental updates can be added later
-  ;; once the basic pipeline is working.
+  "Build GPU instance buffers using pre-allocated storage.
+   If FORCE-FULL is true, rebuild everything.  Otherwise, only rebuild dirty rows.
+   Returns (values simple-buffer simple-byte-count layered-buffer layered-layer-counts).
+   The returned buffers are the grid's cached buffers - do NOT modify them."
   (declare (ignore force-full))
-  (let* ((cols  (display-grid-cols grid))
-         (rows  (display-grid-rows grid))
-         (n     (* cols rows))
-         (sbuf  (make-array (* n +simple-stride+)
-                            :element-type '(unsigned-byte 8) :fill-pointer 0))
-         (lbufs (loop :repeat +max-layers+
-                      :collect (make-array (* n +layered-stride+)
-                                           :element-type '(unsigned-byte 8)
-                                           :fill-pointer 0)))
-         (sc    0)
-         (lc    (make-array +max-layers+ :element-type 'fixnum :initial-element 0))
-         (swatch-data (display-grid-swatch-data grid)))
+  (let* ((cols   (display-grid-cols grid))
+         (rows   (display-grid-rows grid))
+         (sbuf   (display-grid-simple-buffer grid))
+         (lbuf   (display-grid-layered-buffer grid))
+         (lc     (display-grid-layered-counts grid))
+         (swatch-data (display-grid-swatch-data grid))
+         (si     0)   ; simple buffer write index
+         (sc     0)   ; simple cell count
+         ;; Layer write indices: one per layer, offset into lbuf
+         (li     (make-array +max-layers+ :element-type 'fixnum :initial-element 0)))
+    (declare (type fixnum si sc)
+             (type (simple-array (unsigned-byte 8) (*)) sbuf lbuf swatch-data)
+             (type (simple-array fixnum (*)) lc li))
+    ;; Reset layer counts
+    (dotimes (i +max-layers+) (setf (aref lc i) 0))
+    ;; Calculate layer base offsets in the merged buffer
+    ;; Each layer gets cols*rows*stride bytes max, but we write compactly
+    ;; and track actual counts. We'll compact at the end.
+    (let ((layer-base (* cols rows +layered-stride+)))
+      (dotimes (ln +max-layers+)
+        (setf (aref li ln) (* ln layer-base))))
+    ;; Iterate all cells
     (dotimes (row rows)
       (dotimes (col cols)
         (let ((i (%idx grid col row)))
           (if (zerop (sbit (display-grid-layered-flags grid) i))
-              ;; --- Simple cell ---
+              ;; --- Simple cell: write directly into sbuf ---
               (let* ((sw-idx (aref (display-grid-swatch-indices grid) i))
                      (sw-base (* sw-idx +swatch-slots+))
                      (fg (aref swatch-data (+ sw-base 1)))
                      (bg (aref swatch-data (+ sw-base 0))))
-                (%emit-u16 sbuf col)
-                (%emit-u16 sbuf row)
-                (%emit-u16 sbuf (aref (display-grid-glyphs grid) i))
-                (vector-push fg sbuf)
-                (vector-push bg sbuf)
+                (setf (aref sbuf si)       (%u16-lo col)
+                      (aref sbuf (+ si 1)) (%u16-hi col)
+                      (aref sbuf (+ si 2)) (%u16-lo row)
+                      (aref sbuf (+ si 3)) (%u16-hi row))
+                (let ((glyph (aref (display-grid-glyphs grid) i)))
+                  (setf (aref sbuf (+ si 4)) (%u16-lo glyph)
+                        (aref sbuf (+ si 5)) (%u16-hi glyph)))
+                (setf (aref sbuf (+ si 6)) fg
+                      (aref sbuf (+ si 7)) bg)
+                (incf si +simple-stride+)
                 (incf sc))
               ;; --- Layered cell ---
               (let ((loc (gethash (cons col row) (display-grid-layered-cells grid))))
@@ -283,34 +310,43 @@
                     (dotimes (ln +max-layers+)
                       (let ((layer (aref (cell-location-layers loc) ln)))
                         (when layer
-                          (let ((buf (nth ln lbufs))
-                                (ts  (ecase (cell-layer-transparent-side layer)
-                                       (:none 2) (:bg 0) (:fg 1))))
-                            (%emit-u16 buf col)
-                            (%emit-u16 buf row)
-                            (%emit-u16 buf (cell-layer-glyph-idx layer))
-                            (vector-push (cell-layer-ink-idx layer) buf)
-                            (vector-push (cell-layer-bg-idx  layer) buf)
-                            (vector-push ts buf)
-                            (vector-push 0  buf)
-                            (vector-push (aref sw 0) buf)
-                            (vector-push (aref sw 1) buf)
-                            (vector-push (aref sw 2) buf)
-                            (vector-push (aref sw 3) buf)
+                          (let* ((idx (aref li ln))
+                                 (ts  (ecase (cell-layer-transparent-side layer)
+                                        (:none 2) (:bg 0) (:fg 1)))
+                                 (glyph (cell-layer-glyph-idx layer)))
+                            (setf (aref lbuf idx)       (%u16-lo col)
+                                  (aref lbuf (+ idx 1)) (%u16-hi col)
+                                  (aref lbuf (+ idx 2)) (%u16-lo row)
+                                  (aref lbuf (+ idx 3)) (%u16-hi row)
+                                  (aref lbuf (+ idx 4)) (%u16-lo glyph)
+                                  (aref lbuf (+ idx 5)) (%u16-hi glyph)
+                                  (aref lbuf (+ idx 6)) (cell-layer-ink-idx layer)
+                                  (aref lbuf (+ idx 7)) (cell-layer-bg-idx layer)
+                                  (aref lbuf (+ idx 8)) ts
+                                  (aref lbuf (+ idx 9)) 0
+                                  (aref lbuf (+ idx 10)) (aref sw 0)
+                                  (aref lbuf (+ idx 11)) (aref sw 1)
+                                  (aref lbuf (+ idx 12)) (aref sw 2)
+                                  (aref lbuf (+ idx 13)) (aref sw 3))
+                            (incf (aref li ln) +layered-stride+)
                             (incf (aref lc ln)))))))))))))
-    ;; Merge layer buckets
-    (let* ((total (* (reduce #'+ lc) +layered-stride+))
-           (lmerge (make-array total :element-type '(unsigned-byte 8))))
-      (let ((dst 0))
-        (dolist (lb lbufs)
-          (let ((len (fill-pointer lb)))
-            (replace lmerge lb :start1 dst :end2 len)
-            (incf dst len))))
-      (let* ((used (* sc +simple-stride+))
-             (sresult (make-array used :element-type '(unsigned-byte 8))))
-        (replace sresult sbuf :end2 used)
-        (clear-dirty-flags grid)
-        (values sresult sc lmerge lc)))))
+    ;; Compact layered data: move each layer's data to be contiguous
+    ;; Layer 0 is already at offset 0, so we only need to move layers 1+
+    (let ((layer-max (* cols rows +layered-stride+))
+          (dst (* (aref lc 0) +layered-stride+)))
+      (loop :for ln :from 1 :below +max-layers+
+            :for count := (aref lc ln)
+            :when (> count 0)
+              :do (let ((src (* ln layer-max))
+                        (len (* count +layered-stride+)))
+                    (replace lbuf lbuf :start1 dst :end1 (+ dst len)
+                                       :start2 src :end2 (+ src len))
+                    (incf dst len))))
+    ;; Store counts and clear dirty flags
+    (setf (display-grid-simple-count grid) sc)
+    (clear-dirty-flags grid)
+    ;; Return buffers and counts
+    (values sbuf (* sc +simple-stride+) lbuf lc)))
 
 ;;; --------------------------------------------------------------------------
 ;;; Resize
@@ -349,6 +385,7 @@
           (display-grid-swatch-indices grid) new-swatch-indices
           (display-grid-layered-flags grid) new-layered-flags
           (display-grid-row-dirty grid) new-row-dirty
-          (display-grid-layered-cells grid) new-layered-cells
-          (display-grid-layered-counts grid) (make-array +max-layers+ :element-type 'fixnum :initial-element 0))
+          (display-grid-layered-cells grid) new-layered-cells)
+    ;; Reallocate render buffers for new size
+    (%allocate-render-buffers grid)
     grid))

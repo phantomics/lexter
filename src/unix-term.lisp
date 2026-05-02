@@ -136,9 +136,9 @@
   (when (and (member action '(:press :repeat))
              (pty-alive-p (unix-terminal-pty term)))
     ;; Handle Escape specially - close terminal
-    (when (and (eq key :escape) (eq action :press) (null mods))
-      (setf (unix-terminal-running term) nil)
-      (return-from handle-key-press))
+    ;; (when (and (eq key :escape) (eq action :press) (null mods))
+    ;;   (setf (unix-terminal-running term) nil)
+    ;;   (return-from handle-key-press))
     ;; Convert key to bytes
     (let ((n (key-to-bytes key mods (unix-terminal-write-buffer term))))
       (unless (zerop n)

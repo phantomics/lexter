@@ -53,7 +53,9 @@
            #:build-render-data
            ;; Constants
            #:+max-layers+
-           #:+swatch-slots+))
+           #:+swatch-slots+
+           #:+simple-stride+
+           #:+layered-stride+))
 
 (defpackage #:pcf-gl/shaders
   (:use #:cl)

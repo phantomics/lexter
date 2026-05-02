@@ -169,8 +169,8 @@
   ;; Load font and determine window size
   (format t "~&Loading font ~a ...~%" font-path)
   (let* ((font     (load-pcf font-path))
-         (cell-w   (pcf-font-cell-width  font))
-         (cell-h   (pcf-font-cell-height font))
+         (cell-w   (bitmap-font-cell-width  font))
+         (cell-h   (bitmap-font-cell-height font))
          (cols     50)
          (rows     10))
     (format t "~&Cell ~dx~d (native)~%" cell-w cell-h)

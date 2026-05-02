@@ -39,12 +39,12 @@
    Returns an ATLAS struct with a valid GL texture."
   (assert fonts () "At least one font required")
   (let* ((primary     (first fonts))
-         (cell-w      (pcf-font-cell-width  primary))
-         (cell-h      (pcf-font-cell-height primary)))
+         (cell-w      (bitmap-font-cell-width  primary))
+         (cell-h      (bitmap-font-cell-height primary)))
     ;; Validate all fonts have the same cell size
     (dolist (f (rest fonts))
-      (unless (and (= (pcf-font-cell-width  f) cell-w)
-                   (= (pcf-font-cell-height f) cell-h))
+      (unless (and (= (bitmap-font-cell-width  f) cell-w)
+                   (= (bitmap-font-cell-height f) cell-h))
         (error "All fonts in the fallback chain must have the same cell dimensions")))
     ;; Assign a glyph index to each unique codepoint, first-font-wins
     (let* ((codepoint-table (make-hash-table :test 'eql))
@@ -54,9 +54,9 @@
                    (unless (gethash codepoint codepoint-table)
                      (let ((atlas-idx (length glyph-list)))
                        (setf (gethash codepoint codepoint-table) atlas-idx)
-                       (push (aref (pcf-font-bitmaps font) glyph-idx-in-font)
+                       (push (aref (bitmap-font-bitmaps font) glyph-idx-in-font)
                              glyph-list))))
-                 (pcf-font-encoding font)))
+                 (bitmap-font-encoding font)))
       (let* ((glyph-vec   (coerce (nreverse glyph-list) 'simple-vector))
              (num-glyphs  (length glyph-vec))
              ;; Choose atlas column count: ~32 glyphs wide is a good default

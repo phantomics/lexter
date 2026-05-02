@@ -737,16 +737,21 @@
 ;;; --------------------------------------------------------------------------
 
 (defun flush-to-display (screen display-grid &key (atlas nil) (space-glyph 32)
-                                                   (cursor-blink-on t))
+                                                   (cursor-blink-on t)
+                                                   (col-offset 0) (row-offset 0))
   "Copy screen state to the display grid for rendering.
    ATLAS is used to look up cursor glyph indices.
    SPACE-GLYPH is the atlas index for space character.
-   CURSOR-BLINK-ON controls whether a blinking cursor is currently visible."
+   CURSOR-BLINK-ON controls whether a blinking cursor is currently visible.
+   COL-OFFSET and ROW-OFFSET position the screen within the grid (for panes)."
+  (declare (ignore atlas))
   (let ((cols (screen-cols screen))
         (rows (screen-rows screen))
         (swatches (screen-swatches screen))
         (cc (screen-cursor-col screen))
-        (cr (screen-cursor-row screen)))
+        (cr (screen-cursor-row screen))
+        (grid-cols (pcf-gl/grid:display-grid-cols display-grid))
+        (grid-rows (pcf-gl/grid:display-grid-rows display-grid)))
     ;; Always mark cursor row dirty so it gets updated every frame
     ;; This ensures cursor blink and movement are always rendered
     (when (< cr rows)
@@ -766,40 +771,47 @@
                                             (aref sw-data (+ base 3)))))
         (setf (pcf-gl/grid:swatch-generation display-grid) model-gen)))
     ;; Copy cells (including clearing old cursor position)
-    (loop :for row :from 0 :below (min rows (pcf-gl/grid:display-grid-rows display-grid))
-          :when (= 1 (sbit (screen-row-dirty screen) row))
-          :do (loop :for col :from 0 :below (min cols (pcf-gl/grid:display-grid-cols display-grid))
-                    :for layers = (%get-layered screen col row)
-                    :do (if layers
-                            ;; Layered cell
-                            (let ((sw (model-cell-layers-swatch layers)))
-                              (pcf-gl/grid:set-cell-swatch display-grid col row sw)
-                              (loop :for ln :from 0 :below +max-layers+
-                                    :for lobj = (aref (model-cell-layers-layers layers) ln)
-                                    :when lobj
-                                    :do (pcf-gl/grid:set-cell-layer
-                                         display-grid col row ln
-                                         (model-layer-glyph-idx lobj)
-                                         (model-layer-ink-slot lobj)
-                                         :bg-idx (model-layer-bg-slot lobj)
-                                         :transparent-side (model-layer-transparent-side lobj))))
-                            ;; Simple cell - clear any overlay layers first
-                            (progn
-                              (pcf-gl/grid:clear-cell-layers display-grid col row)
-                              (let ((i (%idx screen col row)))
-                                (pcf-gl/grid:set-simple-cell
-                                 display-grid col row
-                                 (let ((g (aref (screen-glyphs screen) i)))
-                                   (if (zerop g) space-glyph g))
-                                 (aref (screen-swatch-indices screen) i)))))))
+    ;; Bounds: iterate screen coords, but clip to grid bounds after offset
+    (loop :for row :from 0 :below rows
+          :for grid-row = (+ row row-offset)
+          :when (and (= 1 (sbit (screen-row-dirty screen) row))
+                     (< grid-row grid-rows))
+          :do (loop :for col :from 0 :below cols
+                    :for grid-col = (+ col col-offset)
+                    :when (< grid-col grid-cols)
+                    :do (let ((layers (%get-layered screen col row)))
+                          (if layers
+                              ;; Layered cell
+                              (let ((sw (model-cell-layers-swatch layers)))
+                                (pcf-gl/grid:set-cell-swatch display-grid grid-col grid-row sw)
+                                (loop :for ln :from 0 :below +max-layers+
+                                      :for lobj = (aref (model-cell-layers-layers layers) ln)
+                                      :when lobj
+                                      :do (pcf-gl/grid:set-cell-layer
+                                           display-grid grid-col grid-row ln
+                                           (model-layer-glyph-idx lobj)
+                                           (model-layer-ink-slot lobj)
+                                           :bg-idx (model-layer-bg-slot lobj)
+                                           :transparent-side (model-layer-transparent-side lobj))))
+                              ;; Simple cell - clear any overlay layers first
+                              (progn
+                                (pcf-gl/grid:clear-cell-layers display-grid grid-col grid-row)
+                                (let ((i (%idx screen col row)))
+                                  (pcf-gl/grid:set-simple-cell
+                                   display-grid grid-col grid-row
+                                   (let ((g (aref (screen-glyphs screen) i)))
+                                     (if (zerop g) space-glyph g))
+                                   (aref (screen-swatch-indices screen) i))))))))
     ;; Handle cursor rendering using reverse video (swap fg/bg)
     (let ((cursor-visible (and (screen-cursor-visible screen)
                                (or (not (screen-cursor-blink screen))
-                                   cursor-blink-on))))
-      (when (and (< cc cols) (< cr rows))
-        ;; Use display grid dimensions for index calculation
-        (let* ((grid-cols (pcf-gl/grid:display-grid-cols display-grid))
-               (cell-idx (+ (* cr grid-cols) cc))
+                                   cursor-blink-on)))
+          (grid-cc (+ cc col-offset))
+          (grid-cr (+ cr row-offset)))
+      (when (and (< cc cols) (< cr rows)
+                 (< grid-cc grid-cols) (< grid-cr grid-rows))
+        ;; Use grid coordinates for cell access
+        (let* ((cell-idx (+ (* grid-cr grid-cols) grid-cc))
                (glyph (aref (pcf-gl/grid::display-grid-glyphs display-grid) cell-idx))
                (sw-idx (aref (pcf-gl/grid::display-grid-swatch-indices display-grid) cell-idx)))
           (if cursor-visible
@@ -817,15 +829,16 @@
                                             (aref sw-data (+ base 2))
                                             (aref sw-data (+ base 3))))
                   ;; Apply reversed swatch to display grid
-                  (pcf-gl/grid:set-simple-cell display-grid cc cr
+                  (pcf-gl/grid:set-simple-cell display-grid grid-cc grid-cr
                                                (if (zerop glyph) space-glyph glyph)
                                                rev-sw)))
               ;; Cursor OFF: restore normal swatch from model
-              (let ((model-sw (aref (screen-swatch-indices screen) cell-idx)))
-                (pcf-gl/grid:set-simple-cell display-grid cc cr
+              (let ((model-sw (aref (screen-swatch-indices screen)
+                                    (+ (* cr (screen-cols screen)) cc))))
+                (pcf-gl/grid:set-simple-cell display-grid grid-cc grid-cr
                                              (if (zerop glyph) space-glyph glyph)
                                              model-sw))))
-        ;; Always mark cursor row dirty
-        (pcf-gl/grid:mark-row-dirty display-grid cr)))
+        ;; Always mark cursor row dirty in grid
+        (pcf-gl/grid:mark-row-dirty display-grid grid-cr)))
     ;; Clear model dirty flags
     (fill (screen-row-dirty screen) 0)))

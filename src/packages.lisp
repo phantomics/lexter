@@ -1,13 +1,16 @@
 (defpackage #:pcf-gl/pcf
   (:use #:cl)
-  (:export #:load-pcf
-           #:pcf-font
-           #:pcf-font-cell-width
-           #:pcf-font-cell-height
-           #:pcf-font-ascent
-           #:pcf-font-glyph-count
-           #:pcf-font-bitmaps
-           #:pcf-font-encoding
+  (:export ;; Loaders
+           #:load-pcf
+           #:load-bdf
+           ;; Font struct (shared by PCF and BDF)
+           #:bitmap-font
+           #:bitmap-font-cell-width
+           #:bitmap-font-cell-height
+           #:bitmap-font-ascent
+           #:bitmap-font-glyph-count
+           #:bitmap-font-bitmaps
+           #:bitmap-font-encoding
            #:glyph-index))
 
 (defpackage #:pcf-gl/atlas

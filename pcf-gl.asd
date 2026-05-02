@@ -22,3 +22,16 @@
                (:file "src/pty")
                (:file "src/vt-handler")
                (:file "src/unix-term")))
+
+;;; Pane multiplexer subsystem
+(asdf:defsystem #:pcf-gl/panes
+  :description "Pane multiplexer for pcf-gl"
+  :version "0.1.0"
+  :depends-on (#:pcf-gl/unix)
+  :serial t
+  :components ((:file "src/panes/packages")
+               (:file "src/panes/protocol")
+               (:file "src/panes/terminal-pane")
+               (:file "src/panes/function-pane")
+               (:file "src/panes/workspace")
+               (:file "src/panes/compositor")))

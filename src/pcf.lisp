@@ -16,8 +16,8 @@
 
 ;;;; Structures
 
-(defstruct pcf-font
-  "A loaded PCF bitmap font."
+(defstruct bitmap-font
+  "A loaded bitmap font (from PCF or BDF)."
   (cell-width   0 :type (unsigned-byte 16))
   (cell-height  0 :type (unsigned-byte 16))
   (ascent       0 :type (unsigned-byte 16))
@@ -111,7 +111,7 @@
       (let ((bitmaps (%parse-bitmaps stream metrics cell-width cell-height)))
         (seek-to stream (fourth encodings-entry))
         (let ((encoding (%parse-encodings stream)))
-          (make-pcf-font
+          (make-bitmap-font
            :cell-width   cell-width
            :cell-height  cell-height
            :ascent       ascent
@@ -229,4 +229,177 @@
 
 (defun glyph-index (font codepoint)
   "Return the glyph index for CODEPOINT in FONT, or NIL if not covered."
-  (gethash codepoint (pcf-font-encoding font)))
+  (gethash codepoint (bitmap-font-encoding font)))
+
+;;; ==========================================================================
+;;; BDF Loader
+;;; ==========================================================================
+;;;
+;;; BDF (Bitmap Distribution Format) is a plain-text font format.
+;;; It's the source format that gets compiled to PCF by bdftopcf.
+
+(defun load-bdf (path)
+  "Load a BDF bitmap font file. Returns a BITMAP-FONT struct."
+  (with-open-file (stream path :direction :input)
+    (%parse-bdf stream)))
+
+(defun %bdf-parse-line (line)
+  "Parse a BDF line into (keyword . rest-of-line) or NIL for empty/comment."
+  (let ((trimmed (string-trim '(#\Space #\Tab) line)))
+    (when (and (> (length trimmed) 0)
+               (char/= (char trimmed 0) #\#))  ; skip comments
+      (let ((space-pos (position #\Space trimmed)))
+        (if space-pos
+            (cons (subseq trimmed 0 space-pos)
+                  (string-trim '(#\Space #\Tab) (subseq trimmed space-pos)))
+            (cons trimmed ""))))))
+
+(defun %bdf-parse-integers (string)
+  "Parse space-separated integers from STRING."
+  (with-input-from-string (s string)
+    (loop :for val = (read s nil nil)
+          :while val
+          :collect val)))
+
+(defun %parse-bdf (stream)
+  "Parse a BDF file, returning a BITMAP-FONT struct."
+  (let ((cell-width nil)
+        (cell-height nil)
+        (ascent nil)
+        (font-y-offset nil)
+        (glyph-list '())
+        (encoding-table (make-hash-table :test 'eql)))
+    ;; First pass: read header to get FONTBOUNDINGBOX and FONT_ASCENT
+    (loop :for line = (read-line stream nil nil)
+          :while line
+          :do (let ((parsed (%bdf-parse-line line)))
+                (when parsed
+                  (let ((keyword (car parsed))
+                        (rest (cdr parsed)))
+                    (cond
+                      ((string= keyword "FONTBOUNDINGBOX")
+                       (destructuring-bind (w h xoff yoff)
+                           (%bdf-parse-integers rest)
+                         (declare (ignore xoff))
+                         (setf cell-width w
+                               cell-height h
+                               font-y-offset yoff)))
+                      ((string= keyword "FONT_ASCENT")
+                       (setf ascent (parse-integer rest)))
+                      ((string= keyword "CHARS")
+                       ;; Done with header, move to glyph parsing
+                       (return)))))))
+    ;; Validate header
+    (unless (and cell-width cell-height)
+      (error "BDF file missing FONTBOUNDINGBOX"))
+    (unless ascent
+      ;; Compute ascent from cell-height and font-y-offset if not explicit
+      (setf ascent (+ cell-height (or font-y-offset 0))))
+    ;; Second pass: parse each glyph
+    (loop :for line = (read-line stream nil nil)
+          :while line
+          :do (let ((parsed (%bdf-parse-line line)))
+                (when (and parsed (string= (car parsed) "STARTCHAR"))
+                  (multiple-value-bind (codepoint pixels)
+                      (%parse-bdf-glyph stream cell-width cell-height ascent)
+                    (when (and codepoint pixels)
+                      (let ((glyph-idx (length glyph-list)))
+                        (push pixels glyph-list)
+                        (setf (gethash codepoint encoding-table) glyph-idx)))))))
+    ;; Build the font struct
+    (let ((bitmaps (coerce (nreverse glyph-list) 'simple-vector)))
+      (make-bitmap-font
+       :cell-width   cell-width
+       :cell-height  cell-height
+       :ascent       ascent
+       :glyph-count  (length bitmaps)
+       :bitmaps      bitmaps
+       :encoding     encoding-table))))
+
+(defun %parse-bdf-glyph (stream cell-width cell-height font-ascent)
+  "Parse a single glyph from STARTCHAR to ENDCHAR.
+   Returns (values codepoint pixel-array) or (values nil nil) on error."
+  (let ((codepoint nil)
+        (bbx-w nil) (bbx-h nil) (bbx-xoff nil) (bbx-yoff nil)
+        (bitmap-lines '()))
+    ;; Read glyph properties until BITMAP
+    (loop :for line = (read-line stream nil nil)
+          :while line
+          :do (let ((parsed (%bdf-parse-line line)))
+                (when parsed
+                  (let ((keyword (car parsed))
+                        (rest (cdr parsed)))
+                    (cond
+                      ((string= keyword "ENCODING")
+                       (setf codepoint (parse-integer rest)))
+                      ((string= keyword "BBX")
+                       (destructuring-bind (w h xoff yoff)
+                           (%bdf-parse-integers rest)
+                         (setf bbx-w w bbx-h h bbx-xoff xoff bbx-yoff yoff)))
+                      ((string= keyword "BITMAP")
+                       (return))
+                      ((string= keyword "ENDCHAR")
+                       ;; Empty glyph (no bitmap section)
+                       (return-from %parse-bdf-glyph (values nil nil))))))))
+    ;; Read hex bitmap lines until ENDCHAR
+    (loop :for line = (read-line stream nil nil)
+          :while line
+          :do (let ((trimmed (string-trim '(#\Space #\Tab) line)))
+                (cond
+                  ((string= trimmed "ENDCHAR") (return))
+                  ((> (length trimmed) 0)
+                   (push trimmed bitmap-lines)))))
+    (setf bitmap-lines (nreverse bitmap-lines))
+    ;; Validate we have what we need
+    (unless (and codepoint bbx-w bbx-h bbx-xoff bbx-yoff)
+      (return-from %parse-bdf-glyph (values nil nil)))
+    ;; Decode the bitmap
+    (let ((pixels (%decode-bdf-bitmap bitmap-lines
+                                       bbx-w bbx-h bbx-xoff bbx-yoff
+                                       cell-width cell-height font-ascent)))
+      (values codepoint pixels))))
+
+(defun %hex-char-value (char)
+  "Return the numeric value of a hex character, or NIL."
+  (cond
+    ((char<= #\0 char #\9) (- (char-code char) (char-code #\0)))
+    ((char<= #\A char #\F) (+ 10 (- (char-code char) (char-code #\A))))
+    ((char<= #\a char #\f) (+ 10 (- (char-code char) (char-code #\a))))
+    (t nil)))
+
+(defun %decode-bdf-bitmap (hex-lines bbx-w bbx-h bbx-xoff bbx-yoff
+                                      cell-width cell-height font-ascent)
+  "Decode BDF hex bitmap lines into a cell-sized pixel array.
+   BBX offsets position the glyph within the cell."
+  ;; Create cell-sized output, all zeros (background)
+  (let* ((pixels (make-array (* cell-width cell-height)
+                             :element-type '(unsigned-byte 8)
+                             :initial-element 0))
+         ;; Calculate where the glyph goes in the cell
+         ;; X: bbx-xoff from the left edge
+         ;; Y: baseline is at (font-ascent) from top; glyph bottom is at baseline + bbx-yoff
+         ;;    So glyph top row is at: font-ascent - (bbx-yoff + bbx-h)
+         (glyph-x bbx-xoff)
+         (glyph-y (- font-ascent bbx-yoff bbx-h)))
+    ;; Decode each hex line
+    (loop :for hex-line :in hex-lines
+          :for src-row :from 0 :below bbx-h
+          :do (let ((dst-row (+ glyph-y src-row)))
+                (when (and (>= dst-row 0) (< dst-row cell-height))
+                  ;; Decode hex string to bits
+                  (loop :for col :from 0 :below bbx-w
+                        :for dst-col = (+ glyph-x col)
+                        :when (and (>= dst-col 0) (< dst-col cell-width))
+                        :do (let* ((hex-idx (floor col 4))
+                                   (bit-in-nibble (- 3 (mod col 4)))
+                                   (hex-char (if (< hex-idx (length hex-line))
+                                                 (char hex-line hex-idx)
+                                                 #\0))
+                                   (nibble (%hex-char-value hex-char))
+                                   (bit-val (if nibble
+                                                (ldb (byte 1 bit-in-nibble) nibble)
+                                                0)))
+                              (when (= bit-val 1)
+                                (setf (aref pixels (+ (* dst-row cell-width) dst-col))
+                                      255)))))))
+    pixels))

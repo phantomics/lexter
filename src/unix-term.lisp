@@ -330,8 +330,8 @@
   (format t "~&=== pcf-gl terminal v0.5 ===~%")
   (format t "~&Loading font ~a ...~%" font-path)
   (let* ((font   (load-pcf font-path))
-         (cell-w (pcf-font-cell-width font))
-         (cell-h (pcf-font-cell-height font)))
+         (cell-w (bitmap-font-cell-width font))
+         (cell-h (bitmap-font-cell-height font)))
     (format t "~&Cell ~dx~d, terminal ~dx~d~%" cell-w cell-h cols rows)
     ;; Initialize GLFW
     (glfw:initialize)
@@ -434,7 +434,7 @@
                                (0   0   170)  ; 4  dark blue
                                (170 0   170)  ; 5  dark magenta
                                (0   170 170)  ; 6  dark cyan
-                               (170 170 170)  ; 7  light grey
+                               (220 220 220)  ; 7  light grey
                                (85  85  85)   ; 8  dark grey
                                (255 85  85)   ; 9  bright red
                                (85  255 85)   ; 10 bright green

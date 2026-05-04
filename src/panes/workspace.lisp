@@ -103,11 +103,10 @@
     any-output))
 
 (defun workspace-any-terminal-alive-p (workspace)
-  "Return T if any terminal pane in WORKSPACE has a live child."
-  (some (lambda (pane)
-          (and (typep pane 'terminal-pane)
-               (terminal-pane-alive-p pane)))
-        (workspace-panes workspace)))
+  "Return T if any terminal pane in WORKSPACE has a live connection.
+   Checks both Unix terminal panes (PTY alive) and other pane types
+   that respond to pane-alive-p."
+  (some #'pane-alive-p (workspace-panes workspace)))
 
 (defun destroy-workspace (workspace)
   "Clean up all panes in WORKSPACE."

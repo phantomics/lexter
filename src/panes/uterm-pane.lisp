@@ -1,6 +1,6 @@
-;;;; Terminal pane: a pane that owns a PTY, screen, and VT handler.
+;;;; Unix terminal pane: a pane that owns a PTY, screen, and VT handler.
 ;;;;
-;;;; This is the core shell session pane type.
+;;;; This is the Unix shell session pane type (VT100/xterm emulation).
 
 (in-package #:pcf-gl/panes)
 
@@ -51,41 +51,41 @@
   "Mapping from GLFW key symbols to byte sequences.")
 
 ;;; --------------------------------------------------------------------------
-;;; Terminal pane class
+;;; Unix terminal pane class
 ;;; --------------------------------------------------------------------------
 
-(defclass terminal-pane (pane)
+(defclass uterm-pane (pane)
   (;; Configuration (set at construction time)
    (command     :initarg :command
-                :accessor terminal-pane-command
+                :accessor uterm-pane-command
                 :initform nil
                 :documentation "Command to run (e.g. \"/bin/bash\").")
    (args        :initarg :args
-                :accessor terminal-pane-args
+                :accessor uterm-pane-args
                 :initform nil
                 :documentation "Arguments to pass to command.")
    ;; Runtime state (set by pane-initialize)
-   (pty         :accessor terminal-pane-pty
+   (pty         :accessor uterm-pane-pty
                 :initform nil
                 :documentation "PTY handle for this terminal session.")
-   (screen      :accessor terminal-pane-screen
+   (screen      :accessor uterm-pane-screen
                 :initform nil
                 :documentation "Screen model for this terminal.")
-   (vt-handler  :accessor terminal-pane-vt-handler
+   (vt-handler  :accessor uterm-pane-vt-handler
                 :initform nil
                 :documentation "VT parser/handler for this terminal.")
-   (initialized :accessor terminal-pane-initialized-p
+   (initialized :accessor uterm-pane-initialized-p
                 :initform nil
                 :type boolean
                 :documentation "Has pane-initialize been called?")
    ;; I/O buffers
-   (read-buffer :accessor terminal-pane-read-buffer
+   (read-buffer :accessor uterm-pane-read-buffer
                 :initform (make-array 4096 :element-type '(unsigned-byte 8))
                 :documentation "Buffer for reading PTY output.")
-   (write-buffer :accessor terminal-pane-write-buffer
+   (write-buffer :accessor uterm-pane-write-buffer
                  :initform (make-array 8 :element-type '(unsigned-byte 8))
                  :documentation "Buffer for writing to PTY.")
-   (uc-scratch   :accessor terminal-pane-uc-scratch
+   (uc-scratch   :accessor uterm-pane-uc-scratch
                  :initform (make-string 1)
                  :documentation "Scratch string for Unicode encoding."))
   (:documentation "A pane containing a terminal session (PTY + screen + VT).
@@ -102,14 +102,14 @@
 ;;; Initialization (called by compositor after atlas is ready)
 ;;; --------------------------------------------------------------------------
 
-(defmethod pane-initialize ((pane terminal-pane) atlas)
+(defmethod pane-initialize ((pane uterm-pane) atlas)
   "Initialize terminal pane: create screen, fork PTY, set up VT handler."
-  (when (terminal-pane-initialized-p pane)
+  (when (uterm-pane-initialized-p pane)
     (return-from pane-initialize nil))  ; already initialized
   (let* ((width (pane-width pane))
          (height (pane-height pane))
-         (command (terminal-pane-command pane))
-         (args (terminal-pane-args pane))
+         (command (uterm-pane-command pane))
+         (args (uterm-pane-args pane))
          (screen (pcf-gl/model:make-screen :cols width :rows height)))
     ;; Set blank glyph from atlas
     (when atlas
@@ -117,21 +117,21 @@
         (when space-idx
           (setf (pcf-gl/model:screen-blank-glyph screen) space-idx))))
     ;; Store screen
-    (setf (terminal-pane-screen pane) screen)
+    (setf (uterm-pane-screen pane) screen)
     ;; Fork PTY if command is provided
     (when command
       (let ((pty (pcf-gl/pty:pty-fork command :cols width :rows height :args args)))
         (pcf-gl/pty:pty-set-nonblocking pty)
-        (setf (terminal-pane-pty pane) pty)
+        (setf (uterm-pane-pty pane) pty)
         ;; Set up VT handler
-        (setf (terminal-pane-vt-handler pane)
+        (setf (uterm-pane-vt-handler pane)
               (pcf-gl/vt-handler:make-vt-handler
                screen atlas
-               :callback (make-terminal-pane-callback pane)))))
-    (setf (terminal-pane-initialized-p pane) t)
+               :callback (make-uterm-pane-callback pane)))))
+    (setf (uterm-pane-initialized-p pane) t)
     t))
 
-(defun make-terminal-pane-callback (pane)
+(defun make-uterm-pane-callback (pane)
   "Create callback function for VT handler events."
   (lambda (type data)
     (case type
@@ -139,9 +139,9 @@
       (:set-title
        (glfw:set-window-title data))
       (:report-cursor
-       (when (and (terminal-pane-pty pane)
-                  (pcf-gl/pty:pty-alive-p (terminal-pane-pty pane)))
-         (pcf-gl/pty:pty-write-string (terminal-pane-pty pane) data)))
+       (when (and (uterm-pane-pty pane)
+                  (pcf-gl/pty:pty-alive-p (uterm-pane-pty pane)))
+         (pcf-gl/pty:pty-write-string (uterm-pane-pty pane) data)))
       (otherwise nil))))
 
 ;;; --------------------------------------------------------------------------
@@ -151,26 +151,26 @@
 ;; Global cursor blink state, set by compositor
 (defvar *cursor-blink-on* t)
 
-(defmethod pane-flush ((pane terminal-pane) grid)
+(defmethod pane-flush ((pane uterm-pane) grid)
   "Flush terminal screen content to grid at pane's offset."
-  (when (terminal-pane-screen pane)
+  (when (uterm-pane-screen pane)
     (pcf-gl/model:flush-to-display
-     (terminal-pane-screen pane) grid
+     (uterm-pane-screen pane) grid
      :col-offset (pane-col pane)
      :row-offset (pane-row pane)
-     :space-glyph (pcf-gl/model:screen-blank-glyph (terminal-pane-screen pane))
+     :space-glyph (pcf-gl/model:screen-blank-glyph (uterm-pane-screen pane))
      :cursor-blink-on *cursor-blink-on*)))
 
-(defmethod pane-handle-key ((pane terminal-pane) key scancode action mods)
+(defmethod pane-handle-key ((pane uterm-pane) key scancode action mods)
   "Send key sequence to terminal's PTY."
   (declare (ignore scancode))
-  (when (and (terminal-pane-pty pane)
+  (when (and (uterm-pane-pty pane)
              (member action '(:press :repeat))
-             (pcf-gl/pty:pty-alive-p (terminal-pane-pty pane)))
-    (let ((n (%key-to-bytes key mods (terminal-pane-write-buffer pane))))
+             (pcf-gl/pty:pty-alive-p (uterm-pane-pty pane)))
+    (let ((n (%key-to-bytes key mods (uterm-pane-write-buffer pane))))
       (unless (zerop n)
-        (pcf-gl/pty:pty-write (terminal-pane-pty pane)
-                               (terminal-pane-write-buffer pane)
+        (pcf-gl/pty:pty-write (uterm-pane-pty pane)
+                               (uterm-pane-write-buffer pane)
                                :end n)
         t))))
 
@@ -209,27 +209,27 @@
                    :finally (return-from %key-to-bytes cx))))))
     0))
 
-(defmethod pane-handle-char ((pane terminal-pane) codepoint)
+(defmethod pane-handle-char ((pane uterm-pane) codepoint)
   "Send UTF-8 encoded character to terminal's PTY."
-  (when (and (terminal-pane-pty pane)
-             (pcf-gl/pty:pty-alive-p (terminal-pane-pty pane)))
-    (setf (aref (terminal-pane-uc-scratch pane) 0)
+  (when (and (uterm-pane-pty pane)
+             (pcf-gl/pty:pty-alive-p (uterm-pane-pty pane)))
+    (setf (aref (uterm-pane-uc-scratch pane) 0)
           (code-char (if (characterp codepoint) (char-code codepoint) codepoint)))
     (let ((n (funcall (babel::encoder *utf8-mapping*)
-                      (terminal-pane-uc-scratch pane) 0 1
-                      (terminal-pane-write-buffer pane) 0)))
-      (pcf-gl/pty:pty-write (terminal-pane-pty pane)
-                             (terminal-pane-write-buffer pane)
+                      (uterm-pane-uc-scratch pane) 0 1
+                      (uterm-pane-write-buffer pane) 0)))
+      (pcf-gl/pty:pty-write (uterm-pane-pty pane)
+                             (uterm-pane-write-buffer pane)
                              :end n))
     t))
 
-(defmethod pane-process-output ((pane terminal-pane))
+(defmethod pane-process-output ((pane uterm-pane))
   "Read and process any available PTY output."
-  (unless (terminal-pane-pty pane)
+  (unless (uterm-pane-pty pane)
     (return-from pane-process-output nil))
-  (let ((pty (terminal-pane-pty pane))
-        (buf (terminal-pane-read-buffer pane))
-        (handler (terminal-pane-vt-handler pane))
+  (let ((pty (uterm-pane-pty pane))
+        (buf (uterm-pane-read-buffer pane))
+        (handler (uterm-pane-vt-handler pane))
         (processed nil))
     (loop
       (let ((status (pcf-gl/pty:pty-poll pty 0)))
@@ -242,30 +242,34 @@
           (otherwise
            (return processed)))))))
 
-(defmethod pane-resize ((pane terminal-pane) new-width new-height)
+(defmethod pane-resize ((pane uterm-pane) new-width new-height)
   "Resize terminal screen and notify PTY."
   (setf (pane-width pane) new-width
         (pane-height pane) new-height)
-  (when (terminal-pane-screen pane)
-    (pcf-gl/model:resize-screen (terminal-pane-screen pane) new-width new-height))
-  (when (terminal-pane-pty pane)
-    (pcf-gl/pty:pty-set-size (terminal-pane-pty pane) new-width new-height)))
+  (when (uterm-pane-screen pane)
+    (pcf-gl/model:resize-screen (uterm-pane-screen pane) new-width new-height))
+  (when (uterm-pane-pty pane)
+    (pcf-gl/pty:pty-set-size (uterm-pane-pty pane) new-width new-height)))
 
-(defmethod pane-dirty-p ((pane terminal-pane))
+(defmethod pane-dirty-p ((pane uterm-pane))
   "Check if terminal screen has dirty rows."
-  (and (terminal-pane-screen pane)
-       (pcf-gl/model:any-row-dirty-p (terminal-pane-screen pane))))
+  (and (uterm-pane-screen pane)
+       (pcf-gl/model:any-row-dirty-p (uterm-pane-screen pane))))
 
-(defmethod pane-destroy ((pane terminal-pane))
+(defmethod pane-destroy ((pane uterm-pane))
   "Close the terminal's PTY."
-  (when (terminal-pane-pty pane)
-    (pcf-gl/pty:pty-close (terminal-pane-pty pane))))
+  (when (uterm-pane-pty pane)
+    (pcf-gl/pty:pty-close (uterm-pane-pty pane))))
 
 ;;; --------------------------------------------------------------------------
 ;;; Utility
 ;;; --------------------------------------------------------------------------
 
-(defun terminal-pane-alive-p (pane)
+(defun uterm-pane-alive-p (pane)
   "Return T if the terminal's child process is still running."
-  (and (terminal-pane-pty pane)
-       (pcf-gl/pty:pty-alive-p (terminal-pane-pty pane))))
+  (and (uterm-pane-pty pane)
+       (pcf-gl/pty:pty-alive-p (uterm-pane-pty pane))))
+
+(defmethod pane-alive-p ((pane uterm-pane))
+  "Return T if the terminal's child process is still running."
+  (uterm-pane-alive-p pane))

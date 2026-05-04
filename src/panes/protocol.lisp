@@ -80,6 +80,13 @@
    "Clean up resources owned by this pane.
     For terminal panes, closes the PTY. Called on workspace teardown."))
 
+(defgeneric pane-alive-p (pane)
+  (:documentation
+   "Return T if this pane has an active session.
+    For Unix terminals, this means the PTY child is alive.
+    For 3270 panes, this means the connection is active.
+    Used to determine when to exit the compositor loop."))
+
 (defgeneric pane-initialize (pane atlas)
   (:documentation
    "Initialize a pane with the given ATLAS.
@@ -117,6 +124,10 @@
 (defmethod pane-destroy ((pane pane))
   "Default: nothing to clean up."
   nil)
+
+(defmethod pane-alive-p ((pane pane))
+  "Default: always alive (for static panes like function-pane)."
+  t)
 
 (defmethod pane-initialize ((pane pane) atlas)
   "Default: no initialization needed."

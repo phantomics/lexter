@@ -19,14 +19,15 @@
    #:pane-resize
    #:pane-dirty-p
    #:pane-destroy
-   ;; Terminal pane
-   #:terminal-pane
-   #:terminal-pane-command
-   #:terminal-pane-args
-   #:terminal-pane-pty
-   #:terminal-pane-screen
-   #:terminal-pane-vt-handler
-   #:terminal-pane-alive-p
+   #:pane-alive-p
+   ;; Unix terminal pane
+   #:uterm-pane
+   #:uterm-pane-command
+   #:uterm-pane-args
+   #:uterm-pane-pty
+   #:uterm-pane-screen
+   #:uterm-pane-vt-handler
+   #:uterm-pane-alive-p
    ;; Function pane
    #:function-pane
    #:function-pane-render-fn

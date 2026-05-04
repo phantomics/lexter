@@ -80,6 +80,13 @@
    "Clean up resources owned by this pane.
     For terminal panes, closes the PTY. Called on workspace teardown."))
 
+(defgeneric pane-initialize (pane atlas)
+  (:documentation
+   "Initialize a pane with the given ATLAS.
+    Called by the compositor after the GL context and atlas are ready.
+    For terminal panes, this forks the PTY and creates the VT handler.
+    For function panes, this is typically a no-op."))
+
 ;;; --------------------------------------------------------------------------
 ;;; Default method implementations
 ;;; --------------------------------------------------------------------------
@@ -109,4 +116,9 @@
 
 (defmethod pane-destroy ((pane pane))
   "Default: nothing to clean up."
+  nil)
+
+(defmethod pane-initialize ((pane pane) atlas)
+  "Default: no initialization needed."
+  (declare (ignore atlas))
   nil)

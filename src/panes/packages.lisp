@@ -11,6 +11,7 @@
    #:pane-height
    #:pane-focusable
    ;; Protocol - generic functions
+   #:pane-initialize
    #:pane-flush
    #:pane-handle-key
    #:pane-handle-char
@@ -20,10 +21,12 @@
    #:pane-destroy
    ;; Terminal pane
    #:terminal-pane
+   #:terminal-pane-command
+   #:terminal-pane-args
    #:terminal-pane-pty
    #:terminal-pane-screen
    #:terminal-pane-vt-handler
-   #:make-terminal-pane
+   #:terminal-pane-alive-p
    ;; Function pane
    #:function-pane
    #:function-pane-render-fn

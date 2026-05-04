@@ -293,6 +293,11 @@
                   (pcf-gl/renderer:update-viewport renderer width height)
                   (schedule-compositor-resize comp new-cols new-rows))))
             (glfw:set-framebuffer-size-callback 'fb-size-callback)
+            ;; Initialize all panes with the atlas
+            (format t "~&Initializing panes...~%")
+            (dolist (ws workspaces)
+              (dolist (pane (workspace-panes ws))
+                (pane-initialize pane atlas)))
             ;; Clear grid initially
             (clear-grid display
                         :glyph (pcf-gl/atlas:atlas-glyph-index atlas 32)

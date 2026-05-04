@@ -3,7 +3,9 @@
   (:export ;; Loaders
            #:load-pcf
            #:load-bdf
-           ;; Font struct (shared by PCF and BDF)
+           #:load-pbm-font
+           #:load-cp437-font
+           ;; Font struct (shared by PCF, BDF, PBM)
            #:bitmap-font
            #:bitmap-font-cell-width
            #:bitmap-font-cell-height

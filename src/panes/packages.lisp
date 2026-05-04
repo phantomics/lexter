@@ -20,6 +20,26 @@
    #:pane-dirty-p
    #:pane-destroy
    #:pane-alive-p
+   ;; VT terminal base pane
+   #:vt-pane
+   #:vt-pane-screen
+   #:vt-pane-vt-handler
+   #:vt-pane-initialized-p
+   #:vt-pane-read-buffer
+   #:vt-pane-write-buffer
+   #:vt-pane-uc-scratch
+   #:vt-pane-init-screen
+   ;; VT pane abstract interface (for subclasses)
+   #:vt-pane-write-bytes
+   #:vt-pane-read-bytes
+   #:vt-pane-backend-alive-p
+   #:vt-pane-backend-destroy
+   #:vt-pane-backend-resize
+   #:vt-pane-write-string
+   ;; VT pane shared state
+   #:*cursor-blink-on*
+   #:*key-sequences*
+   #:%key-to-bytes
    ;; Unix terminal pane
    #:uterm-pane
    #:uterm-pane-command

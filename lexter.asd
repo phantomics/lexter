@@ -18,7 +18,7 @@
   :description "Unix terminal backend for Lexter"
   :license "BSD"
   :version "0.1.0"
-  :depends-on (#:lexter #:cl-vt #:babel)
+  :depends-on (#:lexter #:lexter/telnet #:cl-vt #:babel)
   :serial t
   :components ((:file "src/packages-unix")
                (:file "src/pty")
@@ -34,6 +34,7 @@
   :serial t
   :components ((:file "src/panes/packages")
                (:file "src/panes/protocol")
+               (:file "src/panes/vt-pane")
                (:file "src/panes/uterm-pane")
                (:file "src/panes/function-pane")
                (:file "src/panes/workspace")
@@ -61,3 +62,33 @@
   :serial t
   :components ((:file "src/tn3270-pane/packages")
                (:file "src/tn3270-pane/tn3270-pane")))
+
+;;; Telnet client library (standalone, no pane dependency)
+(asdf:defsystem #:lexter/telnet
+  :description "Telnet client library for Lexter"
+  :license "BSD"
+  :version "0.1.0"
+  :depends-on (#:usocket)
+  :serial t
+  :components ((:file "src/telnet/packages")
+               (:file "src/telnet/cp437")
+               (:file "src/telnet/client")))
+
+;;; Telnet pane (requires panes and telnet systems)
+(asdf:defsystem #:lexter/telnet-pane
+  :description "Telnet/raw TCP pane for Lexter"
+  :license "BSD"
+  :version "0.1.0"
+  :depends-on (#:lexter/panes #:lexter/telnet)
+  :serial t
+  :components ((:file "src/telnet-pane/packages")
+               (:file "src/telnet-pane/telnet-pane")))
+
+;;; PBM bitmap font loader (for CP437 DOS fonts)
+(asdf:defsystem #:lexter/pbm
+  :description "PBM bitmap font loader for Lexter"
+  :license "BSD"
+  :version "0.1.0"
+  :depends-on (#:lexter #:lexter/telnet #:cl-netpbm)
+  :serial t
+  :components ((:file "src/pbm")))

@@ -193,8 +193,8 @@
 
 (defun screen-set-attribute (screen type value)
   "Set current extended attribute for subsequent characters.
-   TYPE is the attribute type (XA-3270, XA-HIGHLIGHT, XA-BGCOLOR, XA-CHARSET).
-   VALUE is the attribute value."
+   TYPE is the attribute type (XA-3270, XA-HIGHLIGHT, XA-COLOR, XA-BGCOLOR, XA-CHARSET).
+   VALUE is the attribute value (for color, this is a 3270 color code like #xF2=red)."
   (declare (type tn3270-screen screen))
   (cond
     ((= type +xa-3270+)
@@ -203,9 +203,16 @@
            (screen-current-highlight screen) 0))
     ((= type +xa-highlight+)
      (setf (screen-current-highlight screen) value))
-    ((or (= type +xa-bgcolor+) (= type +xa-charset+))
-     ;; We map foreground color from 3270 color to our palette index
-     (setf (screen-current-color screen) value))))
+    ((= type +xa-color+)
+     ;; Foreground color - value is 3270 color code (e.g., #xF2=red, #xF4=green)
+     (setf (screen-current-color screen) value))
+    ((= type +xa-bgcolor+)
+     ;; Background color - currently we don't track per-cell bg, but store it
+     ;; TODO: add per-cell background color support if needed
+     nil)
+    ((= type +xa-charset+)
+     ;; Character set - currently ignored
+     nil)))
 
 ;;; --------------------------------------------------------------------------
 ;;; Field content extraction (for read operations)

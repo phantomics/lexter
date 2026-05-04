@@ -145,6 +145,9 @@
     (lexter/grid:resize-grid (compositor-display comp) new-cols new-rows
                               :blank-glyph (lexter/atlas:atlas-glyph-index
                                             (compositor-atlas comp) 32))
+    ;; Mark all workspaces' decorations dirty (layout changed)
+    (dolist (ws (compositor-workspaces comp))
+      (mark-decorations-dirty ws))
     ;; Note: Pane resizing is the user's responsibility since they provide
     ;; the layout. We mark everything dirty so it gets redrawn.
     (lexter/grid:mark-all-dirty (compositor-display comp))))

@@ -6,6 +6,16 @@
 (in-package #:pcf-gl/tn3270-pane)
 
 ;;; --------------------------------------------------------------------------
+;;; Global state for swatch management
+;;; --------------------------------------------------------------------------
+
+(defvar *swatch-cache* (make-hash-table :test 'equal)
+  "Cache of (bg . fg) -> swatch-index.")
+
+(defvar *next-swatch-index* 1
+  "Next available swatch index (0 is reserved for default).")
+
+;;; --------------------------------------------------------------------------
 ;;; 3270 color mapping
 ;;; --------------------------------------------------------------------------
 
@@ -98,6 +108,9 @@
   (when (tn3270-pane-initialized-p pane)
     (return-from pcf-gl/panes:pane-initialize nil))
   (setf (tn3270-pane-atlas pane) atlas)
+  ;; Reset the global swatch cache (grid is recreated each session)
+  (clrhash *swatch-cache*)
+  (setf *next-swatch-index* 1)
   (let* ((cols (pcf-gl/panes:pane-width pane))
          (rows (pcf-gl/panes:pane-height pane))
          (screen (pcf-gl/tn3270:make-tn3270-screen :cols cols :rows rows))
@@ -174,12 +187,6 @@
               (pcf-gl/grid:set-simple-cell grid gc gr cursor-glyph 0)))))
       ;; Mark screen as clean
       (setf (pcf-gl/tn3270::screen-dirty screen) nil))))
-
-(defvar *swatch-cache* (make-hash-table :test 'equal)
-  "Cache of (bg . fg) -> swatch-index.")
-
-(defvar *next-swatch-index* 1
-  "Next available swatch index (0 is reserved for default).")
 
 (defun get-or-create-swatch (grid bg fg)
   "Get or create a swatch for the given BG/FG colors.

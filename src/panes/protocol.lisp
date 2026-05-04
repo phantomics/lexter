@@ -3,7 +3,7 @@
 ;;;; This file defines the abstract interface that all pane types implement.
 ;;;; Concrete implementations are in terminal-pane.lisp and function-pane.lisp.
 
-(in-package #:pcf-gl/panes)
+(in-package #:lexter/panes)
 
 ;;; --------------------------------------------------------------------------
 ;;; Base pane class

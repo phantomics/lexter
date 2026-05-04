@@ -1,4 +1,4 @@
-(in-package #:pcf-gl/renderer)
+(in-package #:lexter/renderer)
 
 ;;;; OpenGL 3.3 render state and per-frame draw loop.
 ;;;;

@@ -2,7 +2,7 @@
 ;;;;
 ;;;; Use this for custom widgets, status bars, cached command output, etc.
 
-(in-package #:pcf-gl/panes)
+(in-package #:lexter/panes)
 
 ;;; --------------------------------------------------------------------------
 ;;; Function pane class
@@ -97,11 +97,11 @@
         (max-col (+ (pane-col pane) (pane-width pane))))
     (loop :for char :across string
           :for c :from grid-col :below max-col
-          :do (pcf-gl/grid:set-simple-cell grid c grid-row
+          :do (lexter/grid:set-simple-cell grid c grid-row
                                             (char-code char) swatch))))
 
 (defun clear-pane-region (pane grid &key (glyph 32) (swatch 0))
   "Clear the entire pane region with GLYPH and SWATCH."
   (loop :for row :from (pane-row pane) :below (+ (pane-row pane) (pane-height pane))
         :do (loop :for col :from (pane-col pane) :below (+ (pane-col pane) (pane-width pane))
-                  :do (pcf-gl/grid:set-simple-cell grid col row glyph swatch))))
+                  :do (lexter/grid:set-simple-cell grid col row glyph swatch))))

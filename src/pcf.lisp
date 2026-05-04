@@ -1,4 +1,4 @@
-(in-package #:pcf-gl/pcf)
+(in-package #:lexter/pcf)
 
 ;;;; PCF table type constants
 (defconstant +pcf-metrics+       4)

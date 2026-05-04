@@ -1,6 +1,6 @@
 ;;;; Package definitions for TN3270 client library.
 
-(defpackage #:pcf-gl/tn3270
+(defpackage #:lexter/tn3270
   (:use #:cl #:tacle/tn3270.lexicon)
   (:export
    ;; Buffer address codec

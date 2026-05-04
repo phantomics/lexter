@@ -1,12 +1,8 @@
-
-  ;; (:shadowing-import-from #:cl-vt #:vt-parser-params-list 
-  ;;                         #:vt-parser-get-param #:vt-parser-intermediate-chars-list)
-
 ;;; ---------------------------------------------------------------------------
 ;;; Unix Backend (Phase 3)
 ;;; ---------------------------------------------------------------------------
 
-(defpackage #:pcf-gl/pty
+(defpackage #:lexter/pty
   (:use #:cl)
   (:export ;; PTY creation
            #:pty-open
@@ -29,8 +25,8 @@
            #:pty-child-pid
            #:pty-alive-p))
 
-(defpackage #:pcf-gl/vt-handler
-  (:use #:cl #:pcf-gl/model)
+(defpackage #:lexter/vt-handler
+  (:use #:cl #:lexter/model)
   (:shadowing-import-from #:cl-vt #:vt-parser-params-list 
                           #:vt-parser-get-param #:vt-parser-intermediate-chars-list)
   (:export #:make-vt-handler
@@ -43,9 +39,9 @@
            ;; Debug
            #:*debug-vt*))
 
-(defpackage #:pcf-gl/unix-term
-  (:use #:cl #:pcf-gl/pcf #:pcf-gl/atlas #:pcf-gl/grid
-        #:pcf-gl/renderer #:pcf-gl/model #:pcf-gl/pty #:pcf-gl/vt-handler)
+(defpackage #:lexter/unix-term
+  (:use #:cl #:lexter/pcf #:lexter/atlas #:lexter/grid
+        #:lexter/renderer #:lexter/model #:lexter/pty #:lexter/vt-handler)
   (:export #:run-terminal
            #:unix-terminal
            #:terminal-screen

@@ -1,4 +1,4 @@
-(in-package #:pcf-gl/pty)
+(in-package #:lexter/pty)
 
 ;;;; PTY (pseudo-terminal) bindings for Unix.
 ;;;;

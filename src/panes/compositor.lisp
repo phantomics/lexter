@@ -1,6 +1,6 @@
 ;;;; Compositor: main entry point and event loop for paned terminal.
 
-(in-package #:pcf-gl/panes)
+(in-package #:lexter/panes)
 
 ;;; --------------------------------------------------------------------------
 ;;; Configuration
@@ -113,7 +113,7 @@
     (setf (compositor-active-index comp) index)
     ;; Clear grid and mark for full redraw
     (clear-grid (compositor-display comp)
-                :glyph (pcf-gl/atlas:atlas-glyph-index
+                :glyph (lexter/atlas:atlas-glyph-index
                         (compositor-atlas comp) 32)
                 :swatch 0)))
 
@@ -142,12 +142,12 @@
           (compositor-rows comp) new-rows
           (compositor-resize-pending comp) nil)
     ;; Resize the display grid
-    (pcf-gl/grid:resize-grid (compositor-display comp) new-cols new-rows
-                              :blank-glyph (pcf-gl/atlas:atlas-glyph-index
+    (lexter/grid:resize-grid (compositor-display comp) new-cols new-rows
+                              :blank-glyph (lexter/atlas:atlas-glyph-index
                                             (compositor-atlas comp) 32))
     ;; Note: Pane resizing is the user's responsibility since they provide
     ;; the layout. We mark everything dirty so it gets redrawn.
-    (pcf-gl/grid:mark-all-dirty (compositor-display comp))))
+    (lexter/grid:mark-all-dirty (compositor-display comp))))
 
 ;;; --------------------------------------------------------------------------
 ;;; Main loop
@@ -192,7 +192,7 @@
                   (when ws
                     (flush-workspace ws (compositor-display comp)))
                   ;; 7. Render
-                  (pcf-gl/renderer:render-frame (compositor-renderer comp)
+                  (lexter/renderer:render-frame (compositor-renderer comp)
                                                  (compositor-display comp))
                   ;; 8. Swap buffers
                   (glfw:swap-buffers)))))
@@ -208,7 +208,7 @@
                                 (cols 80)
                                 (rows 24)
                                 (pixel-scale nil)
-                                (title "pcf-gl panes")
+                                (title "lexter panes")
                                 (prefix-key :f12))
   "Run a paned terminal with the given WORKSPACES.
    
@@ -222,14 +222,14 @@
     (error "At least one workspace is required"))
   ;; Set global prefix key
   (setf *prefix-key* prefix-key)
-  (format t "~&=== pcf-gl panes v0.1 ===~%")
+  (format t "~&=== lexter panes v0.1 ===~%")
   (format t "~&Loading font ~a ...~%" font-path)
   ;; Load font (support both PCF and BDF)
   (let* ((font (if (search ".bdf" font-path :test #'char-equal)
-                   (pcf-gl/pcf:load-bdf font-path)
-                   (pcf-gl/pcf:load-pcf font-path)))
-         (cell-w (pcf-gl/pcf:bitmap-font-cell-width font))
-         (cell-h (pcf-gl/pcf:bitmap-font-cell-height font)))
+                   (lexter/pcf:load-bdf font-path)
+                   (lexter/pcf:load-pcf font-path)))
+         (cell-w (lexter/pcf:bitmap-font-cell-width font))
+         (cell-h (lexter/pcf:bitmap-font-cell-height font)))
     (format t "~&Cell ~dx~d, grid ~dx~d~%" cell-w cell-h cols rows)
     ;; Initialize GLFW
     (glfw:initialize)
@@ -250,15 +250,15 @@
         ;; Set up OpenGL
         (gl:viewport 0 0 win-w win-h)
         ;; Build atlas with cursor glyphs
-        (let* ((atlas (pcf-gl/atlas:build-atlas (list font)))
-               (_ (pcf-gl/atlas:add-cursor-glyphs atlas))
-               (display (pcf-gl/grid:make-display-grid :cols cols :rows rows))
-               (renderer (pcf-gl/renderer:make-renderer atlas win-w win-h
+        (let* ((atlas (lexter/atlas:build-atlas (list font)))
+               (_ (lexter/atlas:add-cursor-glyphs atlas))
+               (display (lexter/grid:make-display-grid :cols cols :rows rows))
+               (renderer (lexter/renderer:make-renderer atlas win-w win-h
                                                          :pixel-scale scale))
                (palette (make-xterm-palette)))
           (declare (ignore _))
           ;; Set up palette and default swatches
-          (pcf-gl/renderer:set-palette renderer palette)
+          (lexter/renderer:set-palette renderer palette)
           (setup-default-swatches display)
           ;; Create compositor state
           (let ((comp (make-compositor
@@ -290,7 +290,7 @@
                            (or (/= new-cols (compositor-cols comp))
                                (/= new-rows (compositor-rows comp))))
                   (gl:viewport 0 0 width height)
-                  (pcf-gl/renderer:update-viewport renderer width height)
+                  (lexter/renderer:update-viewport renderer width height)
                   (schedule-compositor-resize comp new-cols new-rows))))
             (glfw:set-framebuffer-size-callback 'fb-size-callback)
             ;; Initialize all panes with the atlas
@@ -300,7 +300,7 @@
                 (pane-initialize pane atlas)))
             ;; Clear grid initially
             (clear-grid display
-                        :glyph (pcf-gl/atlas:atlas-glyph-index atlas 32)
+                        :glyph (lexter/atlas:atlas-glyph-index atlas 32)
                         :swatch 0)
             ;; Run main loop
             (unwind-protect
@@ -309,7 +309,7 @@
               (format t "~&Shutting down panes...~%")
               (dolist (ws workspaces)
                 (destroy-workspace ws))
-              (pcf-gl/renderer:destroy-renderer renderer))))))))
+              (lexter/renderer:destroy-renderer renderer))))))))
 
 ;;; --------------------------------------------------------------------------
 ;;; Helper functions (duplicated from unix-term for independence)
@@ -358,4 +358,4 @@
 
 (defun setup-default-swatches (display)
   "Initialize default swatches in display grid."
-  (pcf-gl/grid:set-swatch display 0  0 7 7 0))
+  (lexter/grid:set-swatch display 0  0 7 7 0))

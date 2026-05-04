@@ -1,5 +1,5 @@
-(asdf:defsystem #:pcf-gl
-  :description "Pixel font GPU terminal renderer — proof of concept"
+(asdf:defsystem #:lexter
+  :description "Lexter — Lisp-Emergent eXtensible Terminal Emulator Runtime"
   :version "0.1.0"
   :depends-on (#:cl-glfw3 #:cl-opengl #:cffi #:alexandria #:babel)
   :serial t
@@ -13,10 +13,10 @@
                (:file "src/demo")))
 
 ;;; Unix terminal subsystem (requires cl-vt)
-(asdf:defsystem #:pcf-gl/unix
-  :description "Unix terminal backend for pcf-gl"
+(asdf:defsystem #:lexter/unix
+  :description "Unix terminal backend for Lexter"
   :version "0.1.0"
-  :depends-on (#:pcf-gl #:cl-vt #:babel)
+  :depends-on (#:lexter #:cl-vt #:babel)
   :serial t
   :components ((:file "src/packages-unix")
                (:file "src/pty")
@@ -24,10 +24,10 @@
                (:file "src/unix-term")))
 
 ;;; Pane multiplexer subsystem
-(asdf:defsystem #:pcf-gl/panes
-  :description "Pane multiplexer for pcf-gl"
+(asdf:defsystem #:lexter/panes
+  :description "Pane multiplexer for Lexter"
   :version "0.1.0"
-  :depends-on (#:pcf-gl/unix)
+  :depends-on (#:lexter/unix)
   :serial t
   :components ((:file "src/panes/packages")
                (:file "src/panes/protocol")
@@ -37,8 +37,8 @@
                (:file "src/panes/compositor")))
 
 ;;; TN3270 client library (standalone, no pane dependency)
-(asdf:defsystem #:pcf-gl/tn3270
-  :description "TN3270/TN3270E client library"
+(asdf:defsystem #:lexter/tn3270
+  :description "TN3270/TN3270E client library for Lexter"
   :version "0.1.0"
   :depends-on (#:usocket #:babel #:tacle.tn3270/lexicon #:specops/format.ebcdic)
   :serial t
@@ -49,10 +49,10 @@
                (:file "src/tn3270/client")))
 
 ;;; TN3270 pane (requires panes system)
-(asdf:defsystem #:pcf-gl/tn3270-pane
-  :description "TN3270 pane for pcf-gl"
+(asdf:defsystem #:lexter/tn3270-pane
+  :description "TN3270 pane for Lexter"
   :version "0.1.0"
-  :depends-on (#:pcf-gl/panes #:pcf-gl/tn3270)
+  :depends-on (#:lexter/panes #:lexter/tn3270)
   :serial t
   :components ((:file "src/tn3270-pane/packages")
                (:file "src/tn3270-pane/tn3270-pane")))

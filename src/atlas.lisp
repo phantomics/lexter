@@ -1,4 +1,4 @@
-(in-package #:pcf-gl/atlas)
+(in-package #:lexter/atlas)
 
 ;;;; Glyph atlas: packs bitmaps from an ordered list of PCF fonts into a
 ;;;; single GL_R8 texture.  The first font in the list that covers a given

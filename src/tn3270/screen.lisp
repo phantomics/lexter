@@ -7,7 +7,7 @@
 ;;;;
 ;;;; Fields have attributes: protected, numeric, intensity, MDT (modified).
 
-(in-package #:pcf-gl/tn3270)
+(in-package #:lexter/tn3270)
 
 ;;; --------------------------------------------------------------------------
 ;;; Screen structure

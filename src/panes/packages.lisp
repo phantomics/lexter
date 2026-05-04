@@ -1,6 +1,6 @@
 ;;;; Pane system package definition
 
-(defpackage #:pcf-gl/panes
+(defpackage #:lexter/panes
   (:use #:cl)
   (:export
    ;; Protocol - base class

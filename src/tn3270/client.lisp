@@ -3,7 +3,7 @@
 ;;;; Handles TCP connection, telnet negotiation, and TN3270E framing.
 ;;;; Uses usocket for non-blocking I/O.
 
-(in-package #:pcf-gl/tn3270)
+(in-package #:lexter/tn3270)
 
 ;;; --------------------------------------------------------------------------
 ;;; Telnet constants (from tacle.tn3270/lexicon)

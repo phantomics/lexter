@@ -1,4 +1,4 @@
-(in-package #:pcf-gl/vt-handler)
+(in-package #:lexter/vt-handler)
 
 ;;; Debug flag
 (defvar *debug-vt* nil "Set to T to enable VT debug output.")
@@ -46,7 +46,7 @@
 (defstruct (vt-handler (:constructor %make-vt-handler))
   "Handler that connects cl-vt parser to terminal model."
   ;; The terminal screen model
-  (screen nil :type (or null pcf-gl/model:screen))
+  (screen nil :type (or null lexter/model:screen))
   ;; The glyph atlas (for codepoint -> glyph index mapping)
   (atlas nil)
   ;; The cl-vt parser instance  
@@ -95,11 +95,11 @@
     ;; Set the blank glyph on the screen (atlas index for space character)
     ;; and fill the screen with blank glyphs
     (when atlas
-      (let ((space-glyph (pcf-gl/atlas:atlas-glyph-index atlas 32)))
+      (let ((space-glyph (lexter/atlas:atlas-glyph-index atlas 32)))
         (when space-glyph
           (setf (screen-blank-glyph screen) space-glyph)
           ;; Fill screen with proper blank glyph (not codepoint 32)
-          (fill (pcf-gl/model::screen-glyphs screen) space-glyph))))
+          (fill (lexter/model::screen-glyphs screen) space-glyph))))
     ;; Set default tab stops every 8 columns
     (loop :for i :from 0 :below cols :by 8
           :do (setf (sbit tab-stops i) 1))
@@ -153,7 +153,7 @@
          (row (cursor-row screen))
          ;; Look up glyph index from codepoint
          (glyph-idx (when atlas
-                      (pcf-gl/atlas:atlas-glyph-index atlas codepoint))))
+                      (lexter/atlas:atlas-glyph-index atlas codepoint))))
     (when *debug-vt*
       (format t "~&[PRINT] codepoint=~D (#x~X) glyph-idx=~S~%" 
               codepoint codepoint glyph-idx))
@@ -163,7 +163,7 @@
         (format t "~&[PRINT] SKIPPED (no glyph for U+~4,'0X)~%" codepoint))
       (return-from %print-codepoint))
     (let (;; Create swatch from current colors
-          (swatch-idx (intern-swatch (pcf-gl/model::screen-swatches screen)
+          (swatch-idx (intern-swatch (lexter/model::screen-swatches screen)
                                      (vt-handler-current-bg handler)
                                      (vt-handler-current-fg handler)
                                      (vt-handler-current-fg handler)
@@ -263,7 +263,7 @@
          (set-cursor-position screen next-tab (cursor-row screen))))
       ((#x0A #x0B #x0C) ; LF, VT, FF - line feed
        (let ((row (cursor-row screen)))
-         (if (< row (pcf-gl/model::screen-scroll-bottom screen))
+         (if (< row (lexter/model::screen-scroll-bottom screen))
              (set-cursor-position screen (cursor-col screen) (1+ row))
              (scroll-up screen))))
       (#x0D ; CR - carriage return
@@ -600,19 +600,19 @@
                 (vt-handler-current-attrs handler) (vt-handler-saved-attrs handler)))
          (#x44 ; ESC D - IND (Index, line feed)
           (let ((row (cursor-row screen)))
-            (if (< row (pcf-gl/model::screen-scroll-bottom screen))
+            (if (< row (lexter/model::screen-scroll-bottom screen))
                 (set-cursor-position screen (cursor-col screen) (1+ row))
                 (scroll-up screen))))
          (#x45 ; ESC E - NEL (Next Line)
           (let ((row (cursor-row screen)))
-            (if (< row (pcf-gl/model::screen-scroll-bottom screen))
+            (if (< row (lexter/model::screen-scroll-bottom screen))
                 (set-cursor-position screen 0 (1+ row))
                 (progn
                   (scroll-up screen)
                   (set-cursor-position screen 0 row)))))
          (#x4D ; ESC M - RI (Reverse Index)
           (let ((row (cursor-row screen)))
-            (if (> row (pcf-gl/model::screen-scroll-top screen))
+            (if (> row (lexter/model::screen-scroll-top screen))
                 (set-cursor-position screen (cursor-col screen) (1- row))
                 (scroll-down screen))))
          (#x63 ; ESC c - RIS (Reset to Initial State)

@@ -1,10 +1,10 @@
-(in-package #:pcf-gl/demo)
+(in-package #:lexter/demo)
 
 ;;;; Demo entry point.
 ;;;;
 ;;;; Renders two scenes in a single GLFW window:
 ;;;;
-;;;; Row 0  — simple path: "Hello from pcf-gl!"  white-on-black
+;;;; Row 0  — simple path: "Hello from lexter!"  white-on-black
 ;;;; Row 1  — simple path: a sampling of glyph indices, coloured
 ;;;; Row 3  — layered path demonstration (3-layer model: base + 2 overlays):
 ;;;;            layer 0: '#' in colour slot 1 (dark-green) on slot 0 (black)
@@ -88,7 +88,7 @@
     ;; Initialize swatches
     (setup-demo-swatches grid)
     ;; Row 0: simple white-on-black text (swatch 0)
-    (write-string-simple grid atlas "Hello from pcf-gl!" 1 0 0)
+    (write-string-simple grid atlas "Hello from lexter!" 1 0 0)
     ;; Row 1: colour sampler — each character in a different swatch
     (loop :for i :from 0 :below (min 32 (- cols 1))
           :for ch-code = (+ 65 (mod i 26))       ; A-Z cycling
@@ -182,7 +182,7 @@
       (format t "~&Pixel scale: ~dx, window ~dx~d (~dx~d cells)~%"
               scale win-w win-h cols rows)
       (glfw:with-init-window
-          (:title (format nil "pcf-gl demo (~dx scale)" scale)
+          (:title (format nil "lexter demo (~dx scale)" scale)
            :width win-w :height win-h
            :resizable nil
            :context-version-major 3

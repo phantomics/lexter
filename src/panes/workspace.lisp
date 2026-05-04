@@ -1,6 +1,6 @@
 ;;;; Workspace: a collection of panes with focus management and decorations.
 
-(in-package #:pcf-gl/panes)
+(in-package #:lexter/panes)
 
 ;;; --------------------------------------------------------------------------
 ;;; Workspace class
@@ -88,7 +88,7 @@
   ;; Render decorations (border characters, separators)
   (dolist (dec (workspace-decorations workspace))
     (destructuring-bind (col row glyph swatch) dec
-      (pcf-gl/grid:set-simple-cell grid col row glyph swatch))))
+      (lexter/grid:set-simple-cell grid col row glyph swatch))))
 
 (defun workspace-any-dirty-p (workspace)
   "Return T if any pane in WORKSPACE needs re-flushing."
@@ -119,9 +119,9 @@
 
 (defun clear-grid (grid &key (glyph 32) (swatch 0))
   "Clear the entire grid with GLYPH and SWATCH."
-  (let ((cols (pcf-gl/grid:display-grid-cols grid))
-        (rows (pcf-gl/grid:display-grid-rows grid)))
+  (let ((cols (lexter/grid:display-grid-cols grid))
+        (rows (lexter/grid:display-grid-rows grid)))
     (dotimes (row rows)
       (dotimes (col cols)
-        (pcf-gl/grid:set-simple-cell grid col row glyph swatch)))
-    (pcf-gl/grid:mark-all-dirty grid)))
+        (lexter/grid:set-simple-cell grid col row glyph swatch)))
+    (lexter/grid:mark-all-dirty grid)))

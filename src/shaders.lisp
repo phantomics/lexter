@@ -1,4 +1,4 @@
-(in-package #:pcf-gl/shaders)
+(in-package #:lexter/shaders)
 
 ;;;; GLSL 3.30 shader sources.
 ;;;;

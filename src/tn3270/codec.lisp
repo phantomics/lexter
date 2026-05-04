@@ -6,7 +6,7 @@
 ;;;;
 ;;;; This file provides encoding/decoding for SBA (Set Buffer Address) orders.
 
-(in-package #:pcf-gl/tn3270)
+(in-package #:lexter/tn3270)
 
 ;;; --------------------------------------------------------------------------
 ;;; 6-bit encoding table (used for 12-bit addresses)

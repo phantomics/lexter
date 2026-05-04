@@ -1,4 +1,4 @@
-(in-package #:pcf-gl/model)
+(in-package #:lexter/model)
 
 ;;;; Terminal Model
 ;;;;
@@ -750,26 +750,26 @@
         (swatches (screen-swatches screen))
         (cc (screen-cursor-col screen))
         (cr (screen-cursor-row screen))
-        (grid-cols (pcf-gl/grid:display-grid-cols display-grid))
-        (grid-rows (pcf-gl/grid:display-grid-rows display-grid)))
+        (grid-cols (lexter/grid:display-grid-cols display-grid))
+        (grid-rows (lexter/grid:display-grid-rows display-grid)))
     ;; Always mark cursor row dirty so it gets updated every frame
     ;; This ensures cursor blink and movement are always rendered
     (when (< cr rows)
       (setf (sbit (screen-row-dirty screen) cr) 1))
     ;; Sync swatch table only if generation changed
     (let ((model-gen (swatch-table-generation swatches))
-          (grid-gen (pcf-gl/grid:swatch-generation display-grid)))
+          (grid-gen (lexter/grid:swatch-generation display-grid)))
       (when (/= model-gen grid-gen)
         (let ((sw-data (swatch-table-data swatches))
               (sw-count (swatch-table-count swatches)))
           (loop :for i :from 0 :below sw-count
                 :for base = (* i +swatch-slots+)
-                :do (pcf-gl/grid:set-swatch display-grid i
+                :do (lexter/grid:set-swatch display-grid i
                                             (aref sw-data (+ base 0))
                                             (aref sw-data (+ base 1))
                                             (aref sw-data (+ base 2))
                                             (aref sw-data (+ base 3)))))
-        (setf (pcf-gl/grid:swatch-generation display-grid) model-gen)))
+        (setf (lexter/grid:swatch-generation display-grid) model-gen)))
     ;; Copy cells (including clearing old cursor position)
     ;; Bounds: iterate screen coords, but clip to grid bounds after offset
     (loop :for row :from 0 :below rows
@@ -783,11 +783,11 @@
                           (if layers
                               ;; Layered cell
                               (let ((sw (model-cell-layers-swatch layers)))
-                                (pcf-gl/grid:set-cell-swatch display-grid grid-col grid-row sw)
+                                (lexter/grid:set-cell-swatch display-grid grid-col grid-row sw)
                                 (loop :for ln :from 0 :below +max-layers+
                                       :for lobj = (aref (model-cell-layers-layers layers) ln)
                                       :when lobj
-                                      :do (pcf-gl/grid:set-cell-layer
+                                      :do (lexter/grid:set-cell-layer
                                            display-grid grid-col grid-row ln
                                            (model-layer-glyph-idx lobj)
                                            (model-layer-ink-slot lobj)
@@ -795,9 +795,9 @@
                                            :transparent-side (model-layer-transparent-side lobj))))
                               ;; Simple cell - clear any overlay layers first
                               (progn
-                                (pcf-gl/grid:clear-cell-layers display-grid grid-col grid-row)
+                                (lexter/grid:clear-cell-layers display-grid grid-col grid-row)
                                 (let ((i (%idx screen col row)))
-                                  (pcf-gl/grid:set-simple-cell
+                                  (lexter/grid:set-simple-cell
                                    display-grid grid-col grid-row
                                    (let ((g (aref (screen-glyphs screen) i)))
                                      (if (zerop g) space-glyph g))
@@ -812,33 +812,33 @@
                  (< grid-cc grid-cols) (< grid-cr grid-rows))
         ;; Use grid coordinates for cell access
         (let* ((cell-idx (+ (* grid-cr grid-cols) grid-cc))
-               (glyph (aref (pcf-gl/grid::display-grid-glyphs display-grid) cell-idx))
-               (sw-idx (aref (pcf-gl/grid::display-grid-swatch-indices display-grid) cell-idx)))
+               (glyph (aref (lexter/grid::display-grid-glyphs display-grid) cell-idx))
+               (sw-idx (aref (lexter/grid::display-grid-swatch-indices display-grid) cell-idx)))
           (if cursor-visible
               ;; Cursor ON: create a reversed swatch and use it
               (multiple-value-bind (bg fg ov sec)
-                  (pcf-gl/grid:get-swatch display-grid sw-idx)
+                  (lexter/grid:get-swatch display-grid sw-idx)
                 ;; Intern a reversed swatch (fg becomes bg, bg becomes fg)
                 (let ((rev-sw (intern-swatch swatches fg bg ov sec)))
                   ;; Sync this new swatch to display grid immediately
                   (let* ((sw-data (swatch-table-data swatches))
                          (base (* rev-sw +swatch-slots+)))
-                    (pcf-gl/grid:set-swatch display-grid rev-sw
+                    (lexter/grid:set-swatch display-grid rev-sw
                                             (aref sw-data (+ base 0))
                                             (aref sw-data (+ base 1))
                                             (aref sw-data (+ base 2))
                                             (aref sw-data (+ base 3))))
                   ;; Apply reversed swatch to display grid
-                  (pcf-gl/grid:set-simple-cell display-grid grid-cc grid-cr
+                  (lexter/grid:set-simple-cell display-grid grid-cc grid-cr
                                                (if (zerop glyph) space-glyph glyph)
                                                rev-sw)))
               ;; Cursor OFF: restore normal swatch from model
               (let ((model-sw (aref (screen-swatch-indices screen)
                                     (+ (* cr (screen-cols screen)) cc))))
-                (pcf-gl/grid:set-simple-cell display-grid grid-cc grid-cr
+                (lexter/grid:set-simple-cell display-grid grid-cc grid-cr
                                              (if (zerop glyph) space-glyph glyph)
                                              model-sw))))
         ;; Always mark cursor row dirty in grid
-        (pcf-gl/grid:mark-row-dirty display-grid grid-cr)))
+        (lexter/grid:mark-row-dirty display-grid grid-cr)))
     ;; Clear model dirty flags
     (fill (screen-row-dirty screen) 0)))

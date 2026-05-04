@@ -1,9 +1,9 @@
 ;;;; TN3270 pane: a pane that connects to a 3270 host.
 ;;;;
-;;;; This pane uses the pcf-gl/tn3270 client library and renders
+;;;; This pane uses the lexter/tn3270 client library and renders
 ;;;; the 3270 screen to the display grid.
 
-(in-package #:pcf-gl/tn3270-pane)
+(in-package #:lexter/tn3270-pane)
 
 ;;; --------------------------------------------------------------------------
 ;;; Global state for swatch management
@@ -70,7 +70,7 @@
 ;;; TN3270 pane class
 ;;; --------------------------------------------------------------------------
 
-(defclass tn3270-pane (pcf-gl/panes:pane)
+(defclass tn3270-pane (lexter/panes:pane)
   (;; Configuration
    (host        :initarg :host
                 :accessor tn3270-pane-host
@@ -103,18 +103,18 @@
 ;;; Initialization
 ;;; --------------------------------------------------------------------------
 
-(defmethod pcf-gl/panes:pane-initialize ((pane tn3270-pane) atlas)
+(defmethod lexter/panes:pane-initialize ((pane tn3270-pane) atlas)
   "Initialize the 3270 pane: create client, screen, and connect."
   (when (tn3270-pane-initialized-p pane)
-    (return-from pcf-gl/panes:pane-initialize nil))
+    (return-from lexter/panes:pane-initialize nil))
   (setf (tn3270-pane-atlas pane) atlas)
   ;; Reset the global swatch cache (grid is recreated each session)
   (clrhash *swatch-cache*)
   (setf *next-swatch-index* 1)
-  (let* ((cols (pcf-gl/panes:pane-width pane))
-         (rows (pcf-gl/panes:pane-height pane))
-         (screen (pcf-gl/tn3270:make-tn3270-screen :cols cols :rows rows))
-         (client (pcf-gl/tn3270:make-tn3270-client
+  (let* ((cols (lexter/panes:pane-width pane))
+         (rows (lexter/panes:pane-height pane))
+         (screen (lexter/tn3270:make-tn3270-screen :cols cols :rows rows))
+         (client (lexter/tn3270:make-tn3270-client
                   :host (tn3270-pane-host pane)
                   :port (tn3270-pane-port pane)
                   :screen screen)))
@@ -122,7 +122,7 @@
     ;; Attempt connection
     (format t "~&Connecting to ~a:~d...~%"
             (tn3270-pane-host pane) (tn3270-pane-port pane))
-    (if (pcf-gl/tn3270:client-connect client)
+    (if (lexter/tn3270:client-connect client)
         (format t "~&Connected!~%")
         (format t "~&Connection failed.~%"))
     (setf (tn3270-pane-initialized-p pane) t)
@@ -132,22 +132,22 @@
 ;;; Flush to display grid
 ;;; --------------------------------------------------------------------------
 
-(defmethod pcf-gl/panes:pane-flush ((pane tn3270-pane) grid)
+(defmethod lexter/panes:pane-flush ((pane tn3270-pane) grid)
   "Render 3270 screen to the display grid."
   (let* ((client (tn3270-pane-client pane))
-         (screen (when client (pcf-gl/tn3270::client-screen client)))
+         (screen (when client (lexter/tn3270::client-screen client)))
          (atlas (tn3270-pane-atlas pane)))
     (unless (and screen atlas)
-      (return-from pcf-gl/panes:pane-flush nil))
-    (let* ((cols (pcf-gl/tn3270:screen-cols screen))
-           (rows (pcf-gl/tn3270:screen-rows screen))
-           (buf (pcf-gl/tn3270:screen-buffer screen))
-           (colors (pcf-gl/tn3270::screen-colors screen))
-           (highlights (pcf-gl/tn3270::screen-highlights screen))
-           (field-attrs (pcf-gl/tn3270::screen-field-attrs screen))
-           (cursor-addr (pcf-gl/tn3270:screen-cursor-address screen))
-           (col-offset (pcf-gl/panes:pane-col pane))
-           (row-offset (pcf-gl/panes:pane-row pane)))
+      (return-from lexter/panes:pane-flush nil))
+    (let* ((cols (lexter/tn3270:screen-cols screen))
+           (rows (lexter/tn3270:screen-rows screen))
+           (buf (lexter/tn3270:screen-buffer screen))
+           (colors (lexter/tn3270::screen-colors screen))
+           (highlights (lexter/tn3270::screen-highlights screen))
+           (field-attrs (lexter/tn3270::screen-field-attrs screen))
+           (cursor-addr (lexter/tn3270:screen-cursor-address screen))
+           (col-offset (lexter/panes:pane-col pane))
+           (row-offset (lexter/panes:pane-row pane)))
       ;; Render each cell
       (dotimes (r rows)
         (dotimes (c cols)
@@ -160,8 +160,8 @@
                  (gc (+ c col-offset))
                  (gr (+ r row-offset))
                  ;; Get glyph index
-                 (glyph-idx (or (pcf-gl/atlas:atlas-glyph-index atlas char-code)
-                                (pcf-gl/atlas:atlas-glyph-index atlas 32)))
+                 (glyph-idx (or (lexter/atlas:atlas-glyph-index atlas char-code)
+                                (lexter/atlas:atlas-glyph-index atlas 32)))
                  ;; Compute swatch
                  (fg-color (if (plusp fa)
                                7  ; field attr displays dim
@@ -172,21 +172,21 @@
                  (actual-fg (if reverse-p bg-color fg-color))
                  (actual-bg (if reverse-p fg-color bg-color))
                  (swatch (get-or-create-swatch grid actual-bg actual-fg)))
-            (pcf-gl/grid:set-simple-cell grid gc gr glyph-idx swatch))))
+            (lexter/grid:set-simple-cell grid gc gr glyph-idx swatch))))
       ;; Render cursor (block cursor on current position)
       (let* ((cursor-row (floor cursor-addr cols))
              (cursor-col (mod cursor-addr cols))
              (gc (+ cursor-col col-offset))
              (gr (+ cursor-row row-offset)))
-        (when (and pcf-gl/panes::*cursor-blink-on*
+        (when (and lexter/panes::*cursor-blink-on*
                    (< gc (+ col-offset cols))
                    (< gr (+ row-offset rows)))
           ;; Use cursor glyph (filled block)
-          (let ((cursor-glyph (pcf-gl/atlas:atlas-glyph-index atlas :cursor-block)))
+          (let ((cursor-glyph (lexter/atlas:atlas-glyph-index atlas :cursor-block)))
             (when cursor-glyph
-              (pcf-gl/grid:set-simple-cell grid gc gr cursor-glyph 0)))))
+              (lexter/grid:set-simple-cell grid gc gr cursor-glyph 0)))))
       ;; Mark screen as clean
-      (setf (pcf-gl/tn3270::screen-dirty screen) nil))))
+      (setf (lexter/tn3270::screen-dirty screen) nil))))
 
 (defun get-or-create-swatch (grid bg fg)
   "Get or create a swatch for the given BG/FG colors.
@@ -196,7 +196,7 @@
         (when (< *next-swatch-index* 256)  ; max swatches
           (let ((idx *next-swatch-index*))
             ;; set-swatch: idx, slot0=bg, slot1=fg, slot2=overlay1, slot3=overlay2
-            (pcf-gl/grid:set-swatch grid idx bg fg fg bg)
+            (lexter/grid:set-swatch grid idx bg fg fg bg)
             (setf (gethash key *swatch-cache*) idx)
             (incf *next-swatch-index*)
             idx))
@@ -207,47 +207,47 @@
 ;;; Key handling
 ;;; --------------------------------------------------------------------------
 
-(defmethod pcf-gl/panes:pane-handle-key ((pane tn3270-pane) key scancode action mods)
+(defmethod lexter/panes:pane-handle-key ((pane tn3270-pane) key scancode action mods)
   "Handle key events for 3270 emulation."
   (declare (ignore scancode))
   (let ((client (tn3270-pane-client pane)))
-    (unless (and client (pcf-gl/tn3270:client-connected-p client))
-      (return-from pcf-gl/panes:pane-handle-key nil))
+    (unless (and client (lexter/tn3270:client-connected-p client))
+      (return-from lexter/panes:pane-handle-key nil))
     (when (member action '(:press :repeat))
-      (let ((screen (pcf-gl/tn3270::client-screen client)))
+      (let ((screen (lexter/tn3270::client-screen client)))
         ;; Check for AID keys
         (let ((aid-entry (assoc key *3270-key-map*)))
           (when aid-entry
-            (pcf-gl/tn3270:client-send-aid client (cdr aid-entry))
-            (return-from pcf-gl/panes:pane-handle-key t)))
+            (lexter/tn3270:client-send-aid client (cdr aid-entry))
+            (return-from lexter/panes:pane-handle-key t)))
         ;; Cursor movement
-        (let* ((cursor-addr (pcf-gl/tn3270:screen-cursor-address screen))
-               (cols (pcf-gl/tn3270:screen-cols screen))
-               (size (pcf-gl/tn3270::screen-size screen)))
+        (let* ((cursor-addr (lexter/tn3270:screen-cursor-address screen))
+               (cols (lexter/tn3270:screen-cols screen))
+               (size (lexter/tn3270::screen-size screen)))
           (case key
             (:up
-             (pcf-gl/tn3270::screen-set-cursor
+             (lexter/tn3270::screen-set-cursor
               screen (mod (- cursor-addr cols) size))
-             (setf (pcf-gl/tn3270::screen-dirty screen) t)
+             (setf (lexter/tn3270::screen-dirty screen) t)
              t)
             (:down
-             (pcf-gl/tn3270::screen-set-cursor
+             (lexter/tn3270::screen-set-cursor
               screen (mod (+ cursor-addr cols) size))
-             (setf (pcf-gl/tn3270::screen-dirty screen) t)
+             (setf (lexter/tn3270::screen-dirty screen) t)
              t)
             (:left
-             (pcf-gl/tn3270::screen-set-cursor
+             (lexter/tn3270::screen-set-cursor
               screen (mod (1- cursor-addr) size))
-             (setf (pcf-gl/tn3270::screen-dirty screen) t)
+             (setf (lexter/tn3270::screen-dirty screen) t)
              t)
             (:right
-             (pcf-gl/tn3270::screen-set-cursor
+             (lexter/tn3270::screen-set-cursor
               screen (mod (1+ cursor-addr) size))
-             (setf (pcf-gl/tn3270::screen-dirty screen) t)
+             (setf (lexter/tn3270::screen-dirty screen) t)
              t)
             (:home
-             (pcf-gl/tn3270::screen-set-cursor screen 0)
-             (setf (pcf-gl/tn3270::screen-dirty screen) t)
+             (lexter/tn3270::screen-set-cursor screen 0)
+             (setf (lexter/tn3270::screen-dirty screen) t)
              t)
             (:tab
              ;; Tab to next unprotected field
@@ -257,96 +257,96 @@
              ;; Move back and clear
              (let ((new-addr (mod (1- cursor-addr) size)))
                (multiple-value-bind (fa-addr fa)
-                   (pcf-gl/tn3270:screen-field-at screen new-addr)
-                 (unless (and fa-addr (pcf-gl/tn3270:field-protected-p fa))
-                   (setf (aref (pcf-gl/tn3270:screen-buffer screen) new-addr) 32)
-                   (pcf-gl/tn3270::screen-set-cursor screen new-addr)
+                   (lexter/tn3270:screen-field-at screen new-addr)
+                 (unless (and fa-addr (lexter/tn3270:field-protected-p fa))
+                   (setf (aref (lexter/tn3270:screen-buffer screen) new-addr) 32)
+                   (lexter/tn3270::screen-set-cursor screen new-addr)
                    (when fa-addr
-                     (pcf-gl/tn3270::set-field-modified screen fa-addr))
-                   (setf (pcf-gl/tn3270::screen-dirty screen) t))))
+                     (lexter/tn3270::set-field-modified screen fa-addr))
+                   (setf (lexter/tn3270::screen-dirty screen) t))))
              t)
             (:delete
              ;; Clear current position
              (multiple-value-bind (fa-addr fa)
-                 (pcf-gl/tn3270:screen-field-at screen cursor-addr)
-               (unless (and fa-addr (pcf-gl/tn3270:field-protected-p fa))
-                 (setf (aref (pcf-gl/tn3270:screen-buffer screen) cursor-addr) 32)
+                 (lexter/tn3270:screen-field-at screen cursor-addr)
+               (unless (and fa-addr (lexter/tn3270:field-protected-p fa))
+                 (setf (aref (lexter/tn3270:screen-buffer screen) cursor-addr) 32)
                  (when fa-addr
-                   (pcf-gl/tn3270::set-field-modified screen fa-addr))
-                 (setf (pcf-gl/tn3270::screen-dirty screen) t)))
+                   (lexter/tn3270::set-field-modified screen fa-addr))
+                 (setf (lexter/tn3270::screen-dirty screen) t)))
              t)
             (otherwise nil)))))))
 
 (defun tab-to-next-field (screen)
   "Move cursor to the next unprotected field."
-  (let* ((size (pcf-gl/tn3270::screen-size screen))
-         (start (pcf-gl/tn3270:screen-cursor-address screen))
-         (attrs (pcf-gl/tn3270::screen-field-attrs screen)))
+  (let* ((size (lexter/tn3270::screen-size screen))
+         (start (lexter/tn3270:screen-cursor-address screen))
+         (attrs (lexter/tn3270::screen-field-attrs screen)))
     (loop :for i :from 1 :below size
           :for addr = (mod (+ start i) size)
           :for fa = (aref attrs addr)
-          :when (and (plusp fa) (not (pcf-gl/tn3270:field-protected-p fa)))
-          :do (pcf-gl/tn3270::screen-set-cursor screen (mod (1+ addr) size))
-              (setf (pcf-gl/tn3270::screen-dirty screen) t)
+          :when (and (plusp fa) (not (lexter/tn3270:field-protected-p fa)))
+          :do (lexter/tn3270::screen-set-cursor screen (mod (1+ addr) size))
+              (setf (lexter/tn3270::screen-dirty screen) t)
               (return t))))
 
 ;;; --------------------------------------------------------------------------
 ;;; Character input
 ;;; --------------------------------------------------------------------------
 
-(defmethod pcf-gl/panes:pane-handle-char ((pane tn3270-pane) codepoint)
+(defmethod lexter/panes:pane-handle-char ((pane tn3270-pane) codepoint)
   "Handle character input for 3270 data entry."
   (let ((client (tn3270-pane-client pane)))
-    (unless (and client (pcf-gl/tn3270:client-connected-p client))
-      (return-from pcf-gl/panes:pane-handle-char nil))
-    (let* ((screen (pcf-gl/tn3270::client-screen client))
-           (addr (pcf-gl/tn3270:screen-cursor-address screen))
+    (unless (and client (lexter/tn3270:client-connected-p client))
+      (return-from lexter/panes:pane-handle-char nil))
+    (let* ((screen (lexter/tn3270::client-screen client))
+           (addr (lexter/tn3270:screen-cursor-address screen))
            (char-code (if (characterp codepoint) (char-code codepoint) codepoint)))
       ;; Only type in unprotected fields
       (multiple-value-bind (fa-addr fa)
-          (pcf-gl/tn3270:screen-field-at screen addr)
-        (when (and fa-addr (pcf-gl/tn3270:field-protected-p fa))
+          (lexter/tn3270:screen-field-at screen addr)
+        (when (and fa-addr (lexter/tn3270:field-protected-p fa))
           ;; Protected field - beep or skip
-          (return-from pcf-gl/panes:pane-handle-char nil))
+          (return-from lexter/panes:pane-handle-char nil))
         ;; Insert character
-        (pcf-gl/tn3270:screen-put-char screen addr char-code)
+        (lexter/tn3270:screen-put-char screen addr char-code)
         ;; Mark field modified
         (when fa-addr
-          (pcf-gl/tn3270::set-field-modified screen fa-addr))
+          (lexter/tn3270::set-field-modified screen fa-addr))
         t))))
 
 ;;; --------------------------------------------------------------------------
 ;;; I/O processing
 ;;; --------------------------------------------------------------------------
 
-(defmethod pcf-gl/panes:pane-process-output ((pane tn3270-pane))
+(defmethod lexter/panes:pane-process-output ((pane tn3270-pane))
   "Poll the 3270 client for incoming data."
   (let ((client (tn3270-pane-client pane)))
     (unless client
-      (return-from pcf-gl/panes:pane-process-output nil))
-    (let ((result (pcf-gl/tn3270:client-poll client :timeout 0)))
+      (return-from lexter/panes:pane-process-output nil))
+    (let ((result (lexter/tn3270:client-poll client :timeout 0)))
       (eq result :data))))
 
 ;;; --------------------------------------------------------------------------
 ;;; Dirty check
 ;;; --------------------------------------------------------------------------
 
-(defmethod pcf-gl/panes:pane-dirty-p ((pane tn3270-pane))
+(defmethod lexter/panes:pane-dirty-p ((pane tn3270-pane))
   "Check if the 3270 screen needs re-rendering."
   (let ((client (tn3270-pane-client pane)))
     (when client
-      (let ((screen (pcf-gl/tn3270::client-screen client)))
-        (and screen (pcf-gl/tn3270::screen-dirty screen))))))
+      (let ((screen (lexter/tn3270::client-screen client)))
+        (and screen (lexter/tn3270::screen-dirty screen))))))
 
 ;;; --------------------------------------------------------------------------
 ;;; Cleanup
 ;;; --------------------------------------------------------------------------
 
-(defmethod pcf-gl/panes:pane-destroy ((pane tn3270-pane))
+(defmethod lexter/panes:pane-destroy ((pane tn3270-pane))
   "Disconnect from the 3270 host."
   (let ((client (tn3270-pane-client pane)))
     (when client
-      (pcf-gl/tn3270:client-disconnect client))))
+      (lexter/tn3270:client-disconnect client))))
 
 ;;; --------------------------------------------------------------------------
 ;;; Utility
@@ -355,8 +355,8 @@
 (defun tn3270-pane-connected-p (pane)
   "Return T if the pane is connected to a 3270 host."
   (let ((client (tn3270-pane-client pane)))
-    (and client (pcf-gl/tn3270:client-connected-p client))))
+    (and client (lexter/tn3270:client-connected-p client))))
 
-(defmethod pcf-gl/panes:pane-alive-p ((pane tn3270-pane))
+(defmethod lexter/panes:pane-alive-p ((pane tn3270-pane))
   "Return T if the 3270 session is connected."
   (tn3270-pane-connected-p pane))

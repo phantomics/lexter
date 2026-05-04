@@ -4,7 +4,7 @@
 ;;;; Commands: Write, Erase/Write, Erase/Write Alternate, Read Modified, etc.
 ;;;; Orders: SBA, SF, SFE, SA, IC, PT, RA, EUA, GE, MF
 
-(in-package #:pcf-gl/tn3270)
+(in-package #:lexter/tn3270)
 
 ;;; --------------------------------------------------------------------------
 ;;; EBCDIC conversion (via specops/format.ebcdic)

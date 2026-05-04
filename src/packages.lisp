@@ -1,4 +1,4 @@
-(defpackage #:pcf-gl/pcf
+(defpackage #:lexter/pcf
   (:use #:cl)
   (:export ;; Loaders
            #:load-pcf
@@ -13,8 +13,8 @@
            #:bitmap-font-encoding
            #:glyph-index))
 
-(defpackage #:pcf-gl/atlas
-  (:use #:cl #:pcf-gl/pcf)
+(defpackage #:lexter/atlas
+  (:use #:cl #:lexter/pcf)
   (:export #:build-atlas
            #:add-cursor-glyphs
            #:atlas
@@ -28,7 +28,7 @@
            #:+cursor-underline-glyph+
            #:+cursor-bar-glyph+))
 
-(defpackage #:pcf-gl/grid
+(defpackage #:lexter/grid
   (:use #:cl)
   (:export ;; Grid creation and access
            #:make-display-grid
@@ -62,15 +62,15 @@
            #:+simple-stride+
            #:+layered-stride+))
 
-(defpackage #:pcf-gl/shaders
+(defpackage #:lexter/shaders
   (:use #:cl)
   (:export #:+simple-vert+
            #:+simple-frag+
            #:+layered-vert+
            #:+layered-frag+))
 
-(defpackage #:pcf-gl/renderer
-  (:use #:cl #:pcf-gl/atlas #:pcf-gl/grid #:pcf-gl/shaders)
+(defpackage #:lexter/renderer
+  (:use #:cl #:lexter/atlas #:lexter/grid #:lexter/shaders)
   (:export #:make-renderer
            #:render-state
            #:render-state-atlas
@@ -89,7 +89,7 @@
 ;;; Terminal Model (Phase 2)
 ;;; ---------------------------------------------------------------------------
 
-(defpackage #:pcf-gl/model
+(defpackage #:lexter/model
   (:use #:cl)
   (:export ;; Screen creation
            #:make-screen
@@ -156,57 +156,6 @@
            #:+attr-reverse+
            #:+attr-invisible+))
 
-(defpackage #:pcf-gl/demo
-  (:use #:cl #:pcf-gl/pcf #:pcf-gl/atlas #:pcf-gl/grid #:pcf-gl/renderer)
+(defpackage #:lexter/demo
+  (:use #:cl #:lexter/pcf #:lexter/atlas #:lexter/grid #:lexter/renderer)
   (:export #:run-demo))
-
-
-  ;; (:shadowing-import-from #:cl-vt #:vt-parser-params-list 
-  ;;                         #:vt-parser-get-param #:vt-parser-intermediate-chars-list)
-
-;;; ---------------------------------------------------------------------------
-;;; Unix Backend (Phase 3)
-;;; ---------------------------------------------------------------------------
-
-;; (defpackage #:pcf-gl/pty
-;;   (:use #:cl)
-;;   (:export ;; PTY creation
-;;            #:pty-open
-;;            #:pty-fork
-;;            #:pty-close
-;;            ;; PTY I/O
-;;            #:pty-read
-;;            #:pty-write
-;;            #:pty-write-string
-;;            ;; PTY control
-;;            #:pty-set-size
-;;            #:pty-set-nonblocking
-;;            ;; Polling
-;;            #:pty-poll
-;;            #:pty-check-child
-;;            ;; Accessors
-;;            #:pty
-;;            #:pty-master-fd
-;;            #:pty-slave-name
-;;            #:pty-child-pid
-;;            #:pty-alive-p))
-
-;; (defpackage #:pcf-gl/vt-handler
-;;   (:use #:cl #:pcf-gl/model)
-;;   (:export #:make-vt-handler
-;;            #:vt-handler
-;;            #:vt-handler-screen
-;;            #:vt-handler-atlas
-;;            #:vt-handler-parser
-;;            #:vt-handler-callback
-;;            #:process-output
-;;            ;; Debug
-;;            #:*debug-vt*))
-
-;; (defpackage #:pcf-gl/unix-term
-;;   (:use #:cl #:pcf-gl/pcf #:pcf-gl/atlas #:pcf-gl/grid
-;;         #:pcf-gl/renderer #:pcf-gl/model #:pcf-gl/pty #:pcf-gl/vt-handler)
-;;   (:export #:run-terminal
-;;            #:unix-terminal
-;;            #:terminal-screen
-;;            #:terminal-pty))

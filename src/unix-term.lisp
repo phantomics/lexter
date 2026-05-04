@@ -1,4 +1,4 @@
-(in-package #:pcf-gl/unix-term)
+(in-package #:lexter/unix-term)
 
 ;;;; Unix Terminal: main loop tying together PTY, VT parser, model, and renderer.
 ;;;;
@@ -318,7 +318,7 @@
                                (cols 80)
                                (rows 24)
                                (pixel-scale nil)
-                               (title "pcf-gl terminal"))
+                               (title "lexter terminal"))
   "Run a terminal emulator with COMMAND.
    
    COMMAND: program to run (e.g. \"/bin/bash\")
@@ -327,7 +327,7 @@
    COLS, ROWS: terminal dimensions in characters
    PIXEL-SCALE: integer scaling factor (nil = auto-detect)
    TITLE: window title"
-  (format t "~&=== pcf-gl terminal v0.5 ===~%")
+  (format t "~&=== lexter terminal v0.5 ===~%")
   (format t "~&Loading font ~a ...~%" font-path)
   (let* ((font   (load-pcf font-path))
          (cell-w (bitmap-font-cell-width font))
@@ -461,4 +461,4 @@
 (defun setup-default-swatches (display)
   "Initialize default swatches in display grid."
   ;; Swatch 0: black bg, white fg (default)
-  (pcf-gl/grid:set-swatch display 0  0 7 7 0))
+  (lexter/grid:set-swatch display 0  0 7 7 0))

@@ -1,4 +1,4 @@
-(in-package #:pcf-gl/grid)
+(in-package #:lexter/grid)
 
 ;;;; Display grid for GPU rendering.
 ;;;;

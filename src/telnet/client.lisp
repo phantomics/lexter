@@ -339,16 +339,25 @@
    Returns the number of data bytes placed in OUTPUT-BUFFER, or 0 if none available."
   (unless (telnet-connected-p client)
     (return-from telnet-read 0))
-  (let ((stream (telnet-client-stream client)))
-    ;; Check if data is available (non-blocking)
+  (let* ((socket (telnet-client-socket client))
+         (stream (telnet-client-stream client))
+         (buf (telnet-client-recv-buffer client)))
+    ;; Check if data is available using usocket (non-blocking, 0 timeout)
     (handler-case
         (progn
-          ;; Use listen to check for available data
-          (unless (listen stream)
+          (unless (usocket:wait-for-input socket :timeout 0 :ready-only t)
             (return-from telnet-read 0))
-          ;; Read available bytes into internal buffer
-          (let* ((buf (telnet-client-recv-buffer client))
-                 (n (read-sequence buf stream)))
+          ;; Read available bytes one at a time (read-sequence blocks)
+          (let ((n 0)
+                (max-read (length buf)))
+            ;; Read bytes while data is available
+            (loop while (and (< n max-read) (listen stream))
+                  do (let ((byte (read-byte stream nil nil)))
+                       (if byte
+                           (progn
+                             (setf (aref buf n) byte)
+                             (incf n))
+                           (return))))
             (when (zerop n)
               (return-from telnet-read 0))
             ;; Process bytes

@@ -205,6 +205,7 @@
 
 (defun run-paned-terminal (&key workspaces
                                 (font-path "../terminus-18n.pcf")
+                                fonts
                                 (cols 80)
                                 (rows 24)
                                 (pixel-scale nil)
@@ -213,7 +214,8 @@
   "Run a paned terminal with the given WORKSPACES.
    
    WORKSPACES: list of workspace objects (pre-constructed)
-   FONT-PATH: path to PCF or BDF font file
+   FONT-PATH: path to PCF or BDF font file (used if FONTS is nil)
+   FONTS: list of pre-loaded bitmap-font structs (overrides FONT-PATH)
    COLS, ROWS: grid dimensions in characters
    PIXEL-SCALE: integer scaling factor (nil = auto-detect)
    TITLE: window title
@@ -223,13 +225,16 @@
   ;; Set global prefix key
   (setf *prefix-key* prefix-key)
   (format t "~&=== lexter panes v0.1 ===~%")
-  (format t "~&Loading font ~a ...~%" font-path)
-  ;; Load font (support both PCF and BDF)
-  (let* ((font (if (search ".bdf" font-path :test #'char-equal)
-                   (lexter/pcf:load-bdf font-path)
-                   (lexter/pcf:load-pcf font-path)))
-         (cell-w (lexter/pcf:bitmap-font-cell-width font))
-         (cell-h (lexter/pcf:bitmap-font-cell-height font)))
+  ;; Load fonts: either use provided list or load from path
+  (let* ((font-list (or fonts
+                        (progn
+                          (format t "~&Loading font ~a ...~%" font-path)
+                          (list (if (search ".bdf" font-path :test #'char-equal)
+                                    (lexter/pcf:load-bdf font-path)
+                                    (lexter/pcf:load-pcf font-path))))))
+         (primary (first font-list))
+         (cell-w (lexter/pcf:bitmap-font-cell-width primary))
+         (cell-h (lexter/pcf:bitmap-font-cell-height primary)))
     (format t "~&Cell ~dx~d, grid ~dx~d~%" cell-w cell-h cols rows)
     ;; Initialize GLFW
     (glfw:initialize)
@@ -249,8 +254,8 @@
            :opengl-forward-compat t)
         ;; Set up OpenGL
         (gl:viewport 0 0 win-w win-h)
-        ;; Build atlas with cursor glyphs
-        (let* ((atlas (lexter/atlas:build-atlas (list font)))
+        ;; Build atlas with all fonts, then add cursor glyphs
+        (let* ((atlas (lexter/atlas:build-atlas font-list))
                (_ (lexter/atlas:add-cursor-glyphs atlas))
                (display (lexter/grid:make-display-grid :cols cols :rows rows))
                (renderer (lexter/renderer:make-renderer atlas win-w win-h

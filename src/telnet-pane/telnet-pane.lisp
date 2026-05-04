@@ -31,6 +31,11 @@
              :initform :utf8
              :type keyword
              :documentation "Character encoding: :utf8 or :cp437.")
+   (bold-as-bright :initarg :bold-as-bright
+                   :accessor telnet-pane-bold-as-bright
+                   :initform t
+                   :type boolean
+                   :documentation "When T, bold promotes fg 0-7 to bright 8-15.")
    (ttype    :initarg :ttype
              :accessor telnet-pane-ttype
              :initform "ANSI"
@@ -48,6 +53,7 @@
 ;;; --------------------------------------------------------------------------
 
 (defun make-telnet-pane (&key host (port 23) (mode :telnet) (encoding :utf8)
+                              (bold-as-bright t)
                               (ttype "ANSI") (width 80) (height 24)
                               (col 0) (row 0))
   "Create a new telnet-pane with the given configuration."
@@ -56,6 +62,7 @@
                  :port port
                  :mode mode
                  :encoding encoding
+                 :bold-as-bright bold-as-bright
                  :ttype ttype
                  :width width
                  :height height
@@ -119,7 +126,10 @@
   (when (lexter/panes:vt-pane-initialized-p pane)
     (return-from lexter/panes:pane-initialize nil))  ; already initialized
   ;; Initialize screen and VT handler (shared code)
-  (lexter/panes:vt-pane-init-screen pane atlas)
+  ;; Pass encoding and bold-as-bright from pane slots
+  (lexter/panes:vt-pane-init-screen pane atlas
+                                     :encoding (telnet-pane-encoding pane)
+                                     :bold-as-bright (telnet-pane-bold-as-bright pane))
   ;; Create and connect telnet client
   (let ((host (telnet-pane-host pane)))
     (when host

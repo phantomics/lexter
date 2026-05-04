@@ -174,8 +174,10 @@
 ;;; Initialization helper
 ;;; --------------------------------------------------------------------------
 
-(defun vt-pane-init-screen (pane atlas)
-  "Initialize the screen and VT handler for a vt-pane. Called by subclasses."
+(defun vt-pane-init-screen (pane atlas &key (encoding :utf8) bold-as-bright)
+  "Initialize the screen and VT handler for a vt-pane. Called by subclasses.
+   ENCODING is :utf8 (default) or :cp437 (for BBS/DOS compatibility).
+   BOLD-AS-BRIGHT when T promotes fg colors 0-7 to 8-15 when bold is set."
   (let* ((width (pane-width pane))
          (height (pane-height pane))
          (screen (lexter/model:make-screen :cols width :rows height)))
@@ -190,7 +192,9 @@
     (setf (vt-pane-vt-handler pane)
           (lexter/vt-handler:make-vt-handler
            screen atlas
-           :callback (make-vt-pane-callback pane)))
+           :callback (make-vt-pane-callback pane)
+           :encoding encoding
+           :bold-as-bright bold-as-bright))
     (setf (vt-pane-initialized-p pane) t)
     screen))
 

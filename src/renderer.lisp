@@ -26,8 +26,9 @@
   layered-vao
   layered-vbo
   palette-ubo
-  swatch-texture          ; 1D RGBA8UI texture for swatch table
-  (swatch-gen 0 :type fixnum)  ; last uploaded swatch generation
+  swatch-texture          ; 1D RGBA8 texture for swatch table
+  (swatch-gen 0 :type fixnum)   ; last uploaded swatch generation
+  (palette-gen 0 :type fixnum)  ; last uploaded palette generation
   atlas
   (win-w 640 :type fixnum)
   (win-h 480 :type fixnum)
@@ -157,11 +158,22 @@
   (%gl:bind-buffer-base :uniform-buffer 0 ubo))
 
 (defun set-palette (rs palette-floats)
-  "Upload PALETTE-FLOATS (1024 single-floats: 256 x RGBA) to the palette UBO."
+  "Upload PALETTE-FLOATS (1024 single-floats: 256 x RGBA) to the palette UBO.
+   This is the low-level upload; prefer upload-palette for generation-tracked updates."
   (gl:bind-buffer :uniform-buffer (render-state-palette-ubo rs))
   (cffi:with-pointer-to-vector-data (ptr palette-floats)
     (%gl:buffer-sub-data :uniform-buffer 0 4096 ptr))
   (gl:bind-buffer :uniform-buffer 0))
+
+(defun upload-palette (rs palette-floats generation)
+  "Upload palette to GPU if generation has changed.
+   PALETTE-FLOATS is a 1024-element single-float array.
+   GENERATION is the screen's palette-generation counter.
+   Returns T if upload occurred, NIL otherwise."
+  (when (/= generation (render-state-palette-gen rs))
+    (set-palette rs palette-floats)
+    (setf (render-state-palette-gen rs) generation)
+    t))
 
 ;;; --------------------------------------------------------------------------
 ;;; Swatch Table Texture

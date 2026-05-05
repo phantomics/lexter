@@ -15,46 +15,8 @@
 ;;; Standard xterm 256-colour palette
 ;;; --------------------------------------------------------------------------
 
-(defun make-xterm-palette ()
-  "Return a (simple-array single-float (1024)) with the standard xterm colours."
-  (let ((p (make-array 1024 :element-type 'single-float :initial-element 0.0)))
-    (flet ((set-rgb (i r g b)
-             (setf (aref p (+ (* i 4) 0)) (/ r 255.0)
-                   (aref p (+ (* i 4) 1)) (/ g 255.0)
-                   (aref p (+ (* i 4) 2)) (/ b 255.0)
-                   (aref p (+ (* i 4) 3)) 1.0))
-           (comp6 (v) (if (zerop v) 0 (+ 55 (* 40 v)))))
-      ;; Colours 0-15: standard ANSI
-      (loop :for (r g b) :in '((0   0   0)    ; 0  black
-                               (170 0   0)    ; 1  dark red
-                               (0   170 0)    ; 2  dark green
-                               (170 85  0)    ; 3  dark yellow
-                               (0   0   170)  ; 4  dark blue
-                               (170 0   170)  ; 5  dark magenta
-                               (0   170 170)  ; 6  dark cyan
-                               (170 170 170)  ; 7  light grey
-                               (85  85  85)   ; 8  dark grey
-                               (255 85  85)   ; 9  bright red
-                               (85  255 85)   ; 10 bright green
-                               (255 255 85)   ; 11 bright yellow
-                               (85  85  255)  ; 12 bright blue
-                               (255 85  255)  ; 13 bright magenta
-                               (85  255 255)  ; 14 bright cyan
-                               (255 255 255)) ; 15 white
-            :for i :from 0
-            :do (set-rgb i r g b))
-      ;; Colours 16-231: 6x6x6 cube
-      (loop :for i :from 16 :to 231
-            :for n = (- i 16)
-            :do (set-rgb i
-                         (comp6 (floor n 36))
-                         (comp6 (mod (floor n 6) 6))
-                         (comp6 (mod n 6))))
-      ;; Colours 232-255: greyscale ramp
-      (loop :for i :from 232 :to 255
-            :for v = (+ 8 (* 10 (- i 232)))
-            :do (set-rgb i v v v)))
-    p))
+;; Note: The canonical palette creator is now lexter/model:make-default-palette.
+;; This demo uses it directly instead of duplicating the code.
 
 ;;; --------------------------------------------------------------------------
 ;;; Grid population helpers
@@ -197,7 +159,7 @@
                (_        (add-cursor-glyphs atlas))
                (grid     (make-display-grid :cols cols :rows rows))
                (renderer (make-renderer atlas win-w win-h :pixel-scale scale))
-               (palette  (make-xterm-palette)))
+               (palette  (lexter/model:make-default-palette)))
           (declare (ignore _))
           (set-palette renderer palette)
           (setup-demo-grid grid atlas)

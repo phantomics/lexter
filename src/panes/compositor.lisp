@@ -193,7 +193,14 @@
                 (when needs-render
                   ;; 6. Flush active workspace to grid
                   (when ws
-                    (flush-workspace ws (compositor-display comp)))
+                    (flush-workspace ws (compositor-display comp))
+                    ;; 6b. Sync focused pane's palette to renderer
+                    (let ((pane (focused-pane ws)))
+                      (when pane
+                        (multiple-value-bind (palette gen) (pane-palette pane)
+                          (when palette
+                            (lexter/renderer:upload-palette
+                             (compositor-renderer comp) palette gen))))))
                   ;; 7. Render
                   (lexter/renderer:render-frame (compositor-renderer comp)
                                                  (compositor-display comp))

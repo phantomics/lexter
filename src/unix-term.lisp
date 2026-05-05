@@ -29,7 +29,6 @@
   ;; Rendering
   (atlas      nil)
   (renderer   nil)
-  (palette    nil)
   ;; Dimensions
   (cols       80  :type fixnum)
   (rows       24  :type fixnum)
@@ -274,6 +273,11 @@
                                     :atlas (unix-terminal-atlas term)
                                     :space-glyph (screen-blank-glyph (unix-terminal-screen term))
                                     :cursor-blink-on (unix-terminal-cursor-blink-on term))
+                  ;; 6b. Sync palette if changed
+                  (let ((screen (unix-terminal-screen term)))
+                    (upload-palette (unix-terminal-renderer term)
+                                    (screen-palette screen)
+                                    (screen-palette-generation screen)))
                   ;; 7. Render frame
                   (render-frame (unix-terminal-renderer term)
                                 (unix-terminal-display term))
@@ -355,11 +359,12 @@
                ;; Create terminal components
                (screen   (make-screen :cols cols :rows rows))
                (display  (make-display-grid :cols cols :rows rows))
-               (renderer (make-renderer atlas win-w win-h :pixel-scale scale))
-               (palette  (make-xterm-palette)))
+               (renderer (make-renderer atlas win-w win-h :pixel-scale scale)))
           (declare (ignore _))
-          ;; Set up palette
-          (set-palette renderer palette)
+          ;; Upload initial palette from screen
+          (upload-palette renderer
+                          (screen-palette screen)
+                          (screen-palette-generation screen))
           ;; Initialize default swatches in display grid
           (setup-default-swatches display)
           ;; Create terminal state
@@ -368,7 +373,6 @@
                        :display display
                        :atlas atlas
                        :renderer renderer
-                       :palette palette
                        :cols cols
                        :rows rows
                        :pixel-scale scale)))
@@ -417,46 +421,8 @@
 ;;; Helpers
 ;;; --------------------------------------------------------------------------
 
-(defun make-xterm-palette ()
-  "Return a (simple-array single-float (1024)) with the standard xterm colours."
-  (let ((p (make-array 1024 :element-type 'single-float :initial-element 0.0)))
-    (flet ((set-rgb (i r g b)
-             (setf (aref p (+ (* i 4) 0)) (/ r 255.0)
-                   (aref p (+ (* i 4) 1)) (/ g 255.0)
-                   (aref p (+ (* i 4) 2)) (/ b 255.0)
-                   (aref p (+ (* i 4) 3)) 1.0))
-           (comp6 (v) (if (zerop v) 0 (+ 55 (* 40 v)))))
-      ;; Colours 0-15: standard ANSI
-      (loop :for (r g b) :in '((0   0   0)    ; 0  black
-                               (170 0   0)    ; 1  dark red
-                               (0   170 0)    ; 2  dark green
-                               (170 85  0)    ; 3  dark yellow
-                               (0   0   170)  ; 4  dark blue
-                               (170 0   170)  ; 5  dark magenta
-                               (0   170 170)  ; 6  dark cyan
-                               (220 220 220)  ; 7  light grey
-                               (85  85  85)   ; 8  dark grey
-                               (255 85  85)   ; 9  bright red
-                               (85  255 85)   ; 10 bright green
-                               (255 255 85)   ; 11 bright yellow
-                               (85  85  255)  ; 12 bright blue
-                               (255 85  255)  ; 13 bright magenta
-                               (85  255 255)  ; 14 bright cyan
-                               (255 255 255)) ; 15 white
-            :for i :from 0
-            :do (set-rgb i r g b))
-      ;; Colours 16-231: 6x6x6 cube
-      (loop :for i :from 16 :to 231
-            :for n = (- i 16)
-            :do (set-rgb i
-                         (comp6 (floor n 36))
-                         (comp6 (mod (floor n 6) 6))
-                         (comp6 (mod n 6))))
-      ;; Colours 232-255: greyscale ramp
-      (loop :for i :from 232 :to 255
-            :for v = (+ 8 (* 10 (- i 232)))
-            :do (set-rgb i v v v)))
-    p))
+;; Note: Palette is now created by lexter/model:make-default-palette and stored
+;; on the screen struct. No local palette function needed.
 
 (defun setup-default-swatches (display)
   "Initialize default swatches in display grid."

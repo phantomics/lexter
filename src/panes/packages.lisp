@@ -20,6 +20,7 @@
    #:pane-dirty-p
    #:pane-destroy
    #:pane-alive-p
+   #:pane-palette
    ;; VT terminal base pane
    #:vt-pane
    #:vt-pane-screen

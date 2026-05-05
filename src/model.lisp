@@ -103,6 +103,85 @@
             (aref data (+ base 3)))))
 
 ;;; --------------------------------------------------------------------------
+;;; Color Palette
+;;; --------------------------------------------------------------------------
+
+(defun make-default-palette ()
+  "Create the standard xterm 256-color palette as a float array.
+   Returns a (simple-array single-float (1024)) with RGBA values 0.0-1.0."
+  (let ((p (make-array 1024 :element-type 'single-float :initial-element 0.0)))
+    (flet ((set-rgb (i r g b)
+             (setf (aref p (+ (* i 4) 0)) (/ r 255.0)
+                   (aref p (+ (* i 4) 1)) (/ g 255.0)
+                   (aref p (+ (* i 4) 2)) (/ b 255.0)
+                   (aref p (+ (* i 4) 3)) 1.0))
+           (comp6 (v) (if (zerop v) 0 (+ 55 (* 40 v)))))
+      ;; Colors 0-15: standard ANSI
+      (loop :for (r g b) :in '((0   0   0)    ; 0  black
+                               (170 0   0)    ; 1  dark red
+                               (0   170 0)    ; 2  dark green
+                               (170 85  0)    ; 3  dark yellow
+                               (0   0   170)  ; 4  dark blue
+                               (170 0   170)  ; 5  dark magenta
+                               (0   170 170)  ; 6  dark cyan
+                               (170 170 170)  ; 7  light grey
+                               (85  85  85)   ; 8  dark grey
+                               (255 85  85)   ; 9  bright red
+                               (85  255 85)   ; 10 bright green
+                               (255 255 85)   ; 11 bright yellow
+                               (85  85  255)  ; 12 bright blue
+                               (255 85  255)  ; 13 bright magenta
+                               (85  255 255)  ; 14 bright cyan
+                               (255 255 255)) ; 15 white
+            :for i :from 0
+            :do (set-rgb i r g b))
+      ;; Colors 16-231: 6x6x6 cube
+      (loop :for i :from 16 :to 231
+            :for n = (- i 16)
+            :do (set-rgb i
+                         (comp6 (floor n 36))
+                         (comp6 (mod (floor n 6) 6))
+                         (comp6 (mod n 6))))
+      ;; Colors 232-255: greyscale ramp
+      (loop :for i :from 232 :to 255
+            :for v = (+ 8 (* 10 (- i 232)))
+            :do (set-rgb i v v v)))
+    p))
+
+(defun set-palette-entry (screen idx r g b &optional (a 1.0))
+  "Set palette entry IDX to the given RGBA values (0.0-1.0).
+   Increments the palette generation for GPU sync."
+  (let ((p (screen-palette screen))
+        (base (* idx 4)))
+    (setf (aref p (+ base 0)) (coerce r 'single-float)
+          (aref p (+ base 1)) (coerce g 'single-float)
+          (aref p (+ base 2)) (coerce b 'single-float)
+          (aref p (+ base 3)) (coerce a 'single-float)))
+  (incf (screen-palette-generation screen)))
+
+(defun set-palette-entry-rgb8 (screen idx r g b)
+  "Set palette entry IDX to the given RGB values (0-255).
+   Increments the palette generation for GPU sync."
+  (set-palette-entry screen idx (/ r 255.0) (/ g 255.0) (/ b 255.0) 1.0))
+
+(defun get-palette-entry (screen idx)
+  "Return the RGBA values for palette entry IDX as multiple values."
+  (let ((p (screen-palette screen))
+        (base (* idx 4)))
+    (values (aref p (+ base 0))
+            (aref p (+ base 1))
+            (aref p (+ base 2))
+            (aref p (+ base 3)))))
+
+(defun reset-palette (screen)
+  "Reset the screen's palette to the default xterm colors.
+   Increments the palette generation for GPU sync."
+  (let ((default (make-default-palette))
+        (palette (screen-palette screen)))
+    (replace palette default)
+    (incf (screen-palette-generation screen))))
+
+;;; --------------------------------------------------------------------------
 ;;; Cell representation
 ;;; --------------------------------------------------------------------------
 
@@ -172,7 +251,10 @@
   ;; --- Per-row dirty flags (for flush optimization) ---
   (row-dirty     #*  :type simple-bit-vector)
   ;; --- Default swatch for new cells ---
-  (default-swatch 0 :type fixnum))
+  (default-swatch 0 :type fixnum)
+  ;; --- Color palette (256 RGBA colors as floats, 1024 total) ---
+  (palette nil :type (or null (simple-array single-float (1024))))
+  (palette-generation 1 :type fixnum))
 
 ;;; --------------------------------------------------------------------------
 ;;; Constructor
@@ -207,7 +289,9 @@
      :scrollback-count 0
      :scrollback-viewport 0
      :row-dirty       (make-array rows :element-type 'bit :initial-element 1)
-     :default-swatch  0)))
+     :default-swatch  0
+     :palette         (make-default-palette)
+     :palette-generation 1)))
 
 ;;; --------------------------------------------------------------------------
 ;;; Accessors

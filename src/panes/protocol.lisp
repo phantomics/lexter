@@ -94,6 +94,12 @@
     For terminal panes, this forks the PTY and creates the VT handler.
     For function panes, this is typically a no-op."))
 
+(defgeneric pane-palette (pane)
+  (:documentation
+   "Return the pane's color palette as (values palette-array generation).
+    For terminal panes, returns the screen's palette data.
+    Returns NIL for panes without custom palettes (uses default)."))
+
 ;;; --------------------------------------------------------------------------
 ;;; Default method implementations
 ;;; --------------------------------------------------------------------------
@@ -132,4 +138,8 @@
 (defmethod pane-initialize ((pane pane) atlas)
   "Default: no initialization needed."
   (declare (ignore atlas))
+  nil)
+
+(defmethod pane-palette ((pane pane))
+  "Default: no palette (use default)."
   nil)

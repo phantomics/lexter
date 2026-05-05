@@ -82,6 +82,7 @@
            #:render-state-win-h
            #:render-state-pixel-scale
            #:set-palette
+           #:upload-palette
            #:render-frame
            #:update-viewport
            #:set-pixel-scale
@@ -153,6 +154,14 @@
            #:flush-to-display
            ;; Dirty tracking
            #:any-row-dirty-p
+           ;; Palette
+           #:screen-palette
+           #:screen-palette-generation
+           #:make-default-palette
+           #:set-palette-entry
+           #:set-palette-entry-rgb8
+           #:get-palette-entry
+           #:reset-palette
            ;; Attribute word bits (universal)
            #:+attr-bold+
            #:+attr-underline+

@@ -212,6 +212,13 @@
      :space-glyph (lexter/model:screen-blank-glyph (vt-pane-screen pane))
      :cursor-blink-on *cursor-blink-on*)))
 
+(defmethod pane-palette ((pane vt-pane))
+  "Return the terminal's palette for GPU upload."
+  (when (vt-pane-screen pane)
+    (let ((screen (vt-pane-screen pane)))
+      (values (lexter/model:screen-palette screen)
+              (lexter/model:screen-palette-generation screen)))))
+
 (defmethod pane-handle-key ((pane vt-pane) key scancode action mods)
   "Send key sequence to terminal's backend."
   (declare (ignore scancode))

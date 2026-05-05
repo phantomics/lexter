@@ -22,8 +22,8 @@
 ;;; --------------------------------------------------------------------------
 
 (defconstant +simple-stride+  8)
-;; Layered instance: col(2) row(2) glyph(2) ink(1) bg(1) ts(1) pad(1) palette(4) = 14
-(defconstant +layered-stride+ 14)
+;; Layered instance: col(2) row(2) glyph(2) ink(1) bg(1) ts(1) pad(1) swatch_idx(2) = 12
+(defconstant +layered-stride+ 12)
 (defconstant +max-layers+ 3)
 (defconstant +swatch-slots+ 4)
 
@@ -43,9 +43,8 @@
 
 (defstruct cell-location
   "A cell using the layered rendering path."
-  ;; Swatch: 4 global-palette indices (slots 0-3)
-  (swatch (make-array +swatch-slots+ :element-type '(unsigned-byte 8) :initial-element 0)
-          :type (simple-array (unsigned-byte 8) (4)))
+  ;; Swatch index into the grid's swatch table (same as simple cells)
+  (swatch-idx 0 :type (unsigned-byte 16))
   ;; Layers 0-2; NIL = empty/inactive
   (layers (make-array +max-layers+ :initial-element nil) :type simple-vector))
 
@@ -93,7 +92,7 @@
           (display-grid-layered-counts grid)
           (make-array +max-layers+ :element-type 'fixnum :initial-element 0))))
 
-(defun make-display-grid (&key (cols 80) (rows 24) (swatch-count 256))
+(defun make-display-grid (&key (cols 80) (rows 24) (swatch-count 2048))
   "Create a display grid with COLS columns, ROWS rows, and SWATCH-COUNT swatches."
   (let* ((n (* cols rows))
          (grid (%make-display-grid
@@ -126,7 +125,9 @@
     (setf (aref data (+ base 0)) slot0
           (aref data (+ base 1)) slot1
           (aref data (+ base 2)) slot2
-          (aref data (+ base 3)) slot3)))
+          (aref data (+ base 3)) slot3))
+  ;; Increment generation so GPU upload knows swatch table changed
+  (incf (display-grid-swatch-generation grid)))
 
 (defun get-swatch (grid swatch-idx)
   "Return the 4 palette indices for SWATCH-IDX as multiple values."
@@ -197,19 +198,14 @@
 
 (defun %ensure-layered (grid col row)
   "Return the CELL-LOCATION for (COL, ROW), creating if necessary.
-   A new location copies the cell's current swatch."
+   A new location copies the cell's current swatch index."
   (let ((key (cons col row)))
     (or (gethash key (display-grid-layered-cells grid))
         (let* ((i   (%idx grid col row))
                (loc (make-cell-location))
                (sw-idx (aref (display-grid-swatch-indices grid) i)))
-          ;; Copy swatch data into local swatch
-          (multiple-value-bind (s0 s1 s2 s3) (get-swatch grid sw-idx)
-            (let ((sw (cell-location-swatch loc)))
-              (setf (aref sw 0) s0
-                    (aref sw 1) s1
-                    (aref sw 2) s2
-                    (aref sw 3) s3)))
+          ;; Copy swatch index (same table lookup as simple cells)
+          (setf (cell-location-swatch-idx loc) sw-idx)
           ;; Bootstrap layer 0 with current glyph
           (setf (aref (cell-location-layers loc) 0)
                 (make-cell-layer :glyph-idx (aref (display-grid-glyphs grid) i)
@@ -221,13 +217,13 @@
           (mark-row-dirty grid row)
           loc))))
 
-(defun set-cell-swatch (grid col row swatch-array)
-  "Set the per-cell swatch for a layered cell.
-   SWATCH-ARRAY is a 4-element array of palette indices.
+(defun set-cell-swatch (grid col row swatch-idx)
+  "Set the swatch index for a layered cell.
+   SWATCH-IDX references the grid's swatch table (same as simple cells).
    The cell is promoted to layered mode if not already."
   (%ensure-layered grid col row)
   (let ((loc (gethash (cons col row) (display-grid-layered-cells grid))))
-    (replace (cell-location-swatch loc) swatch-array)
+    (setf (cell-location-swatch-idx loc) swatch-idx)
     (mark-row-dirty grid row)))
 
 (defun set-cell-layer (grid col row layer-num glyph-idx ink-idx
@@ -276,13 +272,12 @@
          (sbuf   (display-grid-simple-buffer grid))
          (lbuf   (display-grid-layered-buffer grid))
          (lc     (display-grid-layered-counts grid))
-         (swatch-data (display-grid-swatch-data grid))
          (si     0)   ; simple buffer write index
          (sc     0)   ; simple cell count
          ;; Layer write indices: one per layer, offset into lbuf
          (li     (make-array +max-layers+ :element-type 'fixnum :initial-element 0)))
     (declare (type fixnum si sc)
-             (type (simple-array (unsigned-byte 8) (*)) sbuf lbuf swatch-data)
+             (type (simple-array (unsigned-byte 8) (*)) sbuf lbuf)
              (type (simple-array fixnum (*)) lc li))
     ;; Reset layer counts
     (dotimes (i +max-layers+) (setf (aref lc i) 0))
@@ -297,11 +292,8 @@
       (dotimes (col cols)
         (let ((i (%idx grid col row)))
           (if (zerop (sbit (display-grid-layered-flags grid) i))
-              ;; --- Simple cell: write directly into sbuf ---
-              (let* ((sw-idx (aref (display-grid-swatch-indices grid) i))
-                     (sw-base (* sw-idx +swatch-slots+))
-                     (fg (aref swatch-data (+ sw-base 1)))
-                     (bg (aref swatch-data (+ sw-base 0))))
+              ;; --- Simple cell: write swatch index directly ---
+              (let ((sw-idx (aref (display-grid-swatch-indices grid) i)))
                 (setf (aref sbuf si)       (%u16-lo col)
                       (aref sbuf (+ si 1)) (%u16-hi col)
                       (aref sbuf (+ si 2)) (%u16-lo row)
@@ -309,14 +301,15 @@
                 (let ((glyph (aref (display-grid-glyphs grid) i)))
                   (setf (aref sbuf (+ si 4)) (%u16-lo glyph)
                         (aref sbuf (+ si 5)) (%u16-hi glyph)))
-                (setf (aref sbuf (+ si 6)) fg
-                      (aref sbuf (+ si 7)) bg)
+                ;; Swatch index as uint16 at offset 6-7
+                (setf (aref sbuf (+ si 6)) (%u16-lo sw-idx)
+                      (aref sbuf (+ si 7)) (%u16-hi sw-idx))
                 (incf si +simple-stride+)
                 (incf sc))
               ;; --- Layered cell ---
               (let ((loc (gethash (cons col row) (display-grid-layered-cells grid))))
                 (when loc
-                  (let ((sw (cell-location-swatch loc)))
+                  (let ((sw-idx (cell-location-swatch-idx loc)))
                     (dotimes (ln +max-layers+)
                       (let ((layer (aref (cell-location-layers loc) ln)))
                         (when layer
@@ -334,10 +327,9 @@
                                   (aref lbuf (+ idx 7)) (cell-layer-bg-idx layer)
                                   (aref lbuf (+ idx 8)) ts
                                   (aref lbuf (+ idx 9)) 0
-                                  (aref lbuf (+ idx 10)) (aref sw 0)
-                                  (aref lbuf (+ idx 11)) (aref sw 1)
-                                  (aref lbuf (+ idx 12)) (aref sw 2)
-                                  (aref lbuf (+ idx 13)) (aref sw 3))
+                                  ;; Swatch index as uint16 at offset 10-11
+                                  (aref lbuf (+ idx 10)) (%u16-lo sw-idx)
+                                  (aref lbuf (+ idx 11)) (%u16-hi sw-idx))
                             (incf (aref li ln) +layered-stride+)
                             (incf (aref lc ln)))))))))))))
     ;; Compact layered data: move each layer's data to be contiguous

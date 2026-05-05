@@ -11,7 +11,7 @@
 ;;; Constants (must match grid.lisp)
 ;;; --------------------------------------------------------------------------
 
-(defconstant +layered-stride+ 14)   ; bytes per layered instance
+(defconstant +layered-stride+ 12)   ; bytes per layered instance
 
 ;;; --------------------------------------------------------------------------
 ;;; Render state
@@ -26,6 +26,8 @@
   layered-vao
   layered-vbo
   palette-ubo
+  swatch-texture          ; 1D RGBA8UI texture for swatch table
+  (swatch-gen 0 :type fixnum)  ; last uploaded swatch generation
   atlas
   (win-w 640 :type fixnum)
   (win-h 480 :type fixnum)
@@ -72,11 +74,10 @@
     vbo))
 
 ;;; Simple instance layout (8 bytes):
-;;;   offset 0: int16  col       → i_cell.x
-;;;   offset 2: int16  row       → i_cell.y
-;;;   offset 4: uint16 glyph     → i_glyph
-;;;   offset 6: uint8  fg        → i_colors.x
-;;;   offset 7: uint8  bg        → i_colors.y
+;;;   offset 0: int16  col         → i_cell.x
+;;;   offset 2: int16  row         → i_cell.y
+;;;   offset 4: uint16 glyph       → i_glyph
+;;;   offset 6: uint16 swatch_idx  → i_swatch
 (defun %make-simple-vao (corner-vbo)
   (let ((vao (first (gl:gen-vertex-arrays 1)))
         (vbo (first (gl:gen-buffers 1))))
@@ -89,7 +90,7 @@
     (gl:bind-buffer :array-buffer vbo)
     (%gl:vertex-attrib-ipointer 1 2 :short          8 (cffi:make-pointer 0))  ; i_cell
     (%gl:vertex-attrib-ipointer 2 1 :unsigned-short 8 (cffi:make-pointer 4))  ; i_glyph
-    (%gl:vertex-attrib-ipointer 3 2 :unsigned-byte  8 (cffi:make-pointer 6))  ; i_colors
+    (%gl:vertex-attrib-ipointer 3 1 :unsigned-short 8 (cffi:make-pointer 6))  ; i_swatch
     (gl:enable-vertex-attrib-array 1)
     (gl:enable-vertex-attrib-array 2)
     (gl:enable-vertex-attrib-array 3)
@@ -99,7 +100,7 @@
     (gl:bind-vertex-array 0)
     (values vao vbo)))
 
-;;; Layered instance layout (14 bytes):
+;;; Layered instance layout (12 bytes):
 ;;;   offset  0: int16  col           → i_cell.x
 ;;;   offset  2: int16  row           → i_cell.y
 ;;;   offset  4: uint16 glyph         → i_glyph
@@ -107,10 +108,7 @@
 ;;;   offset  7: uint8  bg-idx        → i_ink_bg.y
 ;;;   offset  8: uint8  trans-side    → i_ts
 ;;;   offset  9: uint8  (pad)
-;;;   offset 10: uint8  palette[0]    → i_palette.x
-;;;   offset 11: uint8  palette[1]    → i_palette.y
-;;;   offset 12: uint8  palette[2]    → i_palette.z
-;;;   offset 13: uint8  palette[3]    → i_palette.w
+;;;   offset 10: uint16 swatch_idx    → i_swatch
 (defun %make-layered-vao (corner-vbo)
   (let ((vao (first (gl:gen-vertex-arrays 1)))
         (vbo (first (gl:gen-buffers 1))))
@@ -119,13 +117,13 @@
     (gl:bind-buffer :array-buffer corner-vbo)
     (gl:vertex-attrib-pointer 0 2 :float nil 8 0)
     (gl:enable-vertex-attrib-array 0)
-    ;; Instance attributes (stride 14) — initial pointers at offset 0
+    ;; Instance attributes (stride 12) — initial pointers at offset 0
     (gl:bind-buffer :array-buffer vbo)
-    (%gl:vertex-attrib-ipointer 1 2 :short          14 (cffi:make-pointer 0))
-    (%gl:vertex-attrib-ipointer 2 1 :unsigned-short 14 (cffi:make-pointer 4))
-    (%gl:vertex-attrib-ipointer 3 2 :unsigned-byte  14 (cffi:make-pointer 6))
-    (%gl:vertex-attrib-ipointer 4 1 :unsigned-byte  14 (cffi:make-pointer 8))
-    (%gl:vertex-attrib-ipointer 5 4 :unsigned-byte  14 (cffi:make-pointer 10))
+    (%gl:vertex-attrib-ipointer 1 2 :short          12 (cffi:make-pointer 0))
+    (%gl:vertex-attrib-ipointer 2 1 :unsigned-short 12 (cffi:make-pointer 4))
+    (%gl:vertex-attrib-ipointer 3 2 :unsigned-byte  12 (cffi:make-pointer 6))
+    (%gl:vertex-attrib-ipointer 4 1 :unsigned-byte  12 (cffi:make-pointer 8))
+    (%gl:vertex-attrib-ipointer 5 1 :unsigned-short 12 (cffi:make-pointer 10))
     (gl:enable-vertex-attrib-array 1)
     (gl:enable-vertex-attrib-array 2)
     (gl:enable-vertex-attrib-array 3)
@@ -166,6 +164,46 @@
   (gl:bind-buffer :uniform-buffer 0))
 
 ;;; --------------------------------------------------------------------------
+;;; Swatch Table Texture
+;;; --------------------------------------------------------------------------
+
+(defconstant +swatch-table-size+ 2048
+  "Maximum number of swatches in the GPU swatch table.")
+
+(defun %make-swatch-texture ()
+  "Create a 1D RGBA8 texture for the swatch table.
+   Uses normalized RGBA8 format - shaders will convert 0.0-1.0 back to 0-255."
+  (let ((tex (first (gl:gen-textures 1))))
+    (gl:bind-texture :texture-1d tex)
+    (gl:tex-parameter :texture-1d :texture-min-filter :nearest)
+    (gl:tex-parameter :texture-1d :texture-mag-filter :nearest)
+    (gl:tex-parameter :texture-1d :texture-wrap-s :clamp-to-edge)
+    ;; Allocate with RGBA8 format (4 bytes per texel = 4 palette indices per swatch)
+    ;; Initial data is null - we'll upload when rendering
+    (gl:tex-image-1d :texture-1d 0 :rgba8 +swatch-table-size+ 0
+                     :rgba :unsigned-byte (cffi:null-pointer))
+    (gl:bind-texture :texture-1d 0)
+    tex))
+
+(defun upload-swatch-table (rs grid)
+  "Upload the grid's swatch table to the GPU if generation changed.
+   Returns T if upload occurred, NIL otherwise."
+  (let ((grid-gen (swatch-generation grid)))
+    (when (/= grid-gen (render-state-swatch-gen rs))
+      (gl:active-texture :texture1)
+      (gl:bind-texture :texture-1d (render-state-swatch-texture rs))
+      ;; Upload the swatch-data array directly - it's already RGBA8 layout
+      ;; (4 consecutive bytes per swatch: slot0, slot1, slot2, slot3)
+      (let ((data (display-grid-swatch-data grid))
+            (count (display-grid-swatch-count grid)))
+        (cffi:with-pointer-to-vector-data (ptr data)
+          (%gl:tex-sub-image-1d :texture-1d 0 0 count
+                                :rgba :unsigned-byte ptr)))
+      (gl:bind-texture :texture-1d 0)
+      (setf (render-state-swatch-gen rs) grid-gen)
+      t)))
+
+;;; --------------------------------------------------------------------------
 ;;; Uniform helpers
 ;;; --------------------------------------------------------------------------
 
@@ -179,7 +217,9 @@
   (gl:uniformi (gl:get-uniform-location prog "u_viewport") win-w win-h)
   (gl:uniformi (gl:get-uniform-location prog "u_atlas_size")
                (atlas-cols atlas) (atlas-rows atlas))
-  (gl:uniformi (gl:get-uniform-location prog "u_atlas") 0))
+  ;; Texture unit bindings: atlas on unit 0, swatch table on unit 1
+  (gl:uniformi (gl:get-uniform-location prog "u_atlas") 0)
+  (gl:uniformi (gl:get-uniform-location prog "u_swatch_table") 1))
 
 ;;; --------------------------------------------------------------------------
 ;;; Public constructor
@@ -193,7 +233,8 @@
   (let* ((sp  (%link-program +simple-vert+  +simple-frag+))
          (lp  (%link-program +layered-vert+ +layered-frag+))
          (cv  (%make-corner-vbo))
-         (pu  (%make-palette-ubo)))
+         (pu  (%make-palette-ubo))
+         (st  (%make-swatch-texture)))
     (multiple-value-bind (svao svbo) (%make-simple-vao  cv)
       (multiple-value-bind (lvao lvbo) (%make-layered-vao cv)
         (%bind-ubo-to-prog sp pu)
@@ -205,6 +246,7 @@
                            :corner-vbo   cv  :simple-vao   svao
                            :simple-vbo   svbo :layered-vao  lvao
                            :layered-vbo  lvbo :palette-ubo  pu
+                           :swatch-texture st
                            :atlas        atlas :win-w win-w :win-h win-h
                            :pixel-scale  pixel-scale)))))
 
@@ -216,6 +258,8 @@
   "Render one frame.  Call after making the GL context current."
   (gl:clear-color 0.0 0.0 0.0 1.0)
   (gl:clear :color-buffer-bit)
+  ;; Upload swatch table to GPU if changed
+  (upload-swatch-table rs grid)
   (multiple-value-bind (sdata sbytes ldata lc)
       (build-render-data grid)
     (declare (type fixnum sbytes))
@@ -224,6 +268,9 @@
       ;; Bind atlas texture to unit 0
       (gl:active-texture :texture0)
       (gl:bind-texture :texture-2d (atlas-texture-id atlas))
+      ;; Bind swatch table texture to unit 1
+      (gl:active-texture :texture1)
+      (gl:bind-texture :texture-1d (render-state-swatch-texture rs))
       ;; ---- Simple cells ------------------------------------------------
       (when (> sc 0)
         (gl:use-program (render-state-simple-prog rs))
@@ -269,7 +316,7 @@
                   (%gl:vertex-attrib-ipointer
                    4 1 :unsigned-byte  +layered-stride+ (cffi:make-pointer (+ byte-off 8)))
                   (%gl:vertex-attrib-ipointer
-                   5 4 :unsigned-byte  +layered-stride+ (cffi:make-pointer (+ byte-off 10)))
+                   5 1 :unsigned-short +layered-stride+ (cffi:make-pointer (+ byte-off 10)))
                   (%gl:draw-arrays-instanced :triangle-strip 0 4 count)
                   (incf byte-off (* count +layered-stride+)))))))))
   (gl:bind-vertex-array 0)
@@ -324,5 +371,6 @@
                            (render-state-simple-vbo  rs)
                            (render-state-layered-vbo rs)
                            (render-state-palette-ubo rs)))
+  (gl:delete-textures (list (render-state-swatch-texture rs)))
   (gl:delete-vertex-arrays (list (render-state-simple-vao  rs)
                                  (render-state-layered-vao rs))))

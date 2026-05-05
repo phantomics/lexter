@@ -36,7 +36,7 @@
 
 (defun %make-initial-swatch-data ()
   "Create swatch data array with slot 0 initialized to (0, 7, 7, 0)."
-  (let ((data (make-array (* 256 +swatch-slots+)
+  (let ((data (make-array (* 2048 +swatch-slots+)
                           :element-type '(unsigned-byte 8)
                           :initial-element 0)))
     ;; Initialize slot 0: bg=0 (black), fg=7 (white), ov=7, sec=0
@@ -59,7 +59,7 @@
   (data    (%make-initial-swatch-data)
            :type (simple-array (unsigned-byte 8) (*)))
   (count   1 :type fixnum)   ; next free slot (0 is pre-allocated)
-  (capacity 256 :type fixnum)
+  (capacity 2048 :type fixnum)
   ;; Hash: (s0 s1 s2 s3) -> index
   (index   (%make-initial-swatch-index) :type hash-table)
   ;; Generation counter: incremented on each new swatch
@@ -121,9 +121,8 @@
 
 (defstruct model-cell-layers
   "Layered cell data."
-  ;; Local swatch: 4 global palette indices (may differ from the default swatch)
-  (swatch (make-array +swatch-slots+ :element-type '(unsigned-byte 8) :initial-element 0)
-          :type (simple-array (unsigned-byte 8) (4)))
+  ;; Swatch index into the screen's swatch table (same as simple cells)
+  (swatch-idx 0 :type (unsigned-byte 16))
   ;; Layers 0-2
   (layers (make-array +max-layers+ :initial-element nil) :type simple-vector)
   ;; Which layer is topmost (highest active layer number)
@@ -313,15 +312,9 @@
     (or (gethash key (screen-layered-cells screen))
         (let* ((i (%idx screen col row))
                (layers (make-model-cell-layers)))
-          ;; Copy swatch from table
-          (let ((sw-idx (aref (screen-swatch-indices screen) i)))
-            (multiple-value-bind (s0 s1 s2 s3)
-                (get-swatch-values (screen-swatches screen) sw-idx)
-              (let ((sw (model-cell-layers-swatch layers)))
-                (setf (aref sw 0) s0
-                      (aref sw 1) s1
-                      (aref sw 2) s2
-                      (aref sw 3) s3))))
+          ;; Copy swatch index (same table lookup as simple cells)
+          (setf (model-cell-layers-swatch-idx layers)
+                (aref (screen-swatch-indices screen) i))
           ;; Initialize layer 0 from current cell
           (setf (aref (model-cell-layers-layers layers) 0)
                 (make-model-layer :glyph-idx (aref (screen-glyphs screen) i)
@@ -782,8 +775,8 @@
                     :do (let ((layers (%get-layered screen col row)))
                           (if layers
                               ;; Layered cell
-                              (let ((sw (model-cell-layers-swatch layers)))
-                                (lexter/grid:set-cell-swatch display-grid grid-col grid-row sw)
+                              (let ((sw-idx (model-cell-layers-swatch-idx layers)))
+                                (lexter/grid:set-cell-swatch display-grid grid-col grid-row sw-idx)
                                 (loop :for ln :from 0 :below +max-layers+
                                       :for lobj = (aref (model-cell-layers-layers layers) ln)
                                       :when lobj

@@ -56,6 +56,8 @@
            #:row-dirty-p
            ;; Swatch sync tracking
            #:swatch-generation
+           #:display-grid-swatch-data
+           #:display-grid-swatch-count
            ;; Render data
            #:build-render-data
            ;; Constants

@@ -101,9 +101,10 @@
     (let ((hash-glyph (atlas-glyph-index atlas (char-code #\#)))
           (x-glyph    (atlas-glyph-index atlas (char-code #\X))))
       (when (and hash-glyph x-glyph)
-        ;; Per-cell swatch: slot 0=black(0) slot 1=dark-green(2)
-        ;;                  slot 2=bright-red(9) slot 3=unused
-        (set-cell-swatch grid 1 3 #(0 2 9 0))
+        ;; Define swatch 200: slot 0=black(0) slot 1=dark-green(2)
+        ;;                    slot 2=bright-red(9) slot 3=unused
+        (set-swatch grid 200 0 2 9 0)
+        (set-cell-swatch grid 1 3 200)
         ;; Layer 0: '#' — ink=slot1(dark-green), bg=slot0(black)
         (set-cell-layer grid 1 3 0 hash-glyph 1 :bg-idx 0 :transparent-side :none)
         ;; Layer 1: 'X' — ink=slot2(bright-red), bg transparent
@@ -114,8 +115,9 @@
     (let ((block-glyph  (atlas-glyph-index atlas (char-code #\@)))
           (letter-glyph (atlas-glyph-index atlas (char-code #\A))))
       (when (and block-glyph letter-glyph)
-        ;; Per-cell swatch: slot 0=black slot 1=bright-cyan(14) slot 2=dark-blue(4) slot 3=unused
-        (set-cell-swatch grid 1 5 #(0 14 4 0))
+        ;; Define swatch 201: slot 0=black slot 1=bright-cyan(14) slot 2=dark-blue(4) slot 3=unused
+        (set-swatch grid 201 0 14 4 0)
+        (set-cell-swatch grid 1 5 201)
         ;; Layer 0: '@' solid, cyan-on-black
         (set-cell-layer grid 1 5 0 block-glyph 1 :bg-idx 0 :transparent-side :none)
         ;; Layer 1: 'A' with :fg transparent — the letter pixels are cut out,

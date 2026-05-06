@@ -197,10 +197,15 @@
                     ;; 6b. Sync focused pane's palette to renderer
                     (let ((pane (focused-pane ws)))
                       (when pane
-                        (multiple-value-bind (palette gen) (pane-palette pane)
+                        (multiple-value-bind (palette gen slot) (pane-palette pane)
                           (when palette
-                            (lexter/renderer:upload-palette
-                             (compositor-renderer comp) palette gen))))))
+                            (let ((s (or slot 0)))
+                              ;; Upload palette data to slot if changed
+                              (lexter/renderer:upload-palette
+                               (compositor-renderer comp) palette gen s)
+                              ;; Set active palette slot for rendering
+                              (lexter/renderer:set-active-palette-slot
+                               (compositor-renderer comp) s)))))))
                   ;; 7. Render
                   (lexter/renderer:render-frame (compositor-renderer comp)
                                                  (compositor-display comp))

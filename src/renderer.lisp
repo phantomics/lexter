@@ -12,6 +12,8 @@
 ;;; --------------------------------------------------------------------------
 
 (defconstant +layered-stride+ 12)   ; bytes per layered instance
+(defconstant +max-palette-slots+ 4  "Number of palette slots in the UBO.")
+(defconstant +palette-slot-size+ 4096 "Bytes per palette slot (256 x vec4).")
 
 ;;; --------------------------------------------------------------------------
 ;;; Render state
@@ -28,7 +30,13 @@
   palette-ubo
   swatch-texture          ; 1D RGBA8 texture for swatch table
   (swatch-gen 0 :type fixnum)   ; last uploaded swatch generation
-  (palette-gen 0 :type fixnum)  ; last uploaded palette generation
+  ;; Palette slot tracking: one generation counter per slot
+  (palette-gens (make-array +max-palette-slots+ :element-type 'fixnum :initial-element 0)
+                :type (simple-array fixnum (*)))
+  (current-palette-slot 0 :type fixnum) ; active slot for rendering
+  ;; Uniform locations for u_palette_slot
+  (simple-palette-slot-loc -1 :type fixnum)
+  (layered-palette-slot-loc -1 :type fixnum)
   atlas
   (win-w 640 :type fixnum)
   (win-h 480 :type fixnum)
@@ -143,9 +151,11 @@
 ;;; --------------------------------------------------------------------------
 
 (defun %make-palette-ubo ()
-  (let ((ubo (first (gl:gen-buffers 1))))
+  "Create UBO for palette storage. Holds +max-palette-slots+ palettes."
+  (let ((ubo (first (gl:gen-buffers 1)))
+        (total-size (* +max-palette-slots+ +palette-slot-size+)))
     (gl:bind-buffer :uniform-buffer ubo)
-    (%gl:buffer-data :uniform-buffer 4096 (cffi:null-pointer) :dynamic-draw)
+    (%gl:buffer-data :uniform-buffer total-size (cffi:null-pointer) :dynamic-draw)
     (gl:bind-buffer :uniform-buffer 0)
     ubo))
 
@@ -157,23 +167,47 @@
       (%gl:uniform-block-binding prog idx 0)))
   (%gl:bind-buffer-base :uniform-buffer 0 ubo))
 
-(defun set-palette (rs palette-floats)
-  "Upload PALETTE-FLOATS (1024 single-floats: 256 x RGBA) to the palette UBO.
+(defun set-palette (rs palette-floats &optional (slot 0))
+  "Upload PALETTE-FLOATS (1024 single-floats: 256 x RGBA) to palette SLOT.
    This is the low-level upload; prefer upload-palette for generation-tracked updates."
+  (assert (< slot +max-palette-slots+) ()
+          "Palette slot ~d out of range (max ~d)" slot +max-palette-slots+)
   (gl:bind-buffer :uniform-buffer (render-state-palette-ubo rs))
-  (cffi:with-pointer-to-vector-data (ptr palette-floats)
-    (%gl:buffer-sub-data :uniform-buffer 0 4096 ptr))
+  (let ((offset (* slot +palette-slot-size+)))
+    (cffi:with-pointer-to-vector-data (ptr palette-floats)
+      (%gl:buffer-sub-data :uniform-buffer offset +palette-slot-size+ ptr)))
   (gl:bind-buffer :uniform-buffer 0))
 
-(defun upload-palette (rs palette-floats generation)
-  "Upload palette to GPU if generation has changed.
+(defun upload-palette (rs palette-floats generation &optional (slot 0))
+  "Upload palette to GPU slot if generation has changed.
    PALETTE-FLOATS is a 1024-element single-float array.
    GENERATION is the screen's palette-generation counter.
+   SLOT is the palette slot index (0 to +max-palette-slots+-1).
    Returns T if upload occurred, NIL otherwise."
-  (when (/= generation (render-state-palette-gen rs))
-    (set-palette rs palette-floats)
-    (setf (render-state-palette-gen rs) generation)
-    t))
+  (assert (< slot +max-palette-slots+) ()
+          "Palette slot ~d out of range (max ~d)" slot +max-palette-slots+)
+  (let ((gens (render-state-palette-gens rs)))
+    (when (/= generation (aref gens slot))
+      (set-palette rs palette-floats slot)
+      (setf (aref gens slot) generation)
+      t)))
+
+(defun set-active-palette-slot (rs slot)
+  "Set the active palette slot for rendering. Updates uniforms in both shaders."
+  (assert (< slot +max-palette-slots+) ()
+          "Palette slot ~d out of range (max ~d)" slot +max-palette-slots+)
+  (unless (= slot (render-state-current-palette-slot rs))
+    (setf (render-state-current-palette-slot rs) slot)
+    ;; Update uniform in simple shader
+    (gl:use-program (render-state-simple-prog rs))
+    (let ((loc (render-state-simple-palette-slot-loc rs)))
+      (when (>= loc 0)
+        (gl:uniformi loc slot)))
+    ;; Update uniform in layered shader
+    (gl:use-program (render-state-layered-prog rs))
+    (let ((loc (render-state-layered-palette-slot-loc rs)))
+      (when (>= loc 0)
+        (gl:uniformi loc slot)))))
 
 ;;; --------------------------------------------------------------------------
 ;;; Swatch Table Texture
@@ -253,14 +287,25 @@
         (%bind-ubo-to-prog lp pu)
         (%set-uniforms sp atlas win-w win-h pixel-scale)
         (%set-uniforms lp atlas win-w win-h pixel-scale)
-        (gl:use-program 0)
-        (make-render-state :simple-prog  sp  :layered-prog lp
-                           :corner-vbo   cv  :simple-vao   svao
-                           :simple-vbo   svbo :layered-vao  lvao
-                           :layered-vbo  lvbo :palette-ubo  pu
-                           :swatch-texture st
-                           :atlas        atlas :win-w win-w :win-h win-h
-                           :pixel-scale  pixel-scale)))))
+        ;; Cache palette slot uniform locations and set initial slot = 0
+        (let ((simple-slot-loc (gl:get-uniform-location sp "u_palette_slot"))
+              (layered-slot-loc (gl:get-uniform-location lp "u_palette_slot")))
+          (gl:use-program sp)
+          (when (>= simple-slot-loc 0)
+            (gl:uniformi simple-slot-loc 0))
+          (gl:use-program lp)
+          (when (>= layered-slot-loc 0)
+            (gl:uniformi layered-slot-loc 0))
+          (gl:use-program 0)
+          (make-render-state :simple-prog  sp  :layered-prog lp
+                             :corner-vbo   cv  :simple-vao   svao
+                             :simple-vbo   svbo :layered-vao  lvao
+                             :layered-vbo  lvbo :palette-ubo  pu
+                             :swatch-texture st
+                             :simple-palette-slot-loc simple-slot-loc
+                             :layered-palette-slot-loc layered-slot-loc
+                             :atlas        atlas :win-w win-w :win-h win-h
+                             :pixel-scale  pixel-scale))))))
 
 ;;; --------------------------------------------------------------------------
 ;;; Per-frame render

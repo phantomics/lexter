@@ -99,7 +99,10 @@
 
 (defgeneric pane-palette (pane)
   (:documentation
-   "Return the pane's color palette as (values palette-array generation).
+   "Return the pane's color palette as (values palette-array generation slot).
+    PALETTE-ARRAY is a 1024-element single-float array (256 x RGBA).
+    GENERATION is the palette's modification counter for change detection.
+    SLOT is the GPU palette slot index (0-3) for palette paging, or NIL for default.
     For terminal panes, returns the screen's palette data.
     Returns NIL for panes without custom palettes (uses default)."))
 

@@ -83,6 +83,8 @@
            #:render-state-pixel-scale
            #:set-palette
            #:upload-palette
+           #:set-active-palette-slot
+           #:+max-palette-slots+
            #:render-frame
            #:update-viewport
            #:set-pixel-scale

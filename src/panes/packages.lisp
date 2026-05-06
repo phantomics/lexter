@@ -29,6 +29,7 @@
    #:vt-pane-screen
    #:vt-pane-vt-handler
    #:vt-pane-initialized-p
+   #:vt-pane-palette-slot
    #:vt-pane-read-buffer
    #:vt-pane-write-buffer
    #:vt-pane-uc-scratch

@@ -70,6 +70,11 @@
                 :initform nil
                 :type boolean
                 :documentation "Has pane-initialize been called?")
+   ;; Palette slot for GPU paging (NIL = use default slot 0)
+   (palette-slot :initarg :palette-slot
+                 :accessor vt-pane-palette-slot
+                 :initform nil
+                 :documentation "GPU palette slot index (0-3) or NIL for default.")
    ;; I/O buffers
    (read-buffer :accessor vt-pane-read-buffer
                 :initform (make-array 4096 :element-type '(unsigned-byte 8))
@@ -214,11 +219,12 @@
      :cursor-blink-on *cursor-blink-on*)))
 
 (defmethod pane-palette ((pane vt-pane))
-  "Return the terminal's palette for GPU upload."
+  "Return the terminal's palette for GPU upload with optional slot."
   (when (vt-pane-screen pane)
     (let ((screen (vt-pane-screen pane)))
       (values (lexter/model:screen-palette screen)
-              (lexter/model:screen-palette-generation screen)))))
+              (lexter/model:screen-palette-generation screen)
+              (vt-pane-palette-slot pane)))))
 
 (defmethod scroll-state ((pane vt-pane))
   "Return scroll state from the screen's scrollback model."

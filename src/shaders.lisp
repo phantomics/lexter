@@ -55,9 +55,10 @@ void main() {
 
 uniform sampler2D u_atlas;
 uniform sampler1D u_swatch_table;  // RGBA8: 4 palette indices per swatch (normalized)
+uniform int u_palette_slot;        // which palette slot (0-3) to use
 
 layout(std140) uniform Palette {
-    vec4 colors[256];
+    vec4 colors[1024];  // 4 palettes x 256 colors
 } u_palette;
 
 in  vec2 f_uv;
@@ -71,7 +72,8 @@ void main() {
     // Convert normalized 0.0-1.0 back to palette index 0-255
     // Slot 0 = bg (r), Slot 1 = fg (g)
     uint idx   = uint(mask > 0.5 ? sw.g * 255.0 + 0.5 : sw.r * 255.0 + 0.5);
-    frag_color = u_palette.colors[idx];
+    // Offset by palette slot (each palette is 256 colors)
+    frag_color = u_palette.colors[u_palette_slot * 256 + int(idx)];
 }
 ")
 
@@ -132,9 +134,10 @@ void main() {
 
 uniform sampler2D u_atlas;
 uniform sampler1D u_swatch_table;  // RGBA8: 4 palette indices per swatch (normalized)
+uniform int u_palette_slot;        // which palette slot (0-3) to use
 
 layout(std140) uniform Palette {
-    vec4 colors[256];
+    vec4 colors[1024];  // 4 palettes x 256 colors
 } u_palette;
 
 in  vec2  f_uv;
@@ -150,12 +153,14 @@ void main() {
     vec4 sw    = texelFetch(u_swatch_table, int(f_swatch_idx), 0);
     // Convert normalized 0.0-1.0 back to palette index 0-255
     uint ink_pal = uint(sw[f_ink_idx] * 255.0 + 0.5);
-    vec4 ink     = u_palette.colors[ink_pal];
+    // Offset by palette slot (each palette is 256 colors)
+    int base     = u_palette_slot * 256;
+    vec4 ink     = u_palette.colors[base + int(ink_pal)];
 
     if (f_ts == 2u) {
         // Layer 0: fully opaque on both sides
         uint bg_pal = uint(sw[f_bg_idx] * 255.0 + 0.5);
-        vec4 bg     = u_palette.colors[bg_pal];
+        vec4 bg     = u_palette.colors[base + int(bg_pal)];
         frag_color  = mask > 0.5 ? ink : bg;
     } else {
         // Overlay layer: one side is transparent

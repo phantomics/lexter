@@ -22,6 +22,11 @@
                 :initform nil
                 :documentation "Decoration source: NIL, list of (col row glyph swatch), 
                  or function (workspace grid) that draws borders/separators.")
+   (decorator   :initarg :decorator
+                :accessor workspace-decorator
+                :initform nil
+                :documentation "Style-aware decoration function (target grid mode &rest params).
+                 Called with workspace for :borders mode, or pane for :scroll-bar mode.")
    (decorations-dirty :accessor workspace-decorations-dirty
                       :initform t
                       :type boolean
@@ -31,6 +36,15 @@
                 :type fixnum
                 :documentation "Index into panes of the focused pane."))
   (:documentation "A named collection of panes with focus management."))
+
+;;; --------------------------------------------------------------------------
+;;; Initialization
+;;; --------------------------------------------------------------------------
+
+(defmethod initialize-instance :after ((ws workspace) &key)
+  "Set back-references from panes to their workspace."
+  (dolist (pane (workspace-panes ws))
+    (setf (pane-workspace pane) ws)))
 
 ;;; --------------------------------------------------------------------------
 ;;; Focus management
@@ -96,7 +110,9 @@
 
 (defun render-decorations (workspace grid)
   "Render workspace decorations to GRID.
-   Decorations can be NIL, a list of (col row glyph swatch), or a function."
+   First renders legacy decorations (NIL, list, or function), then calls
+   the new decorator function with :borders mode if present."
+  ;; Legacy decoration system
   (let ((dec (workspace-decorations workspace)))
     (etypecase dec
       (null nil)
@@ -105,7 +121,11 @@
          (destructuring-bind (col row glyph swatch) d
            (lexter/grid:set-simple-cell grid col row glyph swatch))))
       (function
-       (funcall dec workspace grid)))))
+       (funcall dec workspace grid))))
+  ;; New decorator system: call with :borders mode for workspace-level decorations
+  (let ((decorator (workspace-decorator workspace)))
+    (when decorator
+      (funcall decorator workspace grid :borders))))
 
 (defun mark-decorations-dirty (workspace)
   "Mark workspace decorations for redraw (call after resize or layout change)."

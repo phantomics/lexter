@@ -177,8 +177,9 @@
 (defun vt-pane-init-screen (pane atlas &key (encoding :utf8) bold-as-bright)
   "Initialize the screen and VT handler for a vt-pane. Called by subclasses.
    ENCODING is :utf8 (default) or :cp437 (for BBS/DOS compatibility).
-   BOLD-AS-BRIGHT when T promotes fg colors 0-7 to 8-15 when bold is set."
-  (let* ((width (pane-width pane))
+   BOLD-AS-BRIGHT when T promotes fg colors 0-7 to 8-15 when bold is set.
+   Uses content-width so scrollable panes leave room for the scroll bar."
+  (let* ((width (content-width pane))
          (height (pane-height pane))
          (screen (lexter/model:make-screen :cols width :rows height)))
     ;; Set blank glyph from atlas
@@ -219,6 +220,15 @@
       (values (lexter/model:screen-palette screen)
               (lexter/model:screen-palette-generation screen)))))
 
+(defmethod scroll-state ((pane vt-pane))
+  "Return scroll state from the screen's scrollback model."
+  (when (vt-pane-screen pane)
+    (let ((screen (vt-pane-screen pane)))
+      (values (+ (lexter/model:screen-rows screen)
+                 (lexter/model:scrollback-lines screen))
+              (lexter/model:scrollback-viewport-offset screen)
+              (lexter/model:screen-rows screen)))))
+
 (defmethod pane-handle-key ((pane vt-pane) key scancode action mods)
   "Send key sequence to terminal's backend."
   (declare (ignore scancode))
@@ -257,12 +267,14 @@
            (return processed)))))))
 
 (defmethod pane-resize ((pane vt-pane) new-width new-height)
-  "Resize terminal screen and notify backend."
+  "Resize terminal screen and notify backend.
+   Uses content-width so scrollable panes leave room for the scroll bar."
   (setf (pane-width pane) new-width
         (pane-height pane) new-height)
-  (when (vt-pane-screen pane)
-    (lexter/model:resize-screen (vt-pane-screen pane) new-width new-height))
-  (vt-pane-backend-resize pane new-width new-height))
+  (let ((screen-width (content-width pane)))
+    (when (vt-pane-screen pane)
+      (lexter/model:resize-screen (vt-pane-screen pane) screen-width new-height))
+    (vt-pane-backend-resize pane screen-width new-height)))
 
 (defmethod pane-dirty-p ((pane vt-pane))
   "Check if terminal screen has dirty rows."

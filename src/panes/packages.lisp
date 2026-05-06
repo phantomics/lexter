@@ -21,6 +21,9 @@
    #:pane-destroy
    #:pane-alive-p
    #:pane-palette
+   #:pane-workspace
+   #:scroll-state
+   #:content-width
    ;; VT terminal base pane
    #:vt-pane
    #:vt-pane-screen
@@ -55,11 +58,18 @@
    #:function-pane-state
    #:function-pane-dirty
    #:make-function-pane
+   ;; Scrollable pane mixin
+   #:scrollable-pane
+   #:scroll-bar-visible-p
+   #:scroll-bar-col
+   #:scroll-bar-thumb-geometry
+   #:scroll-bar-hit-test
    ;; Workspace
    #:workspace
    #:workspace-name
    #:workspace-panes
    #:workspace-decorations
+   #:workspace-decorator
    #:workspace-decorations-dirty
    #:workspace-focus-index
    #:focused-pane

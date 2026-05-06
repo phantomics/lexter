@@ -34,7 +34,10 @@
               :accessor pane-focusable
               :initform t
               :type boolean
-              :documentation "Can this pane receive keyboard focus?"))
+              :documentation "Can this pane receive keyboard focus?")
+   (workspace :accessor pane-workspace
+              :initform nil
+              :documentation "Back-reference to containing workspace, if any."))
   (:documentation "Base class for all pane types."))
 
 ;;; --------------------------------------------------------------------------
@@ -100,6 +103,20 @@
     For terminal panes, returns the screen's palette data.
     Returns NIL for panes without custom palettes (uses default)."))
 
+(defgeneric scroll-state (pane)
+  (:documentation
+   "Return scroll state as (values total-lines viewport-offset visible-rows).
+    TOTAL-LINES is the total content height including scrollback.
+    VIEWPORT-OFFSET is how many lines the viewport is scrolled back (0 = bottom).
+    VISIBLE-ROWS is the number of visible rows in the pane.
+    Returns NIL if the pane has no scrollable content."))
+
+(defgeneric content-width (pane)
+  (:documentation
+   "Return the effective content width of the pane.
+    For panes with scroll bars, this is pane-width minus the scroll bar column.
+    For regular panes, this equals pane-width."))
+
 ;;; --------------------------------------------------------------------------
 ;;; Default method implementations
 ;;; --------------------------------------------------------------------------
@@ -143,3 +160,11 @@
 (defmethod pane-palette ((pane pane))
   "Default: no palette (use default)."
   nil)
+
+(defmethod scroll-state ((pane pane))
+  "Default: no scrollable content."
+  nil)
+
+(defmethod content-width ((pane pane))
+  "Default: full pane width."
+  (pane-width pane))

@@ -22,8 +22,11 @@
    #:pane-alive-p
    #:pane-palette
    #:pane-workspace
+   #:pane-input-redirect
    #:scroll-state
    #:content-width
+   #:content-height
+   #:content-row
    ;; VT terminal base pane
    #:vt-pane
    #:vt-pane-screen
@@ -59,9 +62,13 @@
    #:function-pane-state
    #:function-pane-dirty
    #:make-function-pane
-   ;; Scrollable pane mixin
-   #:scrollable-pane
+   ;; Chrome pane mixin (scroll bar, header, footer)
+   #:chrome-pane
    #:scroll-bar-visible-p
+   #:chrome-header-height
+   #:chrome-footer-height
+   #:chrome-header-data
+   #:chrome-footer-data
    #:scroll-bar-col
    #:scroll-bar-thumb-geometry
    #:scroll-bar-hit-test

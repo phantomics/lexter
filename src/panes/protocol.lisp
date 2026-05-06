@@ -37,7 +37,13 @@
               :documentation "Can this pane receive keyboard focus?")
    (workspace :accessor pane-workspace
               :initform nil
-              :documentation "Back-reference to containing workspace, if any."))
+              :documentation "Back-reference to containing workspace, if any.")
+   (input-redirect :accessor pane-input-redirect
+                   :initform nil
+                   :documentation "Function to redirect input to, or NIL for normal routing.
+                    Signature: (funcall redirect pane :key key scancode action mods)
+                             or (funcall redirect pane :char codepoint).
+                    Used for modal dialogs and other input interception."))
   (:documentation "Base class for all pane types."))
 
 ;;; --------------------------------------------------------------------------
@@ -120,6 +126,18 @@
     For panes with scroll bars, this is pane-width minus the scroll bar column.
     For regular panes, this equals pane-width."))
 
+(defgeneric content-height (pane)
+  (:documentation
+   "Return the effective content height of the pane.
+    For panes with headers/footers, this is pane-height minus reserved rows.
+    For regular panes, this equals pane-height."))
+
+(defgeneric content-row (pane)
+  (:documentation
+   "Return the grid row where content starts.
+    For panes with headers, this is pane-row plus header height.
+    For regular panes, this equals pane-row."))
+
 ;;; --------------------------------------------------------------------------
 ;;; Default method implementations
 ;;; --------------------------------------------------------------------------
@@ -171,3 +189,29 @@
 (defmethod content-width ((pane pane))
   "Default: full pane width."
   (pane-width pane))
+
+(defmethod content-height ((pane pane))
+  "Default: full pane height."
+  (pane-height pane))
+
+(defmethod content-row ((pane pane))
+  "Default: pane row (no header offset)."
+  (pane-row pane))
+
+;;; --------------------------------------------------------------------------
+;;; Input redirect support
+;;; --------------------------------------------------------------------------
+
+(defmethod pane-handle-key :around ((pane pane) key scancode action mods)
+  "Check for input redirect before normal key handling."
+  (let ((redirect (pane-input-redirect pane)))
+    (if redirect
+        (funcall redirect pane :key key scancode action mods)
+        (call-next-method))))
+
+(defmethod pane-handle-char :around ((pane pane) codepoint)
+  "Check for input redirect before normal char handling."
+  (let ((redirect (pane-input-redirect pane)))
+    (if redirect
+        (funcall redirect pane :char codepoint)
+        (call-next-method))))

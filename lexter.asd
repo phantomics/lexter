@@ -34,7 +34,7 @@
   :serial t
   :components ((:file "src/panes/packages")
                (:file "src/panes/protocol")
-               (:file "src/panes/scrollable-mixin")
+               (:file "src/panes/chrome-mixin")
                (:file "src/panes/vt-pane")
                (:file "src/panes/uterm-pane")
                (:file "src/panes/function-pane")

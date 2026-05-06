@@ -183,9 +183,10 @@
   "Initialize the screen and VT handler for a vt-pane. Called by subclasses.
    ENCODING is :utf8 (default) or :cp437 (for BBS/DOS compatibility).
    BOLD-AS-BRIGHT when T promotes fg colors 0-7 to 8-15 when bold is set.
-   Uses content-width so scrollable panes leave room for the scroll bar."
+   Uses content-width and content-height so chrome panes reserve space for
+   scroll bars, headers, and footers."
   (let* ((width (content-width pane))
-         (height (pane-height pane))
+         (height (content-height pane))
          (screen (lexter/model:make-screen :cols width :rows height)))
     ;; Set blank glyph from atlas
     (when atlas
@@ -209,12 +210,13 @@
 ;;; --------------------------------------------------------------------------
 
 (defmethod pane-flush ((pane vt-pane) grid)
-  "Flush terminal screen content to grid at pane's offset."
+  "Flush terminal screen content to grid at pane's offset.
+   Uses content-row to account for header chrome."
   (when (vt-pane-screen pane)
     (lexter/model:flush-to-display
      (vt-pane-screen pane) grid
      :col-offset (pane-col pane)
-     :row-offset (pane-row pane)
+     :row-offset (content-row pane)
      :space-glyph (lexter/model:screen-blank-glyph (vt-pane-screen pane))
      :cursor-blink-on *cursor-blink-on*)))
 
@@ -274,13 +276,15 @@
 
 (defmethod pane-resize ((pane vt-pane) new-width new-height)
   "Resize terminal screen and notify backend.
-   Uses content-width so scrollable panes leave room for the scroll bar."
+   Uses content-width and content-height so chrome panes reserve space
+   for scroll bars, headers, and footers."
   (setf (pane-width pane) new-width
         (pane-height pane) new-height)
-  (let ((screen-width (content-width pane)))
+  (let ((screen-width (content-width pane))
+        (screen-height (content-height pane)))
     (when (vt-pane-screen pane)
-      (lexter/model:resize-screen (vt-pane-screen pane) screen-width new-height))
-    (vt-pane-backend-resize pane screen-width new-height)))
+      (lexter/model:resize-screen (vt-pane-screen pane) screen-width screen-height))
+    (vt-pane-backend-resize pane screen-width screen-height)))
 
 (defmethod pane-dirty-p ((pane vt-pane))
   "Check if terminal screen has dirty rows."

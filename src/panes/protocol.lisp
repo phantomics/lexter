@@ -202,16 +202,41 @@
 ;;; Input redirect support
 ;;; --------------------------------------------------------------------------
 
+(defvar *redirect-suppressed* nil
+  "When T, input redirect is bypassed and events reach the pane's normal handler.
+   Bound dynamically by pane-forward-key and pane-forward-char to allow redirect
+   functions to forward events through to the pane without re-triggering themselves.")
+
 (defmethod pane-handle-key :around ((pane pane) key scancode action mods)
-  "Check for input redirect before normal key handling."
+  "Check for input redirect before normal key handling.
+   Redirect is bypassed when *redirect-suppressed* is true."
   (let ((redirect (pane-input-redirect pane)))
-    (if redirect
+    (if (and redirect (not *redirect-suppressed*))
         (funcall redirect pane :key key scancode action mods)
         (call-next-method))))
 
 (defmethod pane-handle-char :around ((pane pane) codepoint)
-  "Check for input redirect before normal char handling."
+  "Check for input redirect before normal char handling.
+   Redirect is bypassed when *redirect-suppressed* is true."
   (let ((redirect (pane-input-redirect pane)))
-    (if redirect
+    (if (and redirect (not *redirect-suppressed*))
         (funcall redirect pane :char codepoint)
         (call-next-method))))
+
+;;; --------------------------------------------------------------------------
+;;; Input forwarding (for use by redirect functions)
+;;; --------------------------------------------------------------------------
+
+(defun pane-forward-key (pane key scancode action mods)
+  "Forward a key event to the pane's normal handler, bypassing any input redirect.
+   Intended for use within redirect functions that want to pass events through
+   to the pane after inspecting or transforming them."
+  (let ((*redirect-suppressed* t))
+    (pane-handle-key pane key scancode action mods)))
+
+(defun pane-forward-char (pane codepoint)
+  "Forward a char event to the pane's normal handler, bypassing any input redirect.
+   Intended for use within redirect functions that want to pass events through
+   to the pane after inspecting or transforming them."
+  (let ((*redirect-suppressed* t))
+    (pane-handle-char pane codepoint)))

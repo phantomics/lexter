@@ -23,6 +23,9 @@
    #:pane-palette
    #:pane-workspace
    #:pane-input-redirect
+   #:pane-forward-key
+   #:pane-forward-char
+   #:*redirect-suppressed*
    #:scroll-state
    #:content-width
    #:content-height

@@ -224,6 +224,9 @@
   (glyphs        #() :type (simple-array (unsigned-byte 16) (*)))
   (swatch-indices #() :type (simple-array (unsigned-byte 16) (*)))
   (attrs         #() :type (simple-array (unsigned-byte 32) (*)))
+  ;; --- Wide character flags ---
+  ;; 1 = left half of double-wide char; right half has glyph=0, same swatch
+  (wide-flags    #*  :type simple-bit-vector)
   ;; --- Layered cells (sparse) ---
   (layered-cells (make-hash-table :test 'equal) :type hash-table)
   ;; --- Swatch table ---
@@ -274,13 +277,14 @@
      :glyphs          (make-array n :element-type '(unsigned-byte 16) :initial-element 32)
      :swatch-indices  (make-array n :element-type '(unsigned-byte 16) :initial-element 0)
      :attrs           (make-array n :element-type '(unsigned-byte 32) :initial-element 0)
+     :wide-flags      (make-array n :element-type 'bit :initial-element 0)
      :layered-cells   (make-hash-table :test 'equal :size 64)
      :swatches        swatches
      :cursor-col      0
      :cursor-row      0
      :cursor-visible  t
      :cursor-style    :block
-     :cursor-blink    t
+     :cursor-blink    nil ;; t
      :scroll-top      0
      :scroll-bottom   (1- rows)
      :scrollback-enabled t
@@ -439,32 +443,58 @@
 ;;; Write operations
 ;;; --------------------------------------------------------------------------
 
-(defun write-char-at (screen col row glyph-idx &key (swatch nil) (attrs nil))
+(defun write-char-at (screen col row glyph-idx &key (swatch nil) (attrs nil) wide)
   "Write a character at (COL, ROW) to the topmost active layer.
    For simple cells, this writes to layer 0.
    For layered cells, this writes to the topmost layer.
-   SWATCH and ATTRS, if provided, update those values."
-  (let ((layers (%get-layered screen col row)))
-    (if layers
-        ;; Layered: write to topmost layer
-        (let* ((ln (model-cell-layers-topmost layers))
-               (lobj (aref (model-cell-layers-layers layers) ln)))
-          (if lobj
-              (setf (model-layer-glyph-idx lobj) glyph-idx)
-              ;; Topmost layer is nil? Create it.
-              (setf (aref (model-cell-layers-layers layers) ln)
-                    (make-model-layer :glyph-idx glyph-idx
-                                      :ink-slot 1
-                                      :bg-slot 0
-                                      :transparent-side (if (zerop ln) :none :bg)))))
-        ;; Simple: write directly
-        (let ((i (%idx screen col row)))
-          (setf (aref (screen-glyphs screen) i) glyph-idx)
-          (when swatch
-            (setf (aref (screen-swatch-indices screen) i) swatch))
-          (when attrs
-            (setf (aref (screen-attrs screen) i) attrs)))))
-  (%mark-dirty screen row))
+   SWATCH and ATTRS, if provided, update those values.
+   WIDE, when T, marks this as a double-wide character: it occupies (COL,ROW) and
+   (COL+1,ROW). The right half is cleared and acts as a continuation cell."
+  (let* ((cols (screen-cols screen))
+         (i (%idx screen col row)))
+    ;; If overwriting the right half of an existing wide char, clear the left half
+    (when (and (> col 0)
+               (= 1 (sbit (screen-wide-flags screen) (%idx screen (1- col) row))))
+      (let ((left-i (%idx screen (1- col) row)))
+        (setf (sbit (screen-wide-flags screen) left-i) 0
+              (aref (screen-glyphs screen) left-i) (screen-blank-glyph screen))))
+    ;; If this cell was wide, clear its old continuation
+    (when (= 1 (sbit (screen-wide-flags screen) i))
+      (let ((next-col (1+ col)))
+        (when (< next-col cols)
+          (let ((next-i (%idx screen next-col row)))
+            (setf (aref (screen-glyphs screen) next-i) (screen-blank-glyph screen))))))
+    (let ((layers (%get-layered screen col row)))
+      (if layers
+          ;; Layered: write to topmost layer
+          (let* ((ln (model-cell-layers-topmost layers))
+                 (lobj (aref (model-cell-layers-layers layers) ln)))
+            (if lobj
+                (setf (model-layer-glyph-idx lobj) glyph-idx)
+                (setf (aref (model-cell-layers-layers layers) ln)
+                      (make-model-layer :glyph-idx glyph-idx
+                                        :ink-slot 1
+                                        :bg-slot 0
+                                        :transparent-side (if (zerop ln) :none :bg)))))
+          ;; Simple: write directly
+          (progn
+            (setf (aref (screen-glyphs screen) i) glyph-idx)
+            (when swatch
+              (setf (aref (screen-swatch-indices screen) i) swatch))
+            (when attrs
+              (setf (aref (screen-attrs screen) i) attrs)))))
+    ;; Set/clear wide flag
+    (setf (sbit (screen-wide-flags screen) i) (if wide 1 0))
+    ;; Handle wide: mark continuation cell
+    (when wide
+      (let ((next-col (1+ col)))
+        (when (< next-col cols)
+          (let ((next-i (%idx screen next-col row)))
+            (setf (aref (screen-glyphs screen) next-i) 0
+                  (sbit (screen-wide-flags screen) next-i) 0)
+            (when swatch
+              (setf (aref (screen-swatch-indices screen) next-i) swatch))))))
+    (%mark-dirty screen row)))
 
 (defun write-string-at (screen col row string &key (swatch nil) (attrs nil)
                                                    (codepoint-fn #'char-code))
@@ -480,17 +510,26 @@
 ;;; Cursor-relative write (targets topmost layer)
 ;;; --------------------------------------------------------------------------
 
-(defun put-char (screen glyph-idx &key (swatch nil) (attrs nil) (advance t))
+(defun put-char (screen glyph-idx &key (swatch nil) (attrs nil) (advance t) wide)
   "Write a character at the cursor position and optionally advance.
-   Targets the topmost active layer."
-  (write-char-at screen (screen-cursor-col screen) (screen-cursor-row screen)
-                 glyph-idx :swatch swatch :attrs attrs)
-  (when advance
-    (let ((new-col (1+ (screen-cursor-col screen))))
-      (if (>= new-col (screen-cols screen))
-          ;; Wrap or stay at edge depending on mode
-          (setf (screen-cursor-col screen) (1- (screen-cols screen)))
-          (setf (screen-cursor-col screen) new-col)))))
+   Targets the topmost active layer.
+   WIDE, when T, writes a double-wide character and advances by 2."
+  (let ((col (screen-cursor-col screen))
+        (cols (screen-cols screen)))
+    ;; For wide chars at the last column, can't fit — write a space and wrap
+    (when (and wide (>= col (1- cols)))
+      (write-char-at screen col (screen-cursor-row screen)
+                     (screen-blank-glyph screen) :swatch swatch)
+      (setf col (1- cols)))
+    (write-char-at screen col (screen-cursor-row screen)
+                   glyph-idx :swatch swatch :attrs attrs :wide wide)
+    (when advance
+      (let ((advance-by (if wide 2 1)))
+        (let ((new-col (+ col advance-by)))
+          (if (>= new-col cols)
+              ;; Wrap or stay at edge depending on mode
+              (setf (screen-cursor-col screen) (1- cols))
+              (setf (screen-cursor-col screen) new-col)))))))
 
 (defun delete-char (screen)
   "Delete the character at cursor by writing a space on the topmost layer."
@@ -779,6 +818,7 @@
          (new-glyphs (make-array new-n :element-type '(unsigned-byte 16) :initial-element blank))
          (new-swatch-indices (make-array new-n :element-type '(unsigned-byte 16) :initial-element 0))
          (new-attrs (make-array new-n :element-type '(unsigned-byte 32) :initial-element 0))
+         (new-wide-flags (make-array new-n :element-type 'bit :initial-element 0))
          (new-layered (make-hash-table :test 'equal :size 64))
          (new-dirty (make-array new-rows :element-type 'bit :initial-element 1)))
     ;; Copy existing data
@@ -786,9 +826,10 @@
           :do (loop :for col :from 0 :below (min old-cols new-cols)
                     :for old-i = (+ (* row old-cols) col)
                     :for new-i = (+ (* row new-cols) col)
-                    :do (setf (aref new-glyphs new-i) (aref (screen-glyphs screen) old-i)
-                              (aref new-swatch-indices new-i) (aref (screen-swatch-indices screen) old-i)
-                              (aref new-attrs new-i) (aref (screen-attrs screen) old-i))))
+                     :do (setf (aref new-glyphs new-i) (aref (screen-glyphs screen) old-i)
+                               (aref new-swatch-indices new-i) (aref (screen-swatch-indices screen) old-i)
+                               (aref new-attrs new-i) (aref (screen-attrs screen) old-i)
+                               (sbit new-wide-flags new-i) (sbit (screen-wide-flags screen) old-i))))
     ;; Copy layered cells that fit
     (maphash (lambda (key layers)
                (destructuring-bind (col . row) key
@@ -801,6 +842,7 @@
           (screen-glyphs screen) new-glyphs
           (screen-swatch-indices screen) new-swatch-indices
           (screen-attrs screen) new-attrs
+          (screen-wide-flags screen) new-wide-flags
           (screen-layered-cells screen) new-layered
           (screen-row-dirty screen) new-dirty
           (screen-scroll-bottom screen) (1- new-rows))
@@ -878,7 +920,8 @@
                                    display-grid grid-col grid-row
                                    (let ((g (aref (screen-glyphs screen) i)))
                                      (if (zerop g) space-glyph g))
-                                   (aref (screen-swatch-indices screen) i))))))))
+                                   (aref (screen-swatch-indices screen) i)
+                                   :wide (= 1 (sbit (screen-wide-flags screen) i)))))))))
     ;; Handle cursor rendering using reverse video (swap fg/bg)
     (let ((cursor-visible (and (screen-cursor-visible screen)
                                (or (not (screen-cursor-blink screen))

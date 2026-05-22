@@ -37,16 +37,23 @@ out vec2  f_uv;
 flat out uint f_swatch_idx;
 
 void main() {
+    // Extract wide flag from bit 15 of swatch
+    bool wide = (i_swatch & 0x8000u) != 0u;
+    float cell_mult = wide ? 2.0 : 1.0;
+
     int gc = int(i_glyph) % u_atlas_size.x;
     int gr = int(i_glyph) / u_atlas_size.x;
-    f_uv = vec2(float(gc) + v_corner.x, float(gr) + v_corner.y)
+    // Wide glyphs span 2 atlas columns
+    f_uv = vec2(float(gc) + v_corner.x * cell_mult, float(gr) + v_corner.y)
            / vec2(u_atlas_size);
 
-    vec2 px  = vec2(i_cell * u_cell_size) + v_corner * vec2(u_cell_size);
+    // Wide glyphs span 2 cell widths on screen
+    vec2 px  = vec2(i_cell * u_cell_size)
+             + v_corner * vec2(u_cell_size) * vec2(cell_mult, 1.0);
     vec2 ndc = px / vec2(u_viewport) * 2.0 - 1.0;
     gl_Position = vec4(ndc.x, -ndc.y, 0.0, 1.0);
 
-    f_swatch_idx = i_swatch;
+    f_swatch_idx = i_swatch & 0x7FFFu;
 }
 ")
 
@@ -113,19 +120,26 @@ flat out uint  f_ts;
 flat out uint  f_swatch_idx;
 
 void main() {
+    // Extract wide flag from bit 15 of swatch
+    bool wide = (i_swatch & 0x8000u) != 0u;
+    float cell_mult = wide ? 2.0 : 1.0;
+
     int gc = int(i_glyph) % u_atlas_size.x;
     int gr = int(i_glyph) / u_atlas_size.x;
-    f_uv = vec2(float(gc) + v_corner.x, float(gr) + v_corner.y)
+    // Wide glyphs span 2 atlas columns
+    f_uv = vec2(float(gc) + v_corner.x * cell_mult, float(gr) + v_corner.y)
            / vec2(u_atlas_size);
 
-    vec2 px  = vec2(i_cell * u_cell_size) + v_corner * vec2(u_cell_size);
+    // Wide glyphs span 2 cell widths on screen
+    vec2 px  = vec2(i_cell * u_cell_size)
+             + v_corner * vec2(u_cell_size) * vec2(cell_mult, 1.0);
     vec2 ndc = px / vec2(u_viewport) * 2.0 - 1.0;
     gl_Position = vec4(ndc.x, -ndc.y, 0.0, 1.0);
 
     f_ink_idx    = i_ink_bg.x;
     f_bg_idx     = i_ink_bg.y;
     f_ts         = i_ts;
-    f_swatch_idx = i_swatch;
+    f_swatch_idx = i_swatch & 0x7FFFu;
 }
 ")
 

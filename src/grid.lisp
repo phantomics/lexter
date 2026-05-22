@@ -60,6 +60,9 @@
   ;; --- Simple path storage (per-cell) ---
   (glyphs        #() :type (simple-array (unsigned-byte 16) (*)))
   (swatch-indices #() :type (simple-array (unsigned-byte 16) (*)))
+  ;; --- Wide character support ---
+  (wide-flags    #*  :type simple-bit-vector)    ; 1 = left half of wide char
+  (continuation-flags #* :type simple-bit-vector) ; 1 = right half (skip during render)
   ;; --- Layered path storage (sparse) ---
   (layered-cells (make-hash-table :test 'equal) :type hash-table)
   (layered-flags #*  :type simple-bit-vector)
@@ -104,6 +107,8 @@
                                             :initial-element 0)
                 :glyphs         (make-array n :element-type '(unsigned-byte 16) :initial-element 0)
                 :swatch-indices (make-array n :element-type '(unsigned-byte 16) :initial-element 0)
+                :wide-flags     (make-array n :element-type 'bit :initial-element 0)
+                :continuation-flags (make-array n :element-type 'bit :initial-element 0)
                 :layered-cells  (make-hash-table :test 'equal :size 64)
                 :layered-flags  (make-array n :element-type 'bit :initial-element 0)
                 :row-dirty      (make-array rows :element-type 'bit :initial-element 1)
@@ -182,14 +187,42 @@
 ;;; Simple path API
 ;;; --------------------------------------------------------------------------
 
-(defun set-simple-cell (grid col row glyph-idx swatch-idx)
+(defun set-simple-cell (grid col row glyph-idx swatch-idx &key wide)
   "Set a simple (single-layer) cell at (COL, ROW).
-   If the cell was layered, that state is cleared."
-  (let ((i (%idx grid col row)))
+   If the cell was layered, that state is cleared.
+   WIDE when true marks the cell as double-width: sets the wide flag on this cell,
+   marks (COL+1, ROW) as a continuation cell, and clears any existing state there."
+  (let ((i (%idx grid col row))
+        (cols (display-grid-cols grid)))
+    ;; If this cell was the continuation of a wide char to the left, clear that wide char
+    (when (= 1 (sbit (display-grid-continuation-flags grid) i))
+      (when (> col 0)
+        (let ((left-i (%idx grid (1- col) row)))
+          (setf (sbit (display-grid-wide-flags grid) left-i) 0))))
+    ;; If this cell was wide, clear its old continuation
+    (when (= 1 (sbit (display-grid-wide-flags grid) i))
+      (let ((next-col (1+ col)))
+        (when (< next-col cols)
+          (let ((next-i (%idx grid next-col row)))
+            (setf (sbit (display-grid-continuation-flags grid) next-i) 0)))))
+    ;; Set cell data
     (setf (aref (display-grid-glyphs grid) i) glyph-idx
           (aref (display-grid-swatch-indices grid) i) swatch-idx
-          (sbit (display-grid-layered-flags grid) i) 0)
+          (sbit (display-grid-layered-flags grid) i) 0
+          (sbit (display-grid-wide-flags grid) i) (if wide 1 0)
+          (sbit (display-grid-continuation-flags grid) i) 0)
     (remhash (cons col row) (display-grid-layered-cells grid))
+    ;; Handle wide: mark continuation cell
+    (when wide
+      (let ((next-col (1+ col)))
+        (when (< next-col cols)
+          (let ((next-i (%idx grid next-col row)))
+            (setf (aref (display-grid-glyphs grid) next-i) 0
+                  (aref (display-grid-swatch-indices grid) next-i) swatch-idx
+                  (sbit (display-grid-layered-flags grid) next-i) 0
+                  (sbit (display-grid-wide-flags grid) next-i) 0
+                  (sbit (display-grid-continuation-flags grid) next-i) 1)
+            (remhash (cons next-col row) (display-grid-layered-cells grid))))))
     (mark-row-dirty grid row)))
 
 ;;; --------------------------------------------------------------------------
@@ -291,9 +324,15 @@
     (dotimes (row rows)
       (dotimes (col cols)
         (let ((i (%idx grid col row)))
+          ;; Skip continuation cells (right half of wide characters)
+          (unless (= 1 (sbit (display-grid-continuation-flags grid) i))
           (if (zerop (sbit (display-grid-layered-flags grid) i))
               ;; --- Simple cell: write swatch index directly ---
-              (let ((sw-idx (aref (display-grid-swatch-indices grid) i)))
+              (let* ((sw-idx (aref (display-grid-swatch-indices grid) i))
+                     ;; Set bit 15 of swatch for wide glyphs
+                     (sw-gpu (if (= 1 (sbit (display-grid-wide-flags grid) i))
+                                 (logior sw-idx #x8000)
+                                 sw-idx)))
                 (setf (aref sbuf si)       (%u16-lo col)
                       (aref sbuf (+ si 1)) (%u16-hi col)
                       (aref sbuf (+ si 2)) (%u16-lo row)
@@ -301,15 +340,18 @@
                 (let ((glyph (aref (display-grid-glyphs grid) i)))
                   (setf (aref sbuf (+ si 4)) (%u16-lo glyph)
                         (aref sbuf (+ si 5)) (%u16-hi glyph)))
-                ;; Swatch index as uint16 at offset 6-7
-                (setf (aref sbuf (+ si 6)) (%u16-lo sw-idx)
-                      (aref sbuf (+ si 7)) (%u16-hi sw-idx))
+                ;; Swatch index (with wide flag in bit 15) at offset 6-7
+                (setf (aref sbuf (+ si 6)) (%u16-lo sw-gpu)
+                      (aref sbuf (+ si 7)) (%u16-hi sw-gpu))
                 (incf si +simple-stride+)
                 (incf sc))
               ;; --- Layered cell ---
               (let ((loc (gethash (cons col row) (display-grid-layered-cells grid))))
                 (when loc
-                  (let ((sw-idx (cell-location-swatch-idx loc)))
+                  (let* ((raw-sw (cell-location-swatch-idx loc))
+                         (sw-idx (if (= 1 (sbit (display-grid-wide-flags grid) i))
+                                     (logior raw-sw #x8000)
+                                     raw-sw)))
                     (dotimes (ln +max-layers+)
                       (let ((layer (aref (cell-location-layers loc) ln)))
                         (when layer
@@ -331,7 +373,7 @@
                                   (aref lbuf (+ idx 10)) (%u16-lo sw-idx)
                                   (aref lbuf (+ idx 11)) (%u16-hi sw-idx))
                             (incf (aref li ln) +layered-stride+)
-                            (incf (aref lc ln)))))))))))))
+                            (incf (aref lc ln))))))))))))))
     ;; Compact layered data: move each layer's data to be contiguous
     ;; Layer 0 is already at offset 0, so we only need to move layers 1+
     (let ((layer-max (* cols rows +layered-stride+))
@@ -362,6 +404,8 @@
          (new-n    (* new-cols new-rows))
          (new-glyphs (make-array new-n :element-type '(unsigned-byte 16) :initial-element blank-glyph))
          (new-swatch-indices (make-array new-n :element-type '(unsigned-byte 16) :initial-element 0))
+         (new-wide-flags (make-array new-n :element-type 'bit :initial-element 0))
+         (new-continuation-flags (make-array new-n :element-type 'bit :initial-element 0))
          (new-layered-flags  (make-array new-n :element-type 'bit :initial-element 0))
          (new-row-dirty (make-array new-rows :element-type 'bit :initial-element 1))
          (new-layered-cells (make-hash-table :test 'equal :size 64)))
@@ -385,6 +429,8 @@
           (display-grid-rows grid) new-rows
           (display-grid-glyphs grid) new-glyphs
           (display-grid-swatch-indices grid) new-swatch-indices
+          (display-grid-wide-flags grid) new-wide-flags
+          (display-grid-continuation-flags grid) new-continuation-flags
           (display-grid-layered-flags grid) new-layered-flags
           (display-grid-row-dirty grid) new-row-dirty
           (display-grid-layered-cells grid) new-layered-cells)

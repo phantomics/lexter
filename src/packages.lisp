@@ -12,8 +12,9 @@
            #:bitmap-font-ascent
            #:bitmap-font-glyph-count
            #:bitmap-font-bitmaps
-           #:bitmap-font-encoding
-           #:glyph-index))
+            #:bitmap-font-encoding
+            #:bitmap-font-wide-glyphs
+            #:glyph-index))
 
 (defpackage #:lexter/atlas
   (:use #:cl #:lexter/pcf)
@@ -26,6 +27,7 @@
            #:atlas-cols
            #:atlas-rows
            #:atlas-glyph-index
+           #:atlas-glyph-wide-p
            #:+cursor-block-glyph+
            #:+cursor-underline-glyph+
            #:+cursor-bar-glyph+))
@@ -173,4 +175,5 @@
 
 (defpackage #:lexter/demo
   (:use #:cl #:lexter/pcf #:lexter/atlas #:lexter/grid #:lexter/renderer)
-  (:export #:run-demo))
+  (:export #:run-demo
+           #:run-cjk-demo))

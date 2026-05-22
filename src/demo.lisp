@@ -24,12 +24,15 @@
 
 (defun write-string-simple (grid atlas str col row swatch-idx)
   "Write STR into GRID starting at (COL, ROW) using the simple path.
-   SWATCH-IDX is the swatch table index (fg/bg are defined in the swatch)."
-  (loop :for ch :across str
-        :for c :from col
-        :for glyph-idx = (atlas-glyph-index atlas (char-code ch))
-        :when glyph-idx
-        :do (set-simple-cell grid c row glyph-idx swatch-idx)))
+   SWATCH-IDX is the swatch table index (fg/bg are defined in the swatch).
+   Handles double-wide glyphs: wide characters advance by 2 columns."
+  (let ((c col))
+    (loop :for ch :across str
+          :for glyph-idx = (atlas-glyph-index atlas (char-code ch))
+          :when glyph-idx
+          :do (let ((wide (atlas-glyph-wide-p atlas glyph-idx)))
+                (set-simple-cell grid c row glyph-idx swatch-idx :wide wide)
+                (incf c (if wide 2 1))))))
 
 (defun setup-demo-swatches (grid)
   "Set up swatch table for the demo.
@@ -164,6 +167,74 @@
           (set-palette renderer palette)
           (setup-demo-grid grid atlas)
           ;; Register key callback for Escape
+          (glfw:def-key-callback quit-on-escape (window key scancode action mods)
+            (declare (ignore scancode mods))
+            (when (and (eq key :escape) (eq action :press))
+              (glfw:set-window-should-close window t)))
+          (glfw:set-key-callback 'quit-on-escape)
+          ;; Main loop
+          (loop :until (glfw:window-should-close-p)
+                :do (render-frame renderer grid)
+                    (glfw:swap-buffers)
+                    (glfw:poll-events))
+          (destroy-renderer renderer))))))
+
+;;; --------------------------------------------------------------------------
+;;; CJK demo: double-wide character rendering with zpix.bdf
+;;; --------------------------------------------------------------------------
+
+(defun run-cjk-demo (&key (font-path "../zpix.bdf") (pixel-scale nil))
+  "Demo for double-wide CJK character rendering using zpix.bdf.
+   Press Escape or close window to quit."
+  (format t "~&Loading BDF font ~a ...~%" font-path)
+  (let* ((font     (lexter/pcf:load-bdf font-path :cell-width 7 :cell-height 12))
+         (cell-w   (bitmap-font-cell-width  font))
+         (cell-h   (bitmap-font-cell-height font))
+         (cols     60)
+         (rows     12))
+    (format t "~&Cell ~dx~d, ~d glyphs (~d wide)~%" cell-w cell-h
+            (bitmap-font-glyph-count font)
+            (if (bitmap-font-wide-glyphs font)
+                (hash-table-count (bitmap-font-wide-glyphs font))
+                0))
+    (glfw:initialize)
+    (let* ((scale   (or pixel-scale 2))
+           (win-w   (* cols cell-w scale))
+           (win-h   (* rows cell-h scale)))
+      (format t "~&Pixel scale: ~dx, window ~dx~d (~dx~d cells)~%"
+              scale win-w win-h cols rows)
+      (glfw:with-init-window
+          (:title "lexter CJK demo"
+           :width win-w :height win-h
+           :resizable nil
+           :context-version-major 3
+           :context-version-minor 3
+           :opengl-profile :opengl-core-profile
+           :opengl-forward-compat t)
+        (gl:viewport 0 0 win-w win-h)
+        (let* ((atlas    (build-atlas (list font)))
+               (_        (add-cursor-glyphs atlas))
+               (grid     (make-display-grid :cols cols :rows rows))
+               (renderer (make-renderer atlas win-w win-h :pixel-scale scale))
+               (palette  (lexter/model:make-default-palette)))
+          (declare (ignore _))
+          (set-palette renderer palette)
+          ;; Set up swatches
+          (set-swatch grid 0  0 15 0 0)   ; white on black
+          (set-swatch grid 1  0 11 0 0)   ; yellow on black
+          (set-swatch grid 2  0 14 0 0)   ; cyan on black
+          (set-swatch grid 3  0 10 0 0)   ; green on black
+          ;; Row 0: ASCII text (narrow)
+          (write-string-simple grid atlas "Hello from lexter!" 1 0 0)
+          ;; Row 2: CJK text (wide characters)
+          (write-string-simple grid atlas "新たなる世界" 1 2 1)
+          ;; Row 4: mixed narrow + wide
+          (write-string-simple grid atlas "CJK: 新たなる世界 (new world)" 1 4 2)
+          ;; Row 6: more CJK
+          (write-string-simple grid atlas "漢字テスト" 1 6 3)
+          ;; Row 8: ASCII for comparison
+          (write-string-simple grid atlas "ABCDEFGHIJKLMNOPQRSTUVWXYZ" 1 8 0)
+          ;; Key callback
           (glfw:def-key-callback quit-on-escape (window key scancode action mods)
             (declare (ignore scancode mods))
             (when (and (eq key :escape) (eq action :press))

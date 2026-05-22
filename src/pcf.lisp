@@ -23,11 +23,15 @@
   (ascent       0 :type (unsigned-byte 16))
   (glyph-count  0 :type fixnum)
   ;; Simple-vector of (simple-array (unsigned-byte 8) (*)).
-  ;; Each element is cell-width*cell-height bytes, row-major top-to-bottom,
-  ;; with 0=background, 255=foreground.
+  ;; Each element is cell-width*cell-height bytes for narrow glyphs,
+  ;; or 2*cell-width*cell-height bytes for wide glyphs.
+  ;; Row-major top-to-bottom, 0=background, 255=foreground.
   (bitmaps      #() :type simple-vector)
   ;; Hash table: codepoint (integer) -> glyph index (integer).
-  (encoding     (make-hash-table) :type hash-table))
+  (encoding     (make-hash-table) :type hash-table)
+  ;; Hash table: font-internal glyph index -> t for double-wide glyphs.
+  ;; NIL if font has no wide glyphs.
+  (wide-glyphs  nil :type (or null hash-table)))
 
 ;;;; Binary reading helpers
 
@@ -110,14 +114,23 @@
       (seek-to stream (fourth bitmaps-entry))
       (let ((bitmaps (%parse-bitmaps stream metrics cell-width cell-height)))
         (seek-to stream (fourth encodings-entry))
-        (let ((encoding (%parse-encodings stream)))
+        (let ((encoding (%parse-encodings stream))
+              (wide-table nil))
+          ;; Detect wide glyphs: any glyph whose :w > cell-width
+          (dotimes (i (length metrics))
+            (let ((w (getf (aref metrics i) :w)))
+              (when (and w (> w cell-width))
+                (unless wide-table
+                  (setf wide-table (make-hash-table :test 'eql)))
+                (setf (gethash i wide-table) t))))
           (make-bitmap-font
            :cell-width   cell-width
            :cell-height  cell-height
            :ascent       ascent
            :glyph-count  (length metrics)
            :bitmaps      bitmaps
-           :encoding     encoding))))))
+           :encoding     encoding
+           :wide-glyphs  wide-table))))))
 
 (defun %parse-metrics (stream)
   "Returns (values metrics-vector cell-width cell-height ascent)."
@@ -238,10 +251,14 @@
 ;;; BDF (Bitmap Distribution Format) is a plain-text font format.
 ;;; It's the source format that gets compiled to PCF by bdftopcf.
 
-(defun load-bdf (path)
-  "Load a BDF bitmap font file. Returns a BITMAP-FONT struct."
+(defun load-bdf (path &key cell-width cell-height)
+  "Load a BDF bitmap font file. Returns a BITMAP-FONT struct.
+   CELL-WIDTH and CELL-HEIGHT override the FONTBOUNDINGBOX dimensions.
+   This is useful for fonts like zpix where the bounding box is larger
+   than the actual cell size.  Glyphs with DWIDTH > cell-width are
+   treated as double-wide and get 2*cell-width pixel arrays."
   (with-open-file (stream path :direction :input)
-    (%parse-bdf stream)))
+    (%parse-bdf stream :cell-width cell-width :cell-height cell-height)))
 
 (defun %bdf-parse-line (line)
   "Parse a BDF line into (keyword . rest-of-line) or NIL for empty/comment."
@@ -261,14 +278,17 @@
           :while val
           :collect val)))
 
-(defun %parse-bdf (stream)
-  "Parse a BDF file, returning a BITMAP-FONT struct."
-  (let ((cell-width nil)
-        (cell-height nil)
+(defun %parse-bdf (stream &key cell-width cell-height)
+  "Parse a BDF file, returning a BITMAP-FONT struct.
+   CELL-WIDTH and CELL-HEIGHT, if provided, override FONTBOUNDINGBOX dimensions.
+   Glyphs with DWIDTH > cell-width are treated as double-wide."
+  (let ((fbb-width nil)
+        (fbb-height nil)
         (ascent nil)
         (font-y-offset nil)
         (glyph-list '())
-        (encoding-table (make-hash-table :test 'eql)))
+        (encoding-table (make-hash-table :test 'eql))
+        (wide-table nil))  ; hash table of wide glyph indices, created on demand
     ;; First pass: read header to get FONTBOUNDINGBOX and FONT_ASCENT
     (loop :for line = (read-line stream nil nil)
           :while line
@@ -281,45 +301,57 @@
                        (destructuring-bind (w h xoff yoff)
                            (%bdf-parse-integers rest)
                          (declare (ignore xoff))
-                         (setf cell-width w
-                               cell-height h
+                         (setf fbb-width w
+                               fbb-height h
                                font-y-offset yoff)))
                       ((string= keyword "FONT_ASCENT")
                        (setf ascent (parse-integer rest)))
                       ((string= keyword "CHARS")
                        ;; Done with header, move to glyph parsing
                        (return)))))))
-    ;; Validate header
-    (unless (and cell-width cell-height)
-      (error "BDF file missing FONTBOUNDINGBOX"))
-    (unless ascent
-      ;; Compute ascent from cell-height and font-y-offset if not explicit
-      (setf ascent (+ cell-height (or font-y-offset 0))))
-    ;; Second pass: parse each glyph
-    (loop :for line = (read-line stream nil nil)
-          :while line
-          :do (let ((parsed (%bdf-parse-line line)))
-                (when (and parsed (string= (car parsed) "STARTCHAR"))
-                  (multiple-value-bind (codepoint pixels)
-                      (%parse-bdf-glyph stream cell-width cell-height ascent)
-                    (when (and codepoint pixels)
-                      (let ((glyph-idx (length glyph-list)))
-                        (push pixels glyph-list)
-                        (setf (gethash codepoint encoding-table) glyph-idx)))))))
-    ;; Build the font struct
-    (let ((bitmaps (coerce (nreverse glyph-list) 'simple-vector)))
-      (make-bitmap-font
-       :cell-width   cell-width
-       :cell-height  cell-height
-       :ascent       ascent
-       :glyph-count  (length bitmaps)
-       :bitmaps      bitmaps
-       :encoding     encoding-table))))
+    ;; Apply overrides or fall back to FONTBOUNDINGBOX
+    (let ((cw (or cell-width fbb-width))
+          (ch (or cell-height fbb-height)))
+      (unless (and cw ch)
+        (error "BDF file missing FONTBOUNDINGBOX and no cell size overrides given"))
+      (unless ascent
+        ;; Compute ascent from fbb-height and font-y-offset if not explicit
+        (setf ascent (+ (or fbb-height ch) (or font-y-offset 0))))
+      ;; Second pass: parse each glyph
+      (loop :for line = (read-line stream nil nil)
+            :while line
+            :do (let ((parsed (%bdf-parse-line line)))
+                  (when (and parsed (string= (car parsed) "STARTCHAR"))
+                    (multiple-value-bind (codepoint pixels dwidth)
+                        (%parse-bdf-glyph stream cw ch ascent)
+                      (when (and codepoint pixels)
+                        (let* ((glyph-idx (length glyph-list))
+                               (wide-p (and dwidth (> dwidth cw))))
+                          (when wide-p
+                            ;; Pixels already decoded at 2*cw width by
+                            ;; %parse-bdf-glyph; just record in wide table
+                            (unless wide-table
+                              (setf wide-table (make-hash-table :test 'eql)))
+                            (setf (gethash glyph-idx wide-table) t))
+                          (push pixels glyph-list)
+                          (setf (gethash codepoint encoding-table) glyph-idx)))))))
+      ;; Build the font struct
+      (let ((bitmaps (coerce (nreverse glyph-list) 'simple-vector)))
+        (make-bitmap-font
+         :cell-width   cw
+         :cell-height  ch
+         :ascent       ascent
+         :glyph-count  (length bitmaps)
+         :bitmaps      bitmaps
+         :encoding     encoding-table
+         :wide-glyphs  wide-table)))))
 
 (defun %parse-bdf-glyph (stream cell-width cell-height font-ascent)
   "Parse a single glyph from STARTCHAR to ENDCHAR.
-   Returns (values codepoint pixel-array) or (values nil nil) on error."
+   Returns (values codepoint pixel-array dwidth) or (values nil nil nil) on error.
+   DWIDTH is the glyph's device width in pixels (for detecting wide characters)."
   (let ((codepoint nil)
+        (dwidth nil)
         (bbx-w nil) (bbx-h nil) (bbx-xoff nil) (bbx-yoff nil)
         (bitmap-lines '()))
     ;; Read glyph properties until BITMAP
@@ -332,6 +364,9 @@
                     (cond
                       ((string= keyword "ENCODING")
                        (setf codepoint (parse-integer rest)))
+                      ((string= keyword "DWIDTH")
+                       (let ((vals (%bdf-parse-integers rest)))
+                         (setf dwidth (first vals))))
                       ((string= keyword "BBX")
                        (destructuring-bind (w h xoff yoff)
                            (%bdf-parse-integers rest)
@@ -340,7 +375,7 @@
                        (return))
                       ((string= keyword "ENDCHAR")
                        ;; Empty glyph (no bitmap section)
-                       (return-from %parse-bdf-glyph (values nil nil))))))))
+                       (return-from %parse-bdf-glyph (values nil nil nil))))))))
     ;; Read hex bitmap lines until ENDCHAR
     (loop :for line = (read-line stream nil nil)
           :while line
@@ -352,12 +387,16 @@
     (setf bitmap-lines (nreverse bitmap-lines))
     ;; Validate we have what we need
     (unless (and codepoint bbx-w bbx-h bbx-xoff bbx-yoff)
-      (return-from %parse-bdf-glyph (values nil nil)))
-    ;; Decode the bitmap
-    (let ((pixels (%decode-bdf-bitmap bitmap-lines
-                                       bbx-w bbx-h bbx-xoff bbx-yoff
-                                       cell-width cell-height font-ascent)))
-      (values codepoint pixels))))
+      (return-from %parse-bdf-glyph (values nil nil nil)))
+    ;; Decode the bitmap. For wide glyphs (DWIDTH > cell-width), render into
+    ;; 2*cell-width so the full glyph data is preserved.
+    (let* ((render-width (if (and dwidth (> dwidth cell-width))
+                             (* 2 cell-width)
+                             cell-width))
+           (pixels (%decode-bdf-bitmap bitmap-lines
+                                        bbx-w bbx-h bbx-xoff bbx-yoff
+                                        render-width cell-height font-ascent)))
+      (values codepoint pixels dwidth))))
 
 (defun %hex-char-value (char)
   "Return the numeric value of a hex character, or NIL."

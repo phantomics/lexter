@@ -129,10 +129,12 @@
 ;;; Entry point
 ;;; --------------------------------------------------------------------------
 
-(defun run-demo (&key (font-path "../terminus-18n.pcf") (pixel-scale nil))
+(defun run-demo (&key (font-path "../terminus-18n.pcf") (pixel-scale nil)
+                      (stop-flag nil))
   "Open a GLFW window and render the demo. Press Escape or close to quit.
    PIXEL-SCALE: integer multiplier for nearest-neighbor scaling (1-16).
-                If NIL, auto-detects based on monitor DPI."
+                If NIL, auto-detects based on monitor DPI.
+   STOP-FLAG: a list whose CAR is checked each tick; NIL CAR terminates the loop."
   ;; Load font and determine window size
   (format t "~&Loading font ~a ...~%" font-path)
   (let* ((font     (load-pcf font-path))
@@ -173,7 +175,8 @@
               (glfw:set-window-should-close window t)))
           (glfw:set-key-callback 'quit-on-escape)
           ;; Main loop
-          (loop :until (glfw:window-should-close-p)
+          (loop :until (or (glfw:window-should-close-p)
+                           (and stop-flag (not (car stop-flag))))
                 :do (render-frame renderer grid)
                     (glfw:swap-buffers)
                     (glfw:poll-events))
@@ -183,9 +186,11 @@
 ;;; CJK demo: double-wide character rendering with zpix.bdf
 ;;; --------------------------------------------------------------------------
 
-(defun run-cjk-demo (&key (font-path "../zpix.bdf") (pixel-scale nil))
+(defun run-cjk-demo (&key (font-path "../zpix.bdf") (pixel-scale nil)
+                          (stop-flag nil))
   "Demo for double-wide CJK character rendering using zpix.bdf.
-   Press Escape or close window to quit."
+   Press Escape or close window to quit.
+   STOP-FLAG: a list whose CAR is checked each tick; NIL CAR terminates the loop."
   (format t "~&Loading BDF font ~a ...~%" font-path)
   (let* ((font     (lexter/pcf:load-bdf font-path :cell-width 7 :cell-height 12))
          (cell-w   (bitmap-font-cell-width  font))
@@ -241,7 +246,8 @@
               (glfw:set-window-should-close window t)))
           (glfw:set-key-callback 'quit-on-escape)
           ;; Main loop
-          (loop :until (glfw:window-should-close-p)
+          (loop :until (or (glfw:window-should-close-p)
+                           (and stop-flag (not (car stop-flag))))
                 :do (render-frame renderer grid)
                     (glfw:swap-buffers)
                     (glfw:poll-events))

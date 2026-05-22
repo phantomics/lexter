@@ -156,12 +156,15 @@
 ;;; Main loop
 ;;; --------------------------------------------------------------------------
 
-(defun run-pane-loop (comp)
-  "Main event loop for paned terminal."
+(defun run-pane-loop (comp &key stop-flag)
+  "Main event loop for paned terminal.
+   STOP-FLAG, if provided, is a list whose CAR is checked each tick.
+   When (CAR STOP-FLAG) is NIL, the loop terminates."
   (setf (compositor-running comp) t)
   (let ((last-time (glfw:get-time)))
     (loop :while (and (compositor-running comp)
-                      (not (glfw:window-should-close-p)))
+                      (not (glfw:window-should-close-p))
+                      (or (null stop-flag) (car stop-flag)))
           :do
           ;; Delta time for cursor blink
           (let* ((current-time (glfw:get-time))
@@ -225,7 +228,8 @@
                                 (rows 24)
                                 (pixel-scale nil)
                                 (title "lexter panes")
-                                (prefix-key :f12))
+                                (prefix-key :f12)
+                                (stop-flag nil))
   "Run a paned terminal with the given WORKSPACES.
    
    WORKSPACES: list of workspace objects (pre-constructed)
@@ -234,7 +238,8 @@
    COLS, ROWS: grid dimensions in characters
    PIXEL-SCALE: integer scaling factor (nil = auto-detect)
    TITLE: window title
-   PREFIX-KEY: key that activates meta-mode (default :f12)"
+   PREFIX-KEY: key that activates meta-mode (default :f12)
+   STOP-FLAG: a list whose CAR is checked each tick; NIL CAR terminates the loop"
   (unless workspaces
     (error "At least one workspace is required"))
   ;; Set global prefix key
@@ -324,7 +329,7 @@
                         :swatch 0)
             ;; Run main loop
             (unwind-protect
-                 (run-pane-loop comp)
+                 (run-pane-loop comp :stop-flag stop-flag)
               ;; Cleanup
               (format t "~&Shutting down panes...~%")
               (dolist (ws workspaces)

@@ -233,12 +233,15 @@
           (not (unix-terminal-cursor-blink-on term)))
     t))
 
-(defun run-terminal-loop (term)
-  "Main event loop."
+(defun run-terminal-loop (term &key stop-flag)
+  "Main event loop.
+   STOP-FLAG, if provided, is a list whose CAR is checked each tick.
+   When (CAR STOP-FLAG) is NIL, the loop terminates."
   (setf (unix-terminal-running term) t)
   (let ((last-time (glfw:get-time)))
     (loop :while (and (unix-terminal-running term)
-                      (not (glfw:window-should-close-p)))
+                      (not (glfw:window-should-close-p))
+                      (or (null stop-flag) (car stop-flag)))
           :do
           ;; Calculate delta time for cursor blink
           (let* ((current-time (glfw:get-time))
@@ -322,7 +325,8 @@
                                (cols 80)
                                (rows 24)
                                (pixel-scale nil)
-                               (title "lexter terminal"))
+                               (title "lexter terminal")
+                               (stop-flag nil))
   "Run a terminal emulator with COMMAND.
    
    COMMAND: program to run (e.g. \"/bin/bash\")
@@ -330,7 +334,8 @@
    FONT-PATH: path to PCF font file
    COLS, ROWS: terminal dimensions in characters
    PIXEL-SCALE: integer scaling factor (nil = auto-detect)
-   TITLE: window title"
+   TITLE: window title
+   STOP-FLAG: a list whose CAR is checked each tick; NIL CAR terminates the loop"
   (format t "~&=== lexter terminal v0.5 ===~%")
   (format t "~&Loading font ~a ...~%" font-path)
   (let* ((font   (load-pcf font-path))
@@ -411,7 +416,7 @@
               (glfw:set-framebuffer-size-callback 'fb-size-callback))
             ;; Run main loop
             (unwind-protect
-                 (run-terminal-loop term)
+                 (run-terminal-loop term :stop-flag stop-flag)
               ;; Cleanup
               (format t "~&Shutting down...~%")
               (pty-close (unix-terminal-pty term))

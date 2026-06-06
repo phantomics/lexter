@@ -177,3 +177,8 @@
   (:use #:cl #:lexter/pcf #:lexter/atlas #:lexter/grid #:lexter/renderer)
   (:export #:run-demo
            #:run-cjk-demo))
+
+(defpackage #:lexter/origin
+  (:use #:cl #:lexter/pcf #:lexter/atlas #:lexter/grid #:lexter/renderer #:alexandria #:origin)
+  (:export ;; Terminal definition
+           #:define-terminal))

@@ -93,3 +93,12 @@
   :depends-on (#:lexter #:lexter/telnet #:cl-netpbm)
   :serial t
   :components ((:file "src/pbm")))
+
+;;; Origin process manager integration
+(asdf:defsystem #:lexter/origin
+  :description "Origin process manager integration for Lexter"
+  :license "BSD"
+  :version "0.1.0"
+  :depends-on ("lexter/unix" "origin" "alexandria")
+  :serial t
+  :components ((:file "src/origin")))

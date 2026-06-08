@@ -34,7 +34,7 @@
     (case order
       ;; SBA (Set Buffer Address) - 3 bytes total
       (#.+order-sba+
-       (when (< (+ pos 3) end)
+       (when (<= (+ pos 3) end)
          (let ((addr (decode-buffer-address (aref data (+ pos 1))
                                             (aref data (+ pos 2)))))
            (screen-set-buffer-address screen addr)))
@@ -42,7 +42,7 @@
 
       ;; SF (Start Field) - 2 bytes total
       (#x1D  ; SF order code (not in lexicon, raw value)
-       (when (< (+ pos 2) end)
+       (when (<= (+ pos 2) end)
          (let ((attr (aref data (+ pos 1)))
                (addr (screen-buffer-address screen)))
            (screen-put-field-attr screen addr attr)
@@ -51,10 +51,10 @@
 
       ;; SFE (Start Field Extended) - variable length
       (#.+order-sfe+
-       (if (< (+ pos 2) end)
+       (if (<= (+ pos 2) end)
            (let* ((pair-count (aref data (+ pos 1)))
                   (len (+ 2 (* 2 pair-count))))
-             (when (< (+ pos len) end)
+             (when (<= (+ pos len) end)
                ;; First pair is always field attribute
                (let ((addr (screen-buffer-address screen))
                      (attr (if (> pair-count 0)
@@ -72,7 +72,7 @@
 
       ;; SA (Set Attribute) - 3 bytes total
       (#.+order-sa+
-       (when (< (+ pos 3) end)
+       (when (<= (+ pos 3) end)
          (let ((type (aref data (+ pos 1)))
                (value (aref data (+ pos 2))))
            (screen-set-attribute screen type value)))
@@ -101,7 +101,7 @@
 
       ;; RA (Repeat to Address) - 4 bytes total
       (#x3C
-       (when (< (+ pos 4) end)
+       (when (<= (+ pos 4) end)
          (let* ((stop-addr (decode-buffer-address (aref data (+ pos 1))
                                                   (aref data (+ pos 2))))
                 (char-byte (aref data (+ pos 3)))
@@ -117,7 +117,7 @@
 
       ;; EUA (Erase Unprotected to Address) - 3 bytes total
       (#.+order-eua+
-       (when (< (+ pos 3) end)
+       (when (<= (+ pos 3) end)
          (let* ((stop-addr (decode-buffer-address (aref data (+ pos 1))
                                                   (aref data (+ pos 2))))
                 (start (screen-buffer-address screen))
@@ -134,7 +134,7 @@
 
       ;; GE (Graphic Escape) - 2 bytes total
       (#.+order-ge+
-       (when (< (+ pos 2) end)
+       (when (<= (+ pos 2) end)
          (let* ((byte (aref data (+ pos 1)))
                 (char (char-code (ebcdic-to-char byte t))))  ; APL charset
            (screen-put-char-buffer screen char)))
@@ -142,21 +142,23 @@
 
       ;; MF (Modify Field) - variable length
       (#.+order-mf+
-       (if (< (+ pos 2) end)
+       (if (<= (+ pos 2) end)
            (let* ((pair-count (aref data (+ pos 1)))
                   (len (+ 2 (* 2 pair-count))))
-             ;; Find current field and modify its attributes
-             (multiple-value-bind (fa-addr fa)
-                 (screen-field-at screen (screen-buffer-address screen))
-               (declare (ignore fa))
-               (when fa-addr
-                 (loop :for i :from 0 :below pair-count
-                       :for type = (aref data (+ pos 2 (* 2 i)))
-                       :for value = (aref data (+ pos 3 (* 2 i)))
-                       :do (cond
-                             ((= type +xa-3270+)
-                              (setf (aref (screen-field-attrs screen) fa-addr) value))
-                             (t (screen-set-attribute screen type value))))))
+             ;; Only process the pairs if they are all present in the buffer.
+             (when (<= (+ pos len) end)
+               ;; Find current field and modify its attributes
+               (multiple-value-bind (fa-addr fa)
+                   (screen-field-at screen (screen-buffer-address screen))
+                 (declare (ignore fa))
+                 (when fa-addr
+                   (loop :for i :from 0 :below pair-count
+                         :for type = (aref data (+ pos 2 (* 2 i)))
+                         :for value = (aref data (+ pos 3 (* 2 i)))
+                         :do (cond
+                               ((= type +xa-3270+)
+                                (setf (aref (screen-field-attrs screen) fa-addr) value))
+                               (t (screen-set-attribute screen type value)))))))
              (+ pos len))
            (+ pos 2)))
 

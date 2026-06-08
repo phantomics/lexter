@@ -173,12 +173,20 @@
            #:+attr-reverse+
            #:+attr-invisible+))
 
+;;; ---------------------------------------------------------------------------
+;;; GUI iteration protocol (steppable window lifecycle)
+;;; ---------------------------------------------------------------------------
+
+(defpackage #:lexter/gui
+  (:use #:cl)
+  (:export #:gui-initialize
+           #:gui-tick
+           #:gui-destroy
+           #:gui-window
+           #:gui-alive-p
+           #:run-gui-loop))
+
 (defpackage #:lexter/demo
   (:use #:cl #:lexter/pcf #:lexter/atlas #:lexter/grid #:lexter/renderer)
   (:export #:run-demo
            #:run-cjk-demo))
-
-(defpackage #:lexter/origin
-  (:use #:cl #:lexter/pcf #:lexter/atlas #:lexter/grid #:lexter/renderer #:alexandria #:origin)
-  (:export ;; Terminal definition
-           #:define-terminal))

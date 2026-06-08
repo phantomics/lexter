@@ -49,7 +49,23 @@
   ;; Pending resize
   (resize-pending nil :type boolean)
   (resize-cols    0   :type fixnum)
-  (resize-rows    0   :type fixnum))
+  (resize-rows    0   :type fixnum)
+  ;; --- GUI iteration state (Approach B) ---
+  ;; GLFW window + OpenGL context owned by this terminal
+  (window     nil)
+  ;; Font and cell metrics (kept for the resize callback and teardown)
+  (font       nil)
+  (cell-w     1   :type fixnum)
+  (cell-h     1   :type fixnum)
+  (win-w      0   :type fixnum)
+  (win-h      0   :type fixnum)
+  ;; Frame timing carried across ticks (glfw:get-time is a double)
+  (last-tick-time 0.0d0 :type double-float)
+  ;; --- Configuration (consumed by gui-initialize) ---
+  (command    nil)
+  (args       nil)
+  (font-path  "../terminus-18n.pcf")
+  (title      "lexter terminal" :type string))
 
 ;;; --------------------------------------------------------------------------
 ;;; Keyboard input handling
@@ -233,61 +249,61 @@
           (not (unix-terminal-cursor-blink-on term)))
     t))
 
-(defun run-terminal-loop (term &key stop-flag)
-  "Main event loop.
-   STOP-FLAG, if provided, is a list whose CAR is checked each tick.
-   When (CAR STOP-FLAG) is NIL, the loop terminates."
-  (setf (unix-terminal-running term) t)
-  (let ((last-time (glfw:get-time)))
-    (loop :while (and (unix-terminal-running term)
-                      (not (glfw:window-should-close-p))
-                      (or (null stop-flag) (car stop-flag)))
-          :do
-          ;; Calculate delta time for cursor blink
-          (let* ((current-time (glfw:get-time))
-                 (dt (- current-time last-time))
-                 (blink-toggled (update-cursor-blink term (coerce dt 'single-float))))
-            (setf last-time current-time)
-            ;; 1. Process PTY output
-            (process-pty-output term)
-            ;; 2. Check if child is still alive
-            (unless (pty-check-child (unix-terminal-pty term))
-              (setf (unix-terminal-running term) nil)
-              (return))
-            ;; 3. Handle any pending resize (always needs render)
-            (let ((resized nil))
-              (when (unix-terminal-resize-pending term)
-                (handle-resize term
-                               (unix-terminal-resize-cols term)
-                               (unix-terminal-resize-rows term))
-                (setf (unix-terminal-resize-pending term) nil
-                      resized t))
-              ;; 4. Poll GLFW events (handles input callbacks)
-              (glfw:poll-events)
-              ;; 5. Check if we need to render
-              ;; Render if: any dirty rows, cursor blink toggled, or resized
-              (let ((needs-render (or resized
-                                      blink-toggled
-                                      (any-row-dirty-p (unix-terminal-screen term)))))
-                (when needs-render
-                  ;; 6. Flush model to display grid (with cursor state)
-                  (flush-to-display (unix-terminal-screen term)
-                                    (unix-terminal-display term)
-                                    :atlas (unix-terminal-atlas term)
-                                    :space-glyph (screen-blank-glyph (unix-terminal-screen term))
-                                    :cursor-blink-on (unix-terminal-cursor-blink-on term))
-                  ;; 6b. Sync palette if changed
-                  (let ((screen (unix-terminal-screen term)))
-                    (upload-palette (unix-terminal-renderer term)
-                                    (screen-palette screen)
-                                    (screen-palette-generation screen)))
-                  ;; 7. Render frame
-                  (render-frame (unix-terminal-renderer term)
-                                (unix-terminal-display term))
-                  ;; 8. Swap buffers
-                  (glfw:swap-buffers)))))
-          ;; Small sleep to avoid burning CPU when idle
-          (sleep 0.001))))
+(defmethod gui-tick ((term unix-terminal))
+  "Advance the terminal by one frame (Approach B iteration API).
+   Makes the terminal's GL context current, processes PTY output, and renders
+   if needed. Does NOT poll GLFW events -- the dispatcher does that once for all
+   windows. Returns T while the terminal is still alive, NIL when it should be
+   torn down."
+  (let ((window (unix-terminal-window term)))
+    (when window
+      (glfw:make-context-current window))
+    ;; Calculate delta time for cursor blink (carried across ticks)
+    (let* ((current-time (glfw:get-time))
+           (dt (- current-time (unix-terminal-last-tick-time term)))
+           (blink-toggled (update-cursor-blink term (coerce dt 'single-float))))
+      (setf (unix-terminal-last-tick-time term) current-time)
+      ;; 1. Process PTY output
+      (process-pty-output term)
+      ;; 2. Check if child is still alive
+      (cond
+        ((not (pty-check-child (unix-terminal-pty term)))
+         (setf (unix-terminal-running term) nil))
+        (t
+         ;; 3. Handle any pending resize (always needs render)
+         (let ((resized nil))
+           (when (unix-terminal-resize-pending term)
+             (handle-resize term
+                            (unix-terminal-resize-cols term)
+                            (unix-terminal-resize-rows term))
+             (setf (unix-terminal-resize-pending term) nil
+                   resized t))
+           ;; 4. Check if we need to render
+           ;; Render if: any dirty rows, cursor blink toggled, or resized
+           (let ((needs-render (or resized
+                                   blink-toggled
+                                   (any-row-dirty-p (unix-terminal-screen term)))))
+             (when needs-render
+               ;; 5. Flush model to display grid (with cursor state)
+               (flush-to-display (unix-terminal-screen term)
+                                 (unix-terminal-display term)
+                                 :atlas (unix-terminal-atlas term)
+                                 :space-glyph (screen-blank-glyph (unix-terminal-screen term))
+                                 :cursor-blink-on (unix-terminal-cursor-blink-on term))
+               ;; 5b. Sync palette if changed
+               (let ((screen (unix-terminal-screen term)))
+                 (upload-palette (unix-terminal-renderer term)
+                                 (screen-palette screen)
+                                 (screen-palette-generation screen)))
+               ;; 6. Render frame
+               (render-frame (unix-terminal-renderer term)
+                             (unix-terminal-display term))
+               ;; 7. Swap buffers
+               (glfw:swap-buffers window)))))))
+    ;; Liveness: alive while running, has a window, and not asked to close.
+    (and (unix-terminal-running term)
+         window
+         (not (glfw:window-should-close-p window)))))
 
 ;;; --------------------------------------------------------------------------
 ;;; Resize handling
@@ -319,90 +335,100 @@
 ;;; Entry point
 ;;; --------------------------------------------------------------------------
 
-(defun run-terminal (command &key
-                               (args nil)
-                               (font-path "../terminus-18n.pcf")
-                               (cols 80)
-                               (rows 24)
-                               (pixel-scale nil)
-                               (title "lexter terminal")
-                               (stop-flag nil))
-  "Run a terminal emulator with COMMAND.
-   
-   COMMAND: program to run (e.g. \"/bin/bash\")
-   ARGS: list of arguments to pass to command
-   FONT-PATH: path to PCF font file
-   COLS, ROWS: terminal dimensions in characters
-   PIXEL-SCALE: integer scaling factor (nil = auto-detect)
-   TITLE: window title
-   STOP-FLAG: a list whose CAR is checked each tick; NIL CAR terminates the loop"
-  (format t "~&=== lexter terminal v0.5 ===~%")
-  (format t "~&Loading font ~a ...~%" font-path)
-  (let* ((font   (load-pcf font-path))
-         (cell-w (bitmap-font-cell-width font))
-         (cell-h (bitmap-font-cell-height font)))
-    (format t "~&Cell ~dx~d, terminal ~dx~d~%" cell-w cell-h cols rows)
-    ;; Initialize GLFW
-    (glfw:initialize)
-    (let* ((scale  (or pixel-scale 1))
+(defun make-terminal (command &key
+                                (args nil)
+                                (font-path "../terminus-18n.pcf")
+                                (cols 80)
+                                (rows 24)
+                                (pixel-scale nil)
+                                (title "lexter terminal"))
+  "Create an uninitialized UNIX-TERMINAL with the given configuration.
+
+The window, OpenGL context, renderer, and PTY are NOT created yet -- call
+GUI-INITIALIZE on the result (on the main thread, after GLFW has been
+initialized), then drive it with GUI-TICK / GUI-DESTROY. This is the
+constructor half of the Approach B iteration API; RUN-TERMINAL is the
+standalone convenience wrapper around it."
+  (make-unix-terminal :command command
+                      :args args
+                      :font-path font-path
+                      :cols cols
+                      :rows rows
+                      :pixel-scale (or pixel-scale 1)
+                      :title title))
+
+(defmethod gui-initialize ((term unix-terminal))
+  "Create TERM's GLFW window, OpenGL context, renderer, VT handler, and PTY.
+Must run on the main thread, after GLFW:INITIALIZE. GLFW:CREATE-WINDOW makes
+the new context current, so the atlas/renderer GL objects belong to it."
+  (let* ((command   (unix-terminal-command term))
+         (args      (unix-terminal-args term))
+         (font-path (unix-terminal-font-path term))
+         (cols      (unix-terminal-cols term))
+         (rows      (unix-terminal-rows term))
+         (scale     (unix-terminal-pixel-scale term)))
+    (format t "~&=== lexter terminal v0.6 ===~%")
+    (format t "~&Loading font ~a ...~%" font-path)
+    (let* ((font   (load-pcf font-path))
+           (cell-w (bitmap-font-cell-width font))
+           (cell-h (bitmap-font-cell-height font))
            (win-w  (* cols cell-w scale))
            (win-h  (* rows cell-h scale)))
+      (format t "~&Cell ~dx~d, terminal ~dx~d~%" cell-w cell-h cols rows)
       (format t "~&Pixel scale: ~dx, window ~dx~d~%" scale win-w win-h)
-      (glfw:with-init-window
-          (:title title
-           :width win-w :height win-h
-           :resizable t
-           :context-version-major 3
-           :context-version-minor 3
-           :opengl-profile :opengl-core-profile
-           :opengl-forward-compat t)
-        ;; Set up OpenGL
+      ;; Create the window (this makes its GL context current).
+      (let ((win (glfw:create-window
+                  :title (unix-terminal-title term)
+                  :width win-w :height win-h
+                  :resizable t
+                  :context-version-major 3
+                  :context-version-minor 3
+                  :opengl-profile :opengl-core-profile
+                  :opengl-forward-compat t)))
         (gl:viewport 0 0 win-w win-h)
-        ;; Build atlas with cursor glyphs
-        (let* ((atlas    (build-atlas (list font)))
-               (_        (add-cursor-glyphs atlas))
-               ;; Create terminal components
-               (screen   (make-screen :cols cols :rows rows))
-               (display  (make-display-grid :cols cols :rows rows))
-               (renderer (make-renderer atlas win-w win-h :pixel-scale scale)))
-          (declare (ignore _))
-          ;; Upload initial palette from screen
-          (upload-palette renderer
-                          (screen-palette screen)
-                          (screen-palette-generation screen))
-          ;; Initialize default swatches in display grid
-          (setup-default-swatches display)
-          ;; Create terminal state
-          (let ((term (make-unix-terminal
-                       :screen screen
-                       :display display
-                       :atlas atlas
-                       :renderer renderer
-                       :cols cols
-                       :rows rows
-                       :pixel-scale scale)))
-            ;; Create VT handler (pass atlas for codepoint -> glyph mapping)
+        ;; Build atlas with cursor glyphs, then the renderer (in this context).
+        (let ((atlas (build-atlas (list font))))
+          (add-cursor-glyphs atlas)
+          (let ((screen   (make-screen :cols cols :rows rows))
+                (display  (make-display-grid :cols cols :rows rows))
+                (renderer (make-renderer atlas win-w win-h :pixel-scale scale)))
+            ;; Upload initial palette from screen.
+            (upload-palette renderer
+                            (screen-palette screen)
+                            (screen-palette-generation screen))
+            (setup-default-swatches display)
+            ;; Populate the persistent terminal object.
+            (setf (unix-terminal-window   term) win
+                  (unix-terminal-font     term) font
+                  (unix-terminal-cell-w   term) cell-w
+                  (unix-terminal-cell-h   term) cell-h
+                  (unix-terminal-win-w    term) win-w
+                  (unix-terminal-win-h    term) win-h
+                  (unix-terminal-screen   term) screen
+                  (unix-terminal-display  term) display
+                  (unix-terminal-atlas    term) atlas
+                  (unix-terminal-renderer term) renderer)
+            ;; Create VT handler (pass atlas for codepoint -> glyph mapping).
             (setf (unix-terminal-vt-handler term)
                   (make-vt-handler screen atlas :callback (make-vt-callback term)))
-            ;; Spawn child process
+            ;; Spawn child process.
             (format t "~&Spawning: ~a~{ ~a~}~%" command args)
             (setf (unix-terminal-pty term)
                   (pty-fork command :cols cols :rows rows :args args))
             (pty-set-nonblocking (unix-terminal-pty term))
             (format t "~&Child PID: ~d~%" (pty-child-pid (unix-terminal-pty term)))
-            ;; Set up GLFW callbacks
-            (let ((term-ref term))  ; capture for closures
-              ;; Key callback
+            ;; Set up GLFW callbacks, bound to this terminal's window.
+            ;; (Single-window for now; multi-window dispatch via a window->object
+            ;;  registry is a deferred, registry-ready extension.)
+            (let ((term-ref term))
               (glfw:def-key-callback key-callback (window key scancode action mods)
                 (declare (ignore window))
                 (handle-key-press term-ref key scancode action mods))
-              (glfw:set-key-callback 'key-callback)
-              ;; Character callback
+              (glfw:set-key-callback 'key-callback win)
               (glfw:def-char-callback char-callback (window codepoint)
                 (declare (ignore window))
                 (handle-char-input term-ref codepoint))
-              (glfw:set-char-callback 'char-callback)
-              ;; Framebuffer size callback (for resize)
+              (glfw:set-char-callback 'char-callback win)
               (glfw:def-framebuffer-size-callback fb-size-callback (window width height)
                 (declare (ignore window))
                 (let ((new-cols (floor width (* cell-w scale)))
@@ -411,16 +437,70 @@
                              (or (/= new-cols (unix-terminal-cols term-ref))
                                  (/= new-rows (unix-terminal-rows term-ref))))
                     (gl:viewport 0 0 width height)
-                    (update-viewport renderer width height)
+                    (update-viewport (unix-terminal-renderer term-ref) width height)
                     (schedule-resize term-ref new-cols new-rows))))
-              (glfw:set-framebuffer-size-callback 'fb-size-callback))
-            ;; Run main loop
-            (unwind-protect
-                 (run-terminal-loop term :stop-flag stop-flag)
-              ;; Cleanup
-              (format t "~&Shutting down...~%")
-              (pty-close (unix-terminal-pty term))
-              (destroy-renderer renderer))))))))
+              (glfw:set-framebuffer-size-callback 'fb-size-callback win))
+            (setf (unix-terminal-running term) t
+                  (unix-terminal-last-tick-time term) (glfw:get-time))
+            term))))))
+
+(defmethod gui-destroy ((term unix-terminal))
+  "Release TERM's PTY, renderer, and GLFW window. Idempotent."
+  (let ((window (unix-terminal-window term)))
+    (when window
+      (format t "~&Shutting down...~%")
+      (when (unix-terminal-pty term)
+        (pty-close (unix-terminal-pty term)))
+      (when (unix-terminal-renderer term)
+        (glfw:make-context-current window)
+        (destroy-renderer (unix-terminal-renderer term)))
+      (glfw:destroy-window window)
+      (setf (unix-terminal-window term) nil
+            (unix-terminal-running term) nil)))
+  term)
+
+(defmethod gui-window ((term unix-terminal))
+  (unix-terminal-window term))
+
+(defmethod gui-alive-p ((term unix-terminal))
+  (and (unix-terminal-running term)
+       (unix-terminal-window term)
+       t))
+
+(defun run-terminal (command &key
+                               (args nil)
+                               (font-path "../terminus-18n.pcf")
+                               (cols 80)
+                               (rows 24)
+                               (pixel-scale nil)
+                               (title "lexter terminal")
+                               (stop-flag nil))
+  "Run a terminal emulator with COMMAND as a standalone, blocking call.
+
+   COMMAND: program to run (e.g. \"/bin/bash\")
+   ARGS: list of arguments to pass to command
+   FONT-PATH: path to PCF font file
+   COLS, ROWS: terminal dimensions in characters
+   PIXEL-SCALE: integer scaling factor (nil = 1x)
+   TITLE: window title
+   STOP-FLAG: a list whose CAR is checked each tick; NIL CAR terminates the loop
+
+   This is a thin wrapper over the iteration API: it owns the GLFW
+   initialize/terminate lifecycle, builds the terminal with MAKE-TERMINAL,
+   GUI-INITIALIZEs it, and drives it through the single-window dispatcher
+   RUN-GUI-LOOP. To embed Lexter in an external main-thread dispatcher (e.g.
+   Origin's), use MAKE-TERMINAL + GUI-INITIALIZE / GUI-TICK / GUI-DESTROY
+   directly instead."
+  (glfw:initialize)
+  (let ((term (make-terminal command :args args :font-path font-path
+                                     :cols cols :rows rows
+                                     :pixel-scale pixel-scale :title title)))
+    (unwind-protect
+         (progn
+           (gui-initialize term)
+           (run-gui-loop (list term) :stop-flag stop-flag))
+      (gui-destroy term)
+      (glfw:terminate))))
 
 ;;; --------------------------------------------------------------------------
 ;;; Helpers

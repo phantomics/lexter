@@ -10,6 +10,7 @@
                (:file "src/grid")
                (:file "src/shaders")
                (:file "src/renderer")
+               (:file "src/gui")
                (:file "src/model")
                (:file "src/demo")))
 
@@ -101,4 +102,5 @@
   :version "0.1.0"
   :depends-on ("lexter/unix" "origin" "alexandria")
   :serial t
-  :components ((:file "src/origin")))
+  :components ((:file "src/packages-origin")
+               (:file "src/origin")))

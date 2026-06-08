@@ -44,8 +44,18 @@
 
 (defpackage #:lexter/unix-term
   (:use #:cl #:lexter/pcf #:lexter/atlas #:lexter/grid
-        #:lexter/renderer #:lexter/model #:lexter/pty #:lexter/vt-handler)
+        #:lexter/renderer #:lexter/model #:lexter/pty #:lexter/vt-handler
+        #:lexter/gui)
   (:export #:run-terminal
+           #:make-terminal
            #:unix-terminal
+           #:unix-terminal-window
            #:terminal-screen
-           #:terminal-pty))
+           #:terminal-pty
+           ;; GUI protocol (re-exported for convenience)
+           #:gui-initialize
+           #:gui-tick
+           #:gui-destroy
+           #:gui-window
+           #:gui-alive-p
+           #:run-gui-loop))

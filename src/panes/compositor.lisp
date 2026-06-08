@@ -40,7 +40,19 @@
   ;; Pending resize
   (resize-pending nil :type boolean)
   (resize-cols    0   :type fixnum)
-  (resize-rows    0   :type fixnum))
+  (resize-rows    0   :type fixnum)
+  ;; --- GUI iteration state (Approach B) ---
+  ;; GLFW window + OpenGL context owned by this compositor
+  (window       nil)
+  (win-w        0   :type fixnum)
+  (win-h        0   :type fixnum)
+  ;; Frame timing carried across ticks (glfw:get-time is a double)
+  (last-tick-time 0.0d0 :type double-float)
+  ;; --- Configuration (consumed by gui-initialize) ---
+  (fonts        nil :type list)
+  (font-path    "../terminus-18n.pcf")
+  (title        "lexter panes" :type string)
+  (prefix-key   :f12))
 
 (defun active-workspace (comp)
   "Return the currently active workspace."
@@ -156,70 +168,220 @@
 ;;; Main loop
 ;;; --------------------------------------------------------------------------
 
-(defun run-pane-loop (comp &key stop-flag)
-  "Main event loop for paned terminal.
-   STOP-FLAG, if provided, is a list whose CAR is checked each tick.
-   When (CAR STOP-FLAG) is NIL, the loop terminates."
-  (setf (compositor-running comp) t)
-  (let ((last-time (glfw:get-time)))
-    (loop :while (and (compositor-running comp)
-                      (not (glfw:window-should-close-p))
-                      (or (null stop-flag) (car stop-flag)))
-          :do
-          ;; Delta time for cursor blink
-          (let* ((current-time (glfw:get-time))
-                 (dt (- current-time last-time))
-                 (blink-toggled (update-compositor-blink comp (coerce dt 'single-float))))
-            (setf last-time current-time)
-            ;; Update global blink state for terminal panes
-            (setf *cursor-blink-on* (compositor-cursor-blink-on comp))
-            ;; 1. Process I/O for ALL panes in ALL workspaces
-            (dolist (ws (compositor-workspaces comp))
-              (workspace-process-output ws))
-            ;; 2. Check if any terminal died (stop if all are dead)
-            (unless (some #'workspace-any-terminal-alive-p
-                          (compositor-workspaces comp))
-              (setf (compositor-running comp) nil)
-              (return))
-            ;; 3. Handle pending resize
-            (let ((resized nil))
-              (when (compositor-resize-pending comp)
-                (handle-compositor-resize comp)
-                (setf resized t))
-              ;; 4. Poll GLFW events
-              (glfw:poll-events)
-              ;; 5. Check if we need to render
-              (let* ((ws (active-workspace comp))
-                     (needs-render (or resized
-                                       blink-toggled
-                                       (and ws (workspace-any-dirty-p ws)))))
-                (when needs-render
-                  ;; 6. Flush active workspace to grid
-                  (when ws
-                    (flush-workspace ws (compositor-display comp))
-                    ;; 6b. Sync focused pane's palette to renderer
-                    (let ((pane (focused-pane ws)))
-                      (when pane
-                        (multiple-value-bind (palette gen slot) (pane-palette pane)
-                          (when palette
-                            (let ((s (or slot 0)))
-                              ;; Upload palette data to slot if changed
-                              (lexter/renderer:upload-palette
-                               (compositor-renderer comp) palette gen s)
-                              ;; Set active palette slot for rendering
-                              (lexter/renderer:set-active-palette-slot
-                               (compositor-renderer comp) s)))))))
-                  ;; 7. Render
-                  (lexter/renderer:render-frame (compositor-renderer comp)
-                                                 (compositor-display comp))
-                  ;; 8. Swap buffers
-                  (glfw:swap-buffers)))))
-          ;; Small sleep to avoid burning CPU
-          (sleep 0.001))))
+(defmethod gui-tick ((comp compositor))
+  "Advance the compositor by one frame (Approach B iteration API).
+   Makes the compositor's GL context current, processes I/O for every pane in
+   every workspace, and renders the active workspace if needed. Does NOT poll
+   GLFW events -- the dispatcher does that once for all windows. Returns T while
+   still alive, NIL when all terminals have died or the window is closing."
+  (let ((window (compositor-window comp)))
+    (when window
+      (glfw:make-context-current window))
+    ;; Delta time for cursor blink (carried across ticks)
+    (let* ((current-time (glfw:get-time))
+           (dt (- current-time (compositor-last-tick-time comp)))
+           (blink-toggled (update-compositor-blink comp (coerce dt 'single-float))))
+      (setf (compositor-last-tick-time comp) current-time)
+      ;; Update global blink state for terminal panes
+      (setf *cursor-blink-on* (compositor-cursor-blink-on comp))
+      ;; 1. Process I/O for ALL panes in ALL workspaces
+      (dolist (ws (compositor-workspaces comp))
+        (workspace-process-output ws))
+      ;; 2. Check if any terminal died (stop if all are dead)
+      (cond
+        ((not (some #'workspace-any-terminal-alive-p
+                    (compositor-workspaces comp)))
+         (setf (compositor-running comp) nil))
+        (t
+         ;; 3. Handle pending resize
+         (let ((resized nil))
+           (when (compositor-resize-pending comp)
+             (handle-compositor-resize comp)
+             (setf resized t))
+           ;; 4. Check if we need to render
+           (let* ((ws (active-workspace comp))
+                  (needs-render (or resized
+                                    blink-toggled
+                                    (and ws (workspace-any-dirty-p ws)))))
+             (when needs-render
+               ;; 5. Flush active workspace to grid
+               (when ws
+                 (flush-workspace ws (compositor-display comp))
+                 ;; 5b. Sync focused pane's palette to renderer
+                 (let ((pane (focused-pane ws)))
+                   (when pane
+                     (multiple-value-bind (palette gen slot) (pane-palette pane)
+                       (when palette
+                         (let ((s (or slot 0)))
+                           ;; Upload palette data to slot if changed
+                           (lexter/renderer:upload-palette
+                            (compositor-renderer comp) palette gen s)
+                           ;; Set active palette slot for rendering
+                           (lexter/renderer:set-active-palette-slot
+                            (compositor-renderer comp) s)))))))
+               ;; 6. Render
+               (lexter/renderer:render-frame (compositor-renderer comp)
+                                             (compositor-display comp))
+               ;; 7. Swap buffers
+               (glfw:swap-buffers window)))))))
+    ;; Liveness: alive while running, has a window, and not asked to close.
+    (and (compositor-running comp)
+         window
+         (not (glfw:window-should-close-p window)))))
 
 ;;; --------------------------------------------------------------------------
 ;;; Entry point
 ;;; --------------------------------------------------------------------------
+
+(defun make-paned-compositor (&key workspaces
+                                   (font-path "../terminus-18n.pcf")
+                                   fonts
+                                   (cols 80)
+                                   (rows 24)
+                                   (pixel-scale nil)
+                                   (title "lexter panes")
+                                   (prefix-key :f12))
+  "Create an uninitialized COMPOSITOR for the given WORKSPACES.
+
+The window, OpenGL context, and renderer are NOT created yet -- call
+GUI-INITIALIZE on the result (on the main thread, after GLFW has been
+initialized), then drive it with GUI-TICK / GUI-DESTROY. This is the
+constructor half of the Approach B iteration API; RUN-PANED-TERMINAL is the
+standalone convenience wrapper around it.
+
+WORKSPACES: list of workspace objects (pre-constructed)
+FONT-PATH:  path to PCF or BDF font file (used if FONTS is nil)
+FONTS:      list of pre-loaded bitmap-font structs (overrides FONT-PATH)
+COLS, ROWS: grid dimensions in characters
+PIXEL-SCALE: integer scaling factor (nil = 1x)
+TITLE:      window title
+PREFIX-KEY: key that activates meta-mode (default :f12)"
+  (unless workspaces
+    (error "At least one workspace is required"))
+  (make-compositor :workspaces workspaces
+                   :active-index 0
+                   :cols cols
+                   :rows rows
+                   :pixel-scale (or pixel-scale 1)
+                   :fonts fonts
+                   :font-path font-path
+                   :title title
+                   :prefix-key prefix-key))
+
+(defmethod gui-initialize ((comp compositor))
+  "Create COMP's GLFW window, OpenGL context, renderer, and initialize all panes.
+Must run on the main thread, after GLFW:INITIALIZE. GLFW:CREATE-WINDOW makes the
+new context current, so the atlas/renderer GL objects belong to it."
+  ;; Set global prefix key
+  (setf *prefix-key* (compositor-prefix-key comp))
+  (format t "~&=== lexter panes v0.1 ===~%")
+  (let* ((font-path (compositor-font-path comp))
+         (font-list (or (compositor-fonts comp)
+                        (progn
+                          (format t "~&Loading font ~a ...~%" font-path)
+                          (list (if (search ".bdf" font-path :test #'char-equal)
+                                    (lexter/pcf:load-bdf font-path)
+                                    (lexter/pcf:load-pcf font-path))))))
+         (primary (first font-list))
+         (cell-w (lexter/pcf:bitmap-font-cell-width primary))
+         (cell-h (lexter/pcf:bitmap-font-cell-height primary))
+         (cols (compositor-cols comp))
+         (rows (compositor-rows comp))
+         (scale (compositor-pixel-scale comp))
+         (win-w (* cols cell-w scale))
+         (win-h (* rows cell-h scale)))
+    (format t "~&Cell ~dx~d, grid ~dx~d~%" cell-w cell-h cols rows)
+    (format t "~&Pixel scale: ~dx, window ~dx~d~%" scale win-w win-h)
+    (format t "~&Prefix key: ~a~%" (compositor-prefix-key comp))
+    (format t "~&Workspaces: ~d~%" (length (compositor-workspaces comp)))
+    ;; Create the window (this makes its GL context current).
+    (let ((win (glfw:create-window
+                :title (compositor-title comp)
+                :width win-w :height win-h
+                :resizable t
+                :context-version-major 3
+                :context-version-minor 3
+                :opengl-profile :opengl-core-profile
+                :opengl-forward-compat t)))
+      (gl:viewport 0 0 win-w win-h)
+      ;; Build atlas with all fonts, then add cursor glyphs, then renderer.
+      (let ((atlas (lexter/atlas:build-atlas font-list)))
+        (lexter/atlas:add-cursor-glyphs atlas)
+        (let ((display (lexter/grid:make-display-grid :cols cols :rows rows))
+              (renderer (lexter/renderer:make-renderer atlas win-w win-h
+                                                       :pixel-scale scale))
+              (palette (make-xterm-palette)))
+          ;; Set up palette and default swatches
+          (lexter/renderer:set-palette renderer palette)
+          (setup-default-swatches display)
+          ;; Populate the persistent compositor object.
+          (setf (compositor-window   comp) win
+                (compositor-atlas    comp) atlas
+                (compositor-display  comp) display
+                (compositor-renderer comp) renderer
+                (compositor-palette  comp) palette
+                (compositor-cell-w   comp) cell-w
+                (compositor-cell-h   comp) cell-h
+                (compositor-win-w    comp) win-w
+                (compositor-win-h    comp) win-h)
+          ;; Set up GLFW callbacks, bound to this compositor's window.
+          ;; (Single-window for now; multi-window dispatch via a window->object
+          ;;  registry is a deferred, registry-ready extension.)
+          (glfw:def-key-callback key-callback (window key scancode action mods)
+            (declare (ignore window))
+            (handle-compositor-key comp key scancode action mods))
+          (glfw:set-key-callback 'key-callback win)
+          (glfw:def-char-callback char-callback (window codepoint)
+            (declare (ignore window))
+            (handle-compositor-char comp codepoint))
+          (glfw:set-char-callback 'char-callback win)
+          (glfw:def-framebuffer-size-callback fb-size-callback (window width height)
+            (declare (ignore window))
+            (let ((new-cols (floor width (* cell-w scale)))
+                  (new-rows (floor height (* cell-h scale))))
+              (when (and (> new-cols 0) (> new-rows 0)
+                         (or (/= new-cols (compositor-cols comp))
+                             (/= new-rows (compositor-rows comp))))
+                (gl:viewport 0 0 width height)
+                (lexter/renderer:update-viewport (compositor-renderer comp)
+                                                 width height)
+                (schedule-compositor-resize comp new-cols new-rows))))
+          (glfw:set-framebuffer-size-callback 'fb-size-callback win)
+          ;; Initialize all panes with the atlas
+          (format t "~&Initializing panes...~%")
+          (dolist (ws (compositor-workspaces comp))
+            (dolist (pane (workspace-panes ws))
+              (pane-initialize pane atlas)))
+          ;; Clear grid initially
+          (clear-grid display
+                      :glyph (lexter/atlas:atlas-glyph-index atlas 32)
+                      :swatch 0)
+          (setf (compositor-running comp) t
+                (compositor-last-tick-time comp) (glfw:get-time))
+          comp)))))
+
+(defmethod gui-destroy ((comp compositor))
+  "Release COMP's panes, renderer, and GLFW window. Idempotent."
+  (let ((window (compositor-window comp)))
+    (when window
+      (format t "~&Shutting down panes...~%")
+      (dolist (ws (compositor-workspaces comp))
+        (destroy-workspace ws))
+      (when (compositor-renderer comp)
+        (glfw:make-context-current window)
+        (lexter/renderer:destroy-renderer (compositor-renderer comp)))
+      (glfw:destroy-window window)
+      (setf (compositor-window comp) nil
+            (compositor-running comp) nil)))
+  comp)
+
+(defmethod gui-window ((comp compositor))
+  (compositor-window comp))
+
+(defmethod gui-alive-p ((comp compositor))
+  (and (compositor-running comp)
+       (compositor-window comp)
+       t))
 
 (defun run-paned-terminal (&key workspaces
                                 (font-path "../terminus-18n.pcf")
@@ -230,111 +392,35 @@
                                 (title "lexter panes")
                                 (prefix-key :f12)
                                 (stop-flag nil))
-  "Run a paned terminal with the given WORKSPACES.
-   
+  "Run a paned terminal with the given WORKSPACES as a standalone, blocking call.
+
    WORKSPACES: list of workspace objects (pre-constructed)
    FONT-PATH: path to PCF or BDF font file (used if FONTS is nil)
    FONTS: list of pre-loaded bitmap-font structs (overrides FONT-PATH)
    COLS, ROWS: grid dimensions in characters
-   PIXEL-SCALE: integer scaling factor (nil = auto-detect)
+   PIXEL-SCALE: integer scaling factor (nil = 1x)
    TITLE: window title
    PREFIX-KEY: key that activates meta-mode (default :f12)
-   STOP-FLAG: a list whose CAR is checked each tick; NIL CAR terminates the loop"
-  (unless workspaces
-    (error "At least one workspace is required"))
-  ;; Set global prefix key
-  (setf *prefix-key* prefix-key)
-  (format t "~&=== lexter panes v0.1 ===~%")
-  ;; Load fonts: either use provided list or load from path
-  (let* ((font-list (or fonts
-                        (progn
-                          (format t "~&Loading font ~a ...~%" font-path)
-                          (list (if (search ".bdf" font-path :test #'char-equal)
-                                    (lexter/pcf:load-bdf font-path)
-                                    (lexter/pcf:load-pcf font-path))))))
-         (primary (first font-list))
-         (cell-w (lexter/pcf:bitmap-font-cell-width primary))
-         (cell-h (lexter/pcf:bitmap-font-cell-height primary)))
-    (format t "~&Cell ~dx~d, grid ~dx~d~%" cell-w cell-h cols rows)
-    ;; Initialize GLFW
-    (glfw:initialize)
-    (let* ((scale (or pixel-scale 1))
-           (win-w (* cols cell-w scale))
-           (win-h (* rows cell-h scale)))
-      (format t "~&Pixel scale: ~dx, window ~dx~d~%" scale win-w win-h)
-      (format t "~&Prefix key: ~a~%" prefix-key)
-      (format t "~&Workspaces: ~d~%" (length workspaces))
-      (glfw:with-init-window
-          (:title title
-           :width win-w :height win-h
-           :resizable t
-           :context-version-major 3
-           :context-version-minor 3
-           :opengl-profile :opengl-core-profile
-           :opengl-forward-compat t)
-        ;; Set up OpenGL
-        (gl:viewport 0 0 win-w win-h)
-        ;; Build atlas with all fonts, then add cursor glyphs
-        (let* ((atlas (lexter/atlas:build-atlas font-list))
-               (_ (lexter/atlas:add-cursor-glyphs atlas))
-               (display (lexter/grid:make-display-grid :cols cols :rows rows))
-               (renderer (lexter/renderer:make-renderer atlas win-w win-h
-                                                         :pixel-scale scale))
-               (palette (make-xterm-palette)))
-          (declare (ignore _))
-          ;; Set up palette and default swatches
-          (lexter/renderer:set-palette renderer palette)
-          (setup-default-swatches display)
-          ;; Create compositor state
-          (let ((comp (make-compositor
-                       :workspaces workspaces
-                       :active-index 0
-                       :atlas atlas
-                       :display display
-                       :renderer renderer
-                       :palette palette
-                       :cols cols
-                       :rows rows
-                       :cell-w cell-w
-                       :cell-h cell-h
-                       :pixel-scale scale)))
-            ;; Set up GLFW callbacks
-            (glfw:def-key-callback key-callback (window key scancode action mods)
-              (declare (ignore window))
-              (handle-compositor-key comp key scancode action mods))
-            (glfw:set-key-callback 'key-callback)
-            (glfw:def-char-callback char-callback (window codepoint)
-              (declare (ignore window))
-              (handle-compositor-char comp codepoint))
-            (glfw:set-char-callback 'char-callback)
-            (glfw:def-framebuffer-size-callback fb-size-callback (window width height)
-              (declare (ignore window))
-              (let ((new-cols (floor width (* cell-w scale)))
-                    (new-rows (floor height (* cell-h scale))))
-                (when (and (> new-cols 0) (> new-rows 0)
-                           (or (/= new-cols (compositor-cols comp))
-                               (/= new-rows (compositor-rows comp))))
-                  (gl:viewport 0 0 width height)
-                  (lexter/renderer:update-viewport renderer width height)
-                  (schedule-compositor-resize comp new-cols new-rows))))
-            (glfw:set-framebuffer-size-callback 'fb-size-callback)
-            ;; Initialize all panes with the atlas
-            (format t "~&Initializing panes...~%")
-            (dolist (ws workspaces)
-              (dolist (pane (workspace-panes ws))
-                (pane-initialize pane atlas)))
-            ;; Clear grid initially
-            (clear-grid display
-                        :glyph (lexter/atlas:atlas-glyph-index atlas 32)
-                        :swatch 0)
-            ;; Run main loop
-            (unwind-protect
-                 (run-pane-loop comp :stop-flag stop-flag)
-              ;; Cleanup
-              (format t "~&Shutting down panes...~%")
-              (dolist (ws workspaces)
-                (destroy-workspace ws))
-              (lexter/renderer:destroy-renderer renderer))))))))
+   STOP-FLAG: a list whose CAR is checked each tick; NIL CAR terminates the loop
+
+   This is a thin wrapper over the iteration API: it owns the GLFW
+   initialize/terminate lifecycle, builds the compositor with
+   MAKE-PANED-COMPOSITOR, GUI-INITIALIZEs it, and drives it through the
+   single-window dispatcher RUN-GUI-LOOP. To embed Lexter panes in an external
+   main-thread dispatcher (e.g. Origin's), use MAKE-PANED-COMPOSITOR +
+   GUI-INITIALIZE / GUI-TICK / GUI-DESTROY directly instead."
+  (glfw:initialize)
+  (let ((comp (make-paned-compositor :workspaces workspaces
+                                     :font-path font-path :fonts fonts
+                                     :cols cols :rows rows
+                                     :pixel-scale pixel-scale
+                                     :title title :prefix-key prefix-key)))
+    (unwind-protect
+         (progn
+           (gui-initialize comp)
+           (run-gui-loop (list comp) :stop-flag stop-flag))
+      (gui-destroy comp)
+      (glfw:terminate))))
 
 ;;; --------------------------------------------------------------------------
 ;;; Helper functions (duplicated from unix-term for independence)

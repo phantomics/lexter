@@ -173,7 +173,9 @@
                  (actual-bg (if reverse-p fg-color bg-color))
                  (swatch (get-or-create-swatch grid actual-bg actual-fg)))
             (lexter/grid:set-simple-cell grid gc gr glyph-idx swatch))))
-      ;; Render cursor (block cursor on current position)
+      ;; Render cursor as reverse-video on the current cell: redraw the
+      ;; underlying glyph with foreground/background swapped, so the character
+      ;; under the cursor stays visible.
       (let* ((cursor-row (floor cursor-addr cols))
              (cursor-col (mod cursor-addr cols))
              (gc (+ cursor-col col-offset))
@@ -181,10 +183,27 @@
         (when (and lexter/panes::*cursor-blink-on*
                    (< gc (+ col-offset cols))
                    (< gr (+ row-offset rows)))
-          ;; Use cursor glyph (filled block)
-          (let ((cursor-glyph (lexter/atlas:atlas-glyph-index atlas :cursor-block)))
-            (when cursor-glyph
-              (lexter/grid:set-simple-cell grid gc gr cursor-glyph 0)))))
+          ;; A simple solid-cursor implementation
+          ;; (let ((cursor-glyph (lexter/atlas:atlas-glyph-index atlas lexter/atlas:+cursor-block-glyph+)))
+          ;;   (when cursor-glyph
+          ;;     (lexter/grid:set-simple-cell grid gc gr cursor-glyph 0)))
+          (let* ((char-code (aref buf cursor-addr))
+                 (color (aref colors cursor-addr))
+                 (highlight (aref highlights cursor-addr))
+                 (fa (aref field-attrs cursor-addr))
+                 (glyph-idx (or (lexter/atlas:atlas-glyph-index atlas char-code)
+                                (lexter/atlas:atlas-glyph-index atlas 32)))
+                 (fg-color (if (plusp fa)
+                               7  ; field attr displays dim
+                               (map-3270-color color)))
+                 (bg-color 0)
+                 ;; The cell's normal fg/bg, accounting for its own reverse highlight.
+                 (cell-reverse-p (= highlight tacle/tn3270.lexicon:+highlight-reverse+))
+                 (cell-fg (if cell-reverse-p bg-color fg-color))
+                 (cell-bg (if cell-reverse-p fg-color bg-color))
+                 ;; Cursor inverts the cell: swap fg/bg (get-or-create-swatch takes BG FG).
+                 (cursor-swatch (get-or-create-swatch grid cell-fg cell-bg)))
+            (lexter/grid:set-simple-cell grid gc gr glyph-idx cursor-swatch))))
       ;; Mark screen as clean
       (setf (lexter/tn3270::screen-dirty screen) nil))))
 

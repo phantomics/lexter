@@ -1,7 +1,7 @@
 ;;;; Pane system package definition
 
 (defpackage #:lexter/panes
-  (:use #:cl)
+  (:use #:cl #:lexter/gui)
   (:export
    ;; Protocol - base class
    #:pane
@@ -92,4 +92,14 @@
    #:clear-grid
    ;; Compositor entry point
    #:run-paned-terminal
-   #:*prefix-key*))
+   #:make-paned-compositor
+   #:compositor
+   #:compositor-window
+   #:*prefix-key*
+   ;; GUI protocol (re-exported for convenience)
+   #:gui-initialize
+   #:gui-tick
+   #:gui-destroy
+   #:gui-window
+   #:gui-alive-p
+   #:run-gui-loop))

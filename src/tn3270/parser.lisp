@@ -37,16 +37,16 @@
        (when (< (+ pos 3) end)
          (let ((addr (decode-buffer-address (aref data (+ pos 1))
                                             (aref data (+ pos 2)))))
-           (screen-set-cursor screen addr)))
+           (screen-set-buffer-address screen addr)))
        (+ pos 3))
 
       ;; SF (Start Field) - 2 bytes total
       (#x1D  ; SF order code (not in lexicon, raw value)
        (when (< (+ pos 2) end)
          (let ((attr (aref data (+ pos 1)))
-               (addr (screen-cursor-address screen)))
+               (addr (screen-buffer-address screen)))
            (screen-put-field-attr screen addr attr)
-           (screen-set-cursor screen (mod (1+ addr) (screen-size screen)))))
+           (screen-set-buffer-address screen (mod (1+ addr) (screen-size screen)))))
        (+ pos 2))
 
       ;; SFE (Start Field Extended) - variable length
@@ -56,7 +56,7 @@
                   (len (+ 2 (* 2 pair-count))))
              (when (< (+ pos len) end)
                ;; First pair is always field attribute
-               (let ((addr (screen-cursor-address screen))
+               (let ((addr (screen-buffer-address screen))
                      (attr (if (> pair-count 0)
                                (aref data (+ pos 3))  ; value of first pair
                                0)))
@@ -66,7 +66,7 @@
                        :for type = (aref data (+ pos 2 (* 2 i)))
                        :for value = (aref data (+ pos 3 (* 2 i)))
                        :do (screen-set-attribute screen type value))
-                 (screen-set-cursor screen (mod (1+ addr) (screen-size screen)))))
+                 (screen-set-buffer-address screen (mod (1+ addr) (screen-size screen)))))
              (+ pos len))
            (+ pos 2)))
 
@@ -80,19 +80,22 @@
 
       ;; IC (Insert Cursor) - 1 byte
       (#.+order-ic+
-       ;; Cursor is already at current position; just mark it
+       ;; Capture the current paint (buffer) position as the user cursor.
+       ;; This is the only order that moves the cursor while the host paints
+       ;; the screen; everything else moves the buffer address instead.
+       (screen-set-cursor screen (screen-buffer-address screen))
        (+ pos 1))
 
       ;; PT (Program Tab) - 1 byte
       (#.+order-pt+
-       ;; Skip to next unprotected field
+       ;; Skip to next unprotected field (advances the buffer address).
        (let* ((size (screen-size screen))
-              (start (screen-cursor-address screen)))
+              (start (screen-buffer-address screen)))
          (loop :for i :from 1 :below size
                :for addr = (mod (+ start i) size)
                :for fa = (aref (screen-field-attrs screen) addr)
                :when (and (plusp fa) (not (field-protected-p fa)))
-               :do (screen-set-cursor screen (mod (1+ addr) size))
+               :do (screen-set-buffer-address screen (mod (1+ addr) size))
                    (return)))
        (+ pos 1))
 
@@ -103,13 +106,13 @@
                                                   (aref data (+ pos 2))))
                 (char-byte (aref data (+ pos 3)))
                 (char (char-code (ebcdic-to-char char-byte)))
-                (start (screen-cursor-address screen))
+                (start (screen-buffer-address screen))
                 (size (screen-size screen)))
-           ;; Repeat character from current position to stop-addr
+           ;; Repeat character from current buffer position to stop-addr.
            (loop :for addr = start :then (mod (1+ addr) size)
                  :until (= addr stop-addr)
-                 :do (screen-put-char screen addr char))
-           (screen-set-cursor screen stop-addr)))
+                 :do (screen-write-cell screen addr char))
+           (screen-set-buffer-address screen stop-addr)))
        (+ pos 4))
 
       ;; EUA (Erase Unprotected to Address) - 3 bytes total
@@ -117,7 +120,7 @@
        (when (< (+ pos 3) end)
          (let* ((stop-addr (decode-buffer-address (aref data (+ pos 1))
                                                   (aref data (+ pos 2))))
-                (start (screen-cursor-address screen))
+                (start (screen-buffer-address screen))
                 (size (screen-size screen)))
            ;; Erase unprotected positions to stop-addr
            (loop :for addr = start :then (mod (1+ addr) size)
@@ -126,16 +129,15 @@
                  :for fa = (if fa-addr (aref (screen-field-attrs screen) fa-addr) 0)
                  :unless (and fa-addr (field-protected-p fa))
                  :do (setf (aref (screen-buffer screen) addr) 32))
-           (screen-set-cursor screen stop-addr)))
+           (screen-set-buffer-address screen stop-addr)))
        (+ pos 3))
 
       ;; GE (Graphic Escape) - 2 bytes total
       (#.+order-ge+
        (when (< (+ pos 2) end)
          (let* ((byte (aref data (+ pos 1)))
-                (char (char-code (ebcdic-to-char byte t)))  ; APL charset
-                (addr (screen-cursor-address screen)))
-           (screen-put-char screen addr char)))
+                (char (char-code (ebcdic-to-char byte t))))  ; APL charset
+           (screen-put-char-buffer screen char)))
        (+ pos 2))
 
       ;; MF (Modify Field) - variable length
@@ -145,7 +147,7 @@
                   (len (+ 2 (* 2 pair-count))))
              ;; Find current field and modify its attributes
              (multiple-value-bind (fa-addr fa)
-                 (screen-field-at screen (screen-cursor-address screen))
+                 (screen-field-at screen (screen-buffer-address screen))
                (declare (ignore fa))
                (when fa-addr
                  (loop :for i :from 0 :below pair-count
@@ -175,6 +177,10 @@
            (type fixnum start end)
            (type (unsigned-byte 8) wcc)
            (ignore wcc))  ; TODO: handle WCC bits (reset MDT, sound alarm, etc.)
+  ;; The host paints starting from buffer address 0 unless an SBA order moves
+  ;; it (hosts almost always lead with SBA). The buffer address is the paint
+  ;; pointer and is kept distinct from the user cursor.
+  (setf (screen-buffer-address screen) 0)
   (let ((pos start)
         (ge-mode nil))
     (loop :while (< pos end)
@@ -199,9 +205,8 @@
                    (incf pos))
                   ;; Text character
                   (t
-                   (let ((char (char-code (ebcdic-to-char byte ge-mode)))
-                         (addr (screen-cursor-address screen)))
-                     (screen-put-char screen addr char)
+                   (let ((char (char-code (ebcdic-to-char byte ge-mode))))
+                     (screen-put-char-buffer screen char)
                      (setf ge-mode nil))
                    (incf pos)))))))
 
@@ -216,6 +221,17 @@
       (let ((cmd (aref data start)))
         (cond
           ;; Write
+          ;;
+          ;; A plain Write does NOT clear the screen and, here, does NOT move
+          ;; the user cursor unless the stream contains an IC order. This means
+          ;; a partial refresh (e.g. a host repainting a status/clock field with
+          ;; no IC) leaves the operator's cursor where it is, instead of being
+          ;; dragged to the last byte painted.
+          ;;
+          ;; NOTE: this differs from a classic 3270, where the cursor address is
+          ;; defined by IC (or defaults to 0 on Erase/Write); a real device does
+          ;; not "remember" the operator cursor across a Write the way we do.
+          ;; We deliberately preserve it for a better interactive experience.
           ((= cmd +cmd-write+)
            (when (< (1+ start) end)
              (process-write-command screen data (+ start 2) end

@@ -32,8 +32,14 @@
   ;; Current field attributes (set by SA orders, reset by field attrs)
   (current-color 0 :type (unsigned-byte 8))
   (current-highlight 0 :type (unsigned-byte 8))
-  ;; Cursor position
+  ;; Cursor position (the *user* cursor: where the operator is typing).
+  ;; Set by the IC order during parsing and by local key handling; NOT moved
+  ;; by the host painting the screen.
   (cursor-address 0 :type fixnum)
+  ;; Buffer (write) address: the host's paint pointer while a Write stream is
+  ;; processed. Distinct from the cursor; orders such as SBA/SF/RA/EUA and
+  ;; character writes advance this, while IC captures it into CURSOR-ADDRESS.
+  (buffer-address 0 :type fixnum)
   ;; Dirty tracking
   (dirty t :type boolean))
 
@@ -74,6 +80,7 @@
     (fill (screen-colors screen) 0 :end size)
     (fill (screen-highlights screen) 0 :end size)
     (setf (screen-cursor-address screen) 0
+          (screen-buffer-address screen) 0
           (screen-current-color screen) 0
           (screen-current-highlight screen) 0
           (screen-dirty screen) t)))
@@ -84,7 +91,10 @@
   (aref (screen-buffer screen) address))
 
 (defun screen-put-char (screen address char)
-  "Put CHAR (codepoint) at ADDRESS and advance cursor."
+  "Put CHAR (codepoint) at ADDRESS and advance the cursor.
+   Used by the local typing path (operator input), where the user cursor
+   should follow the character just entered. The host paint path uses
+   SCREEN-PUT-CHAR-BUFFER instead, which advances the buffer address."
   (declare (type tn3270-screen screen) (type fixnum address char))
   (let ((size (screen-size screen)))
     (setf (aref (screen-buffer screen) address) char
@@ -94,6 +104,30 @@
     ;; Advance cursor with wraparound
     (setf (screen-cursor-address screen)
           (mod (1+ address) size))))
+
+(defun screen-set-buffer-address (screen address)
+  "Set the host paint (buffer) address. Does not touch the user cursor."
+  (declare (type tn3270-screen screen) (type fixnum address))
+  (setf (screen-buffer-address screen) address))
+
+(defun screen-write-cell (screen address char)
+  "Write CHAR (codepoint) at ADDRESS with the current extended attributes,
+   without moving either the buffer address or the user cursor."
+  (declare (type tn3270-screen screen) (type fixnum address char))
+  (setf (aref (screen-buffer screen) address) char
+        (aref (screen-colors screen) address) (screen-current-color screen)
+        (aref (screen-highlights screen) address) (screen-current-highlight screen)
+        (screen-dirty screen) t))
+
+(defun screen-put-char-buffer (screen char)
+  "Write CHAR (codepoint) at the current buffer address and advance the buffer
+   address with wraparound. This is the host paint path: it never moves the
+   user cursor (only the IC order does that)."
+  (declare (type tn3270-screen screen) (type fixnum char))
+  (let ((address (screen-buffer-address screen)))
+    (screen-write-cell screen address char)
+    (setf (screen-buffer-address screen)
+          (mod (1+ address) (screen-size screen)))))
 
 (defun screen-put-field-attr (screen address attr)
   "Put a field attribute at ADDRESS. The cell displays as blank."

@@ -158,6 +158,7 @@
            #:flush-to-display
            ;; Dirty tracking
            #:any-row-dirty-p
+           #:mark-screen-dirty
            ;; Palette
            #:screen-palette
            #:screen-palette-generation

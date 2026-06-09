@@ -202,3 +202,85 @@ window.
   route wheel events to the application (as arrow keys, per xterm
   `alternateScroll`) rather than attempting local scrollback while on the
   alternate screen.
+
+
+---
+
+
+## Addendum: Stale Grid After Buffer Swap
+
+**Date:** 2026-06-06
+
+### Context
+
+After the alternate-screen buffers landed, a user reported a residual
+rendering bug: when the shell prompt sat partway down the window with empty
+space below it, exiting a full-screen app (vim/less) left the restored prompt
+in the middle of the screen surrounded by the *application's* leftover
+characters -- "dead characters" above and below the prompt. Curiously, when
+the window was full of history and the prompt was on the bottom line, exit was
+clean. The buffer swap itself was correct (the primary buffer's contents were
+intact); the defect was purely in what reached the screen.
+
+### Problem
+
+`flush-to-display` is an **incremental** flush: it copies only the screen rows
+whose `row-dirty` bit is set, force-marks just the cursor row each frame, and
+clears all dirty bits afterward. The **display grid is a single buffer shared**
+by the primary and alternate screens.
+
+On a buffer swap, the newly-active screen's *clean* rows are therefore never
+re-copied into the shared grid, which still holds the previous buffer's pixels
+for those rows. On exit from vim only the cursor row repainted (the restored
+prompt), while every other grid row kept vim's leftover content.
+
+The full-screen / prompt-at-bottom case worked only by accident: returning to a
+prompt on the last line makes the shell **scroll** the primary buffer, and
+`scroll-up` marks every row dirty -- incidentally forcing a full re-flush. With
+the prompt mid-screen there was no scroll, so only the rows the shell rewrote
+were repainted and the rest of the grid kept the application's characters. The
+bug affected both standalone `unix-term` and the pane compositor, since both
+render the active screen through the same incremental flush.
+
+### Design Decision
+
+**Force a full repaint at the swap, mode-agnostically.** The swap is the single
+point where the shared grid stops matching the active buffer, so it is the
+correct place to invalidate. After each swap the now-active screen is marked
+entirely dirty, so the next `flush-to-display` re-copies all of its rows into
+the grid (and `any-row-dirty-p` also becomes true, triggering `needs-render`).
+
+This was chosen over alternatives such as giving each buffer its own display
+grid (heavier; the grid is a GPU-facing resource) or having the renderer detect
+a screen-identity change between frames (spreads the concern into the render
+loop). Marking dirty at the swap keeps the fix in one place and covers both
+frontends, since both route through the VT handler.
+
+### Implementation
+
+- **`src/model.lisp`** -- added `mark-screen-dirty`, which fills the screen's
+  `row-dirty` vector with 1s, and exported it from `lexter/model`.
+- **`src/vt-handler.lisp`** -- `%enter-alt-screen` and `%exit-alt-screen` now
+  call `mark-screen-dirty` on the now-active screen after the swap. This also
+  fixes **mode 47 re-entry** (no-clear, reused alt) and **all exits** uniformly;
+  1049 entry already dirtied via its clear, and 1048 (no swap) correctly needs
+  no mark. No renderer, terminal, or pane code changed.
+
+### Verification
+
+The library compiles and loads clean. The headless self-check was extended to
+clear a screen's dirty bits (simulating an idle, already-flushed buffer) and
+then confirm that a swap re-dirties the whole active buffer: entering 1049
+fully dirties the alternate, exiting fully dirties the restored primary, and
+mode 47 re-entry fully dirties the (unclear) alternate. Live confirmation in a
+partially-filled vim/less session -- clean prompt with no surrounding dead
+characters, including the previously-working bottom-line case -- is the user's
+to make, as it requires a GLFW window.
+
+### Files
+
+| File | Action | Description |
+|------|--------|-------------|
+| `src/model.lisp` | Modified | Added `mark-screen-dirty` |
+| `src/packages.lisp` | Modified | Exported `mark-screen-dirty` |
+| `src/vt-handler.lisp` | Modified | Mark active screen fully dirty after each buffer swap |

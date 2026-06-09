@@ -314,6 +314,14 @@
   "Return T if any row in SCREEN is marked dirty."
   (not (zerop (count 1 (screen-row-dirty screen)))))
 
+(defun mark-screen-dirty (screen)
+  "Mark every row of SCREEN dirty so the next FLUSH-TO-DISPLAY repaints the
+   whole screen. Used after an alternate-screen buffer swap, where the shared
+   display grid still holds the previous buffer's content and must be fully
+   re-copied from the now-active buffer."
+  (fill (screen-row-dirty screen) 1)
+  screen)
+
 (defun default-swatch (screen)
   (screen-default-swatch screen))
 

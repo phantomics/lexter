@@ -629,7 +629,10 @@
         (%clear-screen-buffer alt))
       (setf (vt-handler-primary-screen handler) (vt-handler-screen handler)
             (vt-handler-screen handler) alt
-            (vt-handler-in-alt-screen handler) t))))
+            (vt-handler-in-alt-screen handler) t)
+      ;; The display grid is shared between buffers; force a full repaint from
+      ;; the now-active screen so its clean rows overwrite the old buffer's.
+      (mark-screen-dirty alt))))
 
 (defun %exit-alt-screen (handler &key clear)
   "Switch the active buffer back to the primary screen. When CLEAR, erase the
@@ -639,7 +642,10 @@
     (when clear
       (%clear-screen-buffer (vt-handler-screen handler)))
     (setf (vt-handler-screen handler) (vt-handler-primary-screen handler)
-          (vt-handler-in-alt-screen handler) nil)))
+          (vt-handler-in-alt-screen handler) nil)
+    ;; The display grid is shared between buffers; force a full repaint from
+    ;; the restored primary so its clean rows overwrite the alternate's content.
+    (mark-screen-dirty (vt-handler-screen handler))))
 
 (defun vt-handler-resize-all (handler new-cols new-rows)
   "Resize every screen buffer owned by HANDLER (primary and, if present, the

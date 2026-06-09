@@ -245,7 +245,7 @@
       (let* ((m (aref metrics i))
              (glyph-asc (getf m :asc))
              (glyph-dsc (getf m :dsc))
-             (glyph-ink-h (+ (abs glyph-asc) (abs glyph-dsc)))
+             (glyph-ink-h (max 0 (+ glyph-asc glyph-dsc)))
              ;; Row stride based on cell-width (advance width)
              (row-stride (%padded-row-stride cell-width pad-bytes))
              ;; Position ink within the cell: top row of ink = font-ascent - glyph-ascent

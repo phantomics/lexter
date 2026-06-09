@@ -209,29 +209,43 @@
 ;;; Protocol implementations (shared by all VT panes)
 ;;; --------------------------------------------------------------------------
 
+(defun vt-pane-active-screen (pane)
+  "Return the VT handler's currently active screen (primary or alternate buffer),
+   falling back to the pane's own screen slot before the handler exists. The
+   render path must follow this rather than a cached slot so an alternate-screen
+   swap (vim, less, htop, ...) becomes visible."
+  (let ((handler (vt-pane-vt-handler pane)))
+    (if handler
+        (lexter/vt-handler:vt-handler-screen handler)
+        (vt-pane-screen pane))))
+
 (defmethod pane-flush ((pane vt-pane) grid)
   "Flush terminal screen content to grid at pane's offset.
    Uses content-row to account for header chrome."
-  (when (vt-pane-screen pane)
-    (lexter/model:flush-to-display
-     (vt-pane-screen pane) grid
-     :col-offset (pane-col pane)
-     :row-offset (content-row pane)
-     :space-glyph (lexter/model:screen-blank-glyph (vt-pane-screen pane))
-     :cursor-blink-on *cursor-blink-on*)))
+  (let ((screen (vt-pane-active-screen pane)))
+    (when screen
+      (lexter/model:flush-to-display
+       screen grid
+       :col-offset (pane-col pane)
+       :row-offset (content-row pane)
+       :space-glyph (lexter/model:screen-blank-glyph screen)
+       :cursor-blink-on *cursor-blink-on*))))
 
 (defmethod pane-palette ((pane vt-pane))
-  "Return the terminal's palette for GPU upload with optional slot."
-  (when (vt-pane-screen pane)
-    (let ((screen (vt-pane-screen pane)))
+  "Return the terminal's palette for GPU upload with optional slot.
+   The active screen owns the palette, so the alternate buffer's palette is used
+   while it is active and the primary's is restored on exit."
+  (let ((screen (vt-pane-active-screen pane)))
+    (when screen
       (values (lexter/model:screen-palette screen)
               (lexter/model:screen-palette-generation screen)
               (vt-pane-palette-slot pane)))))
 
 (defmethod scroll-state ((pane vt-pane))
-  "Return scroll state from the screen's scrollback model."
-  (when (vt-pane-screen pane)
-    (let ((screen (vt-pane-screen pane)))
+  "Return scroll state from the active screen's scrollback model.
+   The alternate screen has no scrollback, so no scroll bar is shown in vim etc."
+  (let ((screen (vt-pane-active-screen pane)))
+    (when screen
       (values (+ (lexter/model:screen-rows screen)
                  (lexter/model:scrollback-lines screen))
               (lexter/model:scrollback-viewport-offset screen)
@@ -283,15 +297,20 @@
   (setf (pane-width pane) new-width
         (pane-height pane) new-height)
   (let ((screen-width (content-width pane))
-        (screen-height (content-height pane)))
-    (when (vt-pane-screen pane)
-      (lexter/model:resize-screen (vt-pane-screen pane) screen-width screen-height))
+        (screen-height (content-height pane))
+        (handler (vt-pane-vt-handler pane)))
+    ;; Resize both the primary and alternate buffers (via the handler) so
+    ;; returning from the alternate screen after a resize is correct.
+    (cond (handler
+           (lexter/vt-handler:vt-handler-resize-all handler screen-width screen-height))
+          ((vt-pane-screen pane)
+           (lexter/model:resize-screen (vt-pane-screen pane) screen-width screen-height)))
     (vt-pane-backend-resize pane screen-width screen-height)))
 
 (defmethod pane-dirty-p ((pane vt-pane))
-  "Check if terminal screen has dirty rows."
-  (and (vt-pane-screen pane)
-       (lexter/model:any-row-dirty-p (vt-pane-screen pane))))
+  "Check if the active terminal screen has dirty rows."
+  (let ((screen (vt-pane-active-screen pane)))
+    (and screen (lexter/model:any-row-dirty-p screen))))
 
 (defmethod pane-destroy ((pane vt-pane))
   "Destroy the terminal's backend connection."

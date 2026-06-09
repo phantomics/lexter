@@ -55,15 +55,28 @@
   (current-fg      7  :type (unsigned-byte 8))   ; default white
   (current-bg      0  :type (unsigned-byte 8))   ; default black
   (current-attrs   0  :type (unsigned-byte 32))
-  ;; Saved cursor state (DECSC/DECRC)
+  ;; Saved cursor state (DECSC/DECRC -- ESC 7 / ESC 8)
   (saved-col       0  :type fixnum)
   (saved-row       0  :type fixnum)
   (saved-fg        7  :type (unsigned-byte 8))
   (saved-bg        0  :type (unsigned-byte 8))
   (saved-attrs     0  :type (unsigned-byte 32))
-  ;; Alternate screen buffer (for ?1049)
+  ;; Alternate screen buffer (DEC private modes 47 / 1047 / 1048 / 1049).
+  ;; SCREEN is always the *active* buffer (all write ops use it). PRIMARY-SCREEN
+  ;; holds the normal buffer while the alternate is active; ALT-SCREEN is the
+  ;; persistent alternate buffer (created lazily, reused so mode 47's no-clear
+  ;; semantics work). The renderer must follow VT-HANDLER-SCREEN, not a cached
+  ;; reference, so a buffer swap becomes visible.
+  (primary-screen  nil)
   (alt-screen      nil)
   (in-alt-screen   nil :type boolean)
+  ;; Dedicated cursor save for 1048/1049 (kept separate from DECSC's slots so
+  ;; the two save/restore mechanisms never interfere).
+  (alt-saved-col   0  :type fixnum)
+  (alt-saved-row   0  :type fixnum)
+  (alt-saved-fg    7  :type (unsigned-byte 8))
+  (alt-saved-bg    0  :type (unsigned-byte 8))
+  (alt-saved-attrs 0  :type (unsigned-byte 32))
   ;; Autowrap mode
   (autowrap        t   :type boolean)
   ;; Application callback for actions we can't handle
@@ -98,6 +111,7 @@
   (let* ((cols (screen-cols screen))
          (tab-stops (make-array cols :element-type 'bit :initial-element 0))
          (handler (%make-vt-handler :screen screen
+                                    :primary-screen screen
                                     :atlas atlas
                                     :callback callback
                                     :tab-stops tab-stops
@@ -562,6 +576,80 @@
 ;;; DEC Private Mode handlers (DECSET/DECRST)
 ;;; --------------------------------------------------------------------------
 
+;;; --------------------------------------------------------------------------
+;;; Alternate screen buffer support (DEC private modes 47/1047/1048/1049)
+;;; --------------------------------------------------------------------------
+
+(defun %save-alt-cursor (handler)
+  "Save the active screen's cursor and SGR state into the dedicated 1048/1049
+   save slots."
+  (let ((screen (vt-handler-screen handler)))
+    (setf (vt-handler-alt-saved-col   handler) (cursor-col screen)
+          (vt-handler-alt-saved-row   handler) (cursor-row screen)
+          (vt-handler-alt-saved-fg    handler) (vt-handler-current-fg handler)
+          (vt-handler-alt-saved-bg    handler) (vt-handler-current-bg handler)
+          (vt-handler-alt-saved-attrs handler) (vt-handler-current-attrs handler))))
+
+(defun %restore-alt-cursor (handler)
+  "Restore the cursor and SGR state saved by %SAVE-ALT-CURSOR onto the (now
+   active) screen."
+  (let ((screen (vt-handler-screen handler)))
+    (setf (vt-handler-current-fg handler)    (vt-handler-alt-saved-fg handler)
+          (vt-handler-current-bg handler)    (vt-handler-alt-saved-bg handler)
+          (vt-handler-current-attrs handler) (vt-handler-alt-saved-attrs handler))
+    (set-cursor-position screen
+                         (min (vt-handler-alt-saved-col handler) (1- (screen-cols screen)))
+                         (min (vt-handler-alt-saved-row handler) (1- (screen-rows screen))))))
+
+(defun %ensure-alt-screen (handler)
+  "Lazily create the persistent alternate buffer, matching the primary's
+   dimensions and blank glyph. The alternate buffer carries no scrollback."
+  (or (vt-handler-alt-screen handler)
+      (let* ((primary (vt-handler-primary-screen handler))
+             (alt (make-screen :cols (screen-cols primary)
+                               :rows (screen-rows primary)
+                               :mode (screen-mode primary))))
+        (setf (screen-blank-glyph alt) (screen-blank-glyph primary))
+        (fill (lexter/model::screen-glyphs alt) (screen-blank-glyph primary))
+        ;; Alternate screen has no scrollback (it is exactly viewport-sized).
+        (setf (lexter/model::screen-scrollback-enabled alt) nil)
+        (setf (vt-handler-alt-screen handler) alt))))
+
+(defun %clear-screen-buffer (screen)
+  "Erase the entire SCREEN and home the cursor."
+  (erase-in-display screen 2)
+  (set-cursor-position screen 0 0))
+
+(defun %enter-alt-screen (handler &key clear)
+  "Switch the active buffer to the alternate screen. When CLEAR, erase it first.
+   No-op if already on the alternate screen."
+  (unless (vt-handler-in-alt-screen handler)
+    (let ((alt (%ensure-alt-screen handler)))
+      (when clear
+        (%clear-screen-buffer alt))
+      (setf (vt-handler-primary-screen handler) (vt-handler-screen handler)
+            (vt-handler-screen handler) alt
+            (vt-handler-in-alt-screen handler) t))))
+
+(defun %exit-alt-screen (handler &key clear)
+  "Switch the active buffer back to the primary screen. When CLEAR, erase the
+   alternate buffer (mode 1047 semantics) before switching away.
+   No-op if not on the alternate screen."
+  (when (vt-handler-in-alt-screen handler)
+    (when clear
+      (%clear-screen-buffer (vt-handler-screen handler)))
+    (setf (vt-handler-screen handler) (vt-handler-primary-screen handler)
+          (vt-handler-in-alt-screen handler) nil)))
+
+(defun vt-handler-resize-all (handler new-cols new-rows)
+  "Resize every screen buffer owned by HANDLER (primary and, if present, the
+   alternate) so that returning from the alternate screen after a resize shows
+   a correctly-sized primary."
+  (let ((primary (vt-handler-primary-screen handler))
+        (alt (vt-handler-alt-screen handler)))
+    (when primary (resize-screen primary new-cols new-rows))
+    (when alt (resize-screen alt new-cols new-rows))))
+
 (defun handle-decset (handler mode)
   "Handle DECSET (CSI ? n h)."
   (let ((screen (vt-handler-screen handler)))
@@ -572,13 +660,15 @@
        (when *debug-vt*
          (format t "~&[DECSET] Cursor SHOWN~%"))
        (set-cursor-visible screen t))
-      (1049 ; Alternate screen buffer
-       (unless (vt-handler-in-alt-screen handler)
-         ;; Save main screen and create alternate
-         (setf (vt-handler-alt-screen handler) screen
-               (vt-handler-in-alt-screen handler) t)
-         ;; TODO: create new screen buffer
-         ))
+      (47   ; Switch to alternate screen (no clear)
+       (%enter-alt-screen handler))
+      (1047 ; Switch to alternate screen (cleared on exit, not entry)
+       (%enter-alt-screen handler))
+      (1048 ; Save cursor
+       (%save-alt-cursor handler))
+      (1049 ; Save cursor, switch to a freshly-cleared alternate screen
+       (%save-alt-cursor handler)
+       (%enter-alt-screen handler :clear t))
       (otherwise
        (when (vt-handler-callback handler)
          (funcall (vt-handler-callback handler) :unknown-decset mode))))))
@@ -593,11 +683,15 @@
        (when *debug-vt*
          (format t "~&[DECRST] Cursor HIDDEN~%"))
        (set-cursor-visible screen nil))
-      (1049 ; Restore main screen buffer
-       (when (vt-handler-in-alt-screen handler)
-         (setf (vt-handler-in-alt-screen handler) nil)
-         ;; TODO: restore main screen
-         ))
+      (47   ; Switch back to primary screen (no clear)
+       (%exit-alt-screen handler))
+      (1047 ; Clear the alternate screen, then switch back to primary
+       (%exit-alt-screen handler :clear t))
+      (1048 ; Restore cursor
+       (%restore-alt-cursor handler))
+      (1049 ; Switch back to primary screen and restore cursor
+       (%exit-alt-screen handler)
+       (%restore-alt-cursor handler))
       (otherwise
        (when (vt-handler-callback handler)
          (funcall (vt-handler-callback handler) :unknown-decrst mode))))))

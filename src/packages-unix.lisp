@@ -38,6 +38,8 @@
            #:vt-handler-encoding
            #:vt-handler-bold-as-bright
            #:vt-handler-cp437-table
+           #:vt-handler-in-alt-screen
+           #:vt-handler-resize-all
            #:process-output
            ;; Debug
            #:*debug-vt*))

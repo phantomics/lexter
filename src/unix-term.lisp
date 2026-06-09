@@ -288,23 +288,23 @@
                             (unix-terminal-resize-rows term))
              (setf (unix-terminal-resize-pending term) nil
                    resized t))
-           ;; 4. Check if we need to render
-           ;; Render if: any dirty rows, cursor blink toggled, or resized
-           (let ((needs-render (or resized
-                                   blink-toggled
-                                   (any-row-dirty-p (unix-terminal-screen term)))))
+           ;; 4. Check if we need to render. Render the *active* screen, which
+           ;; the VT handler may have swapped to the alternate buffer (vim etc).
+           (let* ((screen (vt-handler-screen (unix-terminal-vt-handler term)))
+                  (needs-render (or resized
+                                    blink-toggled
+                                    (any-row-dirty-p screen))))
              (when needs-render
                ;; 5. Flush model to display grid (with cursor state)
-               (flush-to-display (unix-terminal-screen term)
+               (flush-to-display screen
                                  (unix-terminal-display term)
                                  :atlas (unix-terminal-atlas term)
-                                 :space-glyph (screen-blank-glyph (unix-terminal-screen term))
+                                 :space-glyph (screen-blank-glyph screen)
                                  :cursor-blink-on (unix-terminal-cursor-blink-on term))
-               ;; 5b. Sync palette if changed
-               (let ((screen (unix-terminal-screen term)))
-                 (upload-palette (unix-terminal-renderer term)
-                                 (screen-palette screen)
-                                 (screen-palette-generation screen)))
+               ;; 5b. Sync palette if changed (active screen owns the palette)
+               (upload-palette (unix-terminal-renderer term)
+                               (screen-palette screen)
+                               (screen-palette-generation screen))
                ;; 6. Render frame
                (render-frame (unix-terminal-renderer term)
                              (unix-terminal-display term))
@@ -321,14 +321,15 @@
 
 (defun handle-resize (term new-cols new-rows)
   "Handle terminal resize."
-  (let ((screen (unix-terminal-screen term))
+  (let ((handler (unix-terminal-vt-handler term))
         (display (unix-terminal-display term))
         (pty (unix-terminal-pty term)))
-    ;; Resize model
-    (resize-screen screen new-cols new-rows)
-    ;; Resize display grid (use the screen's blank glyph)
+    ;; Resize model -- both the primary and alternate buffers, so returning
+    ;; from the alternate screen after a resize shows a correctly-sized primary.
+    (vt-handler-resize-all handler new-cols new-rows)
+    ;; Resize display grid (use the active screen's blank glyph)
     (resize-grid display new-cols new-rows
-                 :blank-glyph (screen-blank-glyph screen))
+                 :blank-glyph (screen-blank-glyph (vt-handler-screen handler)))
     ;; Update PTY window size
     (pty-set-size pty new-cols new-rows)
     ;; Update dimensions

@@ -242,8 +242,10 @@
   (declare (ignore scancode))
   (when (and (member action '(:press :repeat))
              (vt-pane-backend-alive-p pane))
-    (let ((n (%key-to-bytes key mods (vt-pane-write-buffer pane))))
-      (unless (zerop n)
+    ;; %KEY-TO-BYTES always returns an integer; the OR is a defensive guard so a
+    ;; future change can never feed NIL into PLUSP.
+    (let ((n (or (%key-to-bytes key mods (vt-pane-write-buffer pane)) 0)))
+      (when (plusp n)
         (vt-pane-write-bytes pane (vt-pane-write-buffer pane) :end n)
         t))))
 

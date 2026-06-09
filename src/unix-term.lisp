@@ -112,8 +112,13 @@
   "Mapping from GLFW key symbols to byte sequences.")
 
 (defun key-to-bytes (key mods buffer)
-  "Convert a GLFW key press to bytes to send to PTY.
-   Returns a byte vector or NIL if the key should be ignored."
+  "Convert a GLFW key press to bytes written into BUFFER.
+   Returns the number of bytes written (0 if the key produces no output).
+   Always returns an integer: an unhandled modifier combination (e.g. a
+   Ctrl/Alt chord with a non-alphabetic or multi-character key, as produced by
+   desktop-switch shortcuts) yields 0 rather than NIL. Proper modifier-encoded
+   sequences for special keys are not yet implemented -- such chords are simply
+   swallowed for now."
   (let ((ctrl-p  (member :control mods))
         (shift-p (member :shift   mods))
         (alt-p   (member :alt     mods)))
@@ -127,7 +132,7 @@
            (let ((code (- (char-code (char-upcase (char name 0))) 64)))
              (when (<= 1 code 26)
                (setf (aref buffer 0) code)
-               1))))) ;; one-byte code
+               (return-from key-to-bytes 1)))))) ;; one-byte code
       ;; Alt+key - send ESC prefix
       ((and alt-p (symbolp key))
        (let ((name (symbol-name key)))
@@ -138,12 +143,16 @@
                          (char-downcase (char name 0)))))
              (setf (aref buffer 0) +esc+ ;; ESC prefix
                    (aref buffer 1) (char-code ch))
-             2)))) ;; two-byte code
+             (return-from key-to-bytes 2))))) ;; two-byte code
+      ;; Special keys from table
       (t (let ((seq-form (assoc key *key-sequences*)))
-           ;; Special keys
-           (if seq-form (loop :for cx :from 0 :for char :across (rest seq-form)
-                              :do (setf (aref buffer cx) char) :finally (return cx))
-               0)))))) ;; Regular character keys are handled via char callback, thus return 0
+           (when seq-form
+             (loop :for cx :from 0 :for char :across (rest seq-form)
+                   :do (setf (aref buffer cx) char)
+                   :finally (return-from key-to-bytes cx))))))
+    ;; Unhandled (regular character keys go through the char callback, and any
+    ;; modifier chord that produced no bytes falls through here): 0.
+    0))
 
 (defun handle-key-press (term key scancode action mods)
   "Handle a GLFW key callback."
@@ -154,9 +163,10 @@
     ;; (when (and (eq key :escape) (eq action :press) (null mods))
     ;;   (setf (unix-terminal-running term) nil)
     ;;   (return-from handle-key-press))
-    ;; Convert key to bytes
-    (let ((n (key-to-bytes key mods (unix-terminal-write-buffer term))))
-      (unless (zerop n)
+    ;; Convert key to bytes. KEY-TO-BYTES always returns an integer; the OR is
+    ;; a defensive guard so a future change can never feed NIL into PLUSP.
+    (let ((n (or (key-to-bytes key mods (unix-terminal-write-buffer term)) 0)))
+      (when (plusp n)
         (pty-write (unix-terminal-pty term)
                    (unix-terminal-write-buffer term)
                    :end n)))))

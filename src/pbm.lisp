@@ -11,6 +11,14 @@
 ;;; PBM font loading
 ;;; --------------------------------------------------------------------------
 
+(defun load-pbm-file (path)
+  "Load an uncompressed PCF bitmap font file. Returns a PCF-FONT struct."
+  (if (search ".gz" path :test #'char-equal)
+      (flex:with-input-from-sequence
+          (stream (chipz:decompress nil 'chipz:gzip (alexandria:read-file-into-byte-vector path)))
+        (netpbm:read-from-stream stream))
+      (netpbm:read-from-file path)))
+
 (defun load-pbm-font (pathname &key glyph-width glyph-height encoding-table)
   "Load a bitmap font from a PBM image file.
    
@@ -23,7 +31,7 @@
    mapping (byte N maps to codepoint N).
    
    Returns a BITMAP-FONT struct suitable for use with build-atlas."
-  (let* ((image (netpbm:read-from-file pathname))
+  (let* ((image (load-pbm-file pathname))
          ;; NOTE: cl-netpbm transposes the image. PBM header is "width height"
          ;; but netpbm returns array with dim0=width, dim1=height (non-standard).
          ;; We work with this directly: (aref image x y) where x is column, y is row.

@@ -91,14 +91,21 @@
 
 ;;;; Public entry point
 
-(defun load-pcf (path)
-  "Load an uncompressed PCF bitmap font file. Returns a PCF-FONT struct."
+(defun load-pcf (path &key cell-width cell-height)
+  "Load an uncompressed PCF bitmap font file. Returns a PCF-FONT struct.
+
+CELL-WIDTH, if given, overrides the auto-detected terminal cell width (the
+\"narrow\"/half width). This is needed for dual-width fonts such as Unifont,
+whose glyph storage raster (16px) is wider than the narrow ASCII cell (8px):
+pass :CELL-WIDTH 8 so ASCII renders single-width and full-width glyphs (CJK)
+are detected as double-wide. CELL-HEIGHT likewise overrides the cell height.
+For ordinary monospace fonts the overrides are unnecessary."
   (if (search ".gz" path :test #'char-equal)
       (flex:with-input-from-sequence
           (stream (chipz:decompress nil 'chipz:gzip (alexandria:read-file-into-byte-vector path)))
-        (%parse-pcf stream))
+        (%parse-pcf stream :cell-width cell-width :cell-height cell-height))
       (with-open-file (stream path :element-type '(unsigned-byte 8))
-        (%parse-pcf stream))))
+        (%parse-pcf stream :cell-width cell-width :cell-height cell-height))))
 
 ;;;; Parser internals
 
@@ -132,7 +139,7 @@
         (dotimes (i 3) (read-s16 stream msb-p))
         (values font-ascent font-descent max-w)))))
 
-(defun %parse-pcf (stream)
+(defun %parse-pcf (stream &key cell-width cell-height)
   (let ((magic (read-u32-le stream)))
     (unless (= magic #x70636601)
       (error "Not a PCF file (bad magic #x~8,'0X)" magic)))
@@ -160,17 +167,26 @@
               (progn (seek-to stream (fourth accel-entry))
                      (%parse-accelerators stream))
               (values nil nil nil))
-        ;; Determine cell dimensions:
+        ;; Determine cell dimensions. Two distinct widths are involved:
+        ;;   STORAGE-WIDTH -- the glyph bitmap raster width in the file (used for
+        ;;     the row stride). Taken from glyph 0's advance / accelerator max-w.
+        ;;   CELL-WIDTH    -- the terminal's narrow ("half") cell width. Equal to
+        ;;     STORAGE-WIDTH for monospace fonts, but smaller for dual-width fonts
+        ;;     like Unifont (storage 16, narrow cell 8). The caller may override.
+        ;; Glyphs whose advance exceeds CELL-WIDTH are double-wide and are
+        ;; extracted at 2*CELL-WIDTH so full-width glyphs (CJK) are preserved.
         ;; Height: prefer accelerators (fontAscent + fontDescent), fall back to glyph 0
-        ;; Width:  prefer glyph 0's :w (advance width), fall back to accelerators max-w
         ;; Ascent: prefer accelerators fontAscent, fall back to glyph 0
-        (let* ((cell-width  (or glyph0-width accel-max-w))
-               (cell-height (if (and accel-ascent accel-descent)
-                                (+ accel-ascent accel-descent)
-                                glyph0-height))
+        (let* ((storage-width (or glyph0-width accel-max-w))
+               (cell-width  (or cell-width storage-width))
+               (cell-height (or cell-height
+                                (if (and accel-ascent accel-descent)
+                                    (+ accel-ascent accel-descent)
+                                    glyph0-height)))
                (ascent      (or accel-ascent glyph0-ascent)))
           (seek-to stream (fourth bitmaps-entry))
-          (let ((bitmaps (%parse-bitmaps stream metrics cell-width cell-height ascent)))
+          (let ((bitmaps (%parse-bitmaps stream metrics storage-width cell-width
+                                         cell-height ascent)))
             (seek-to stream (fourth encodings-entry))
             (let ((encoding (%parse-encodings stream))
                   (wide-table nil))
@@ -221,11 +237,14 @@
            (h       (+ asc dsc)))
       (values metrics w h asc))))
 
-(defun %parse-bitmaps (stream metrics cell-width cell-height font-ascent)
+(defun %parse-bitmaps (stream metrics storage-width cell-width cell-height font-ascent)
   "Returns a simple-vector of pixel byte-arrays, one per glyph.
-   Each glyph's raw bitmap covers its ink bounding box (per-glyph :asc + :dsc rows).
-   The output pixel array is cell-width x cell-height, with the glyph's ink
-   positioned within the cell using its ascent relative to FONT-ASCENT."
+   Each glyph's raw bitmap covers its ink bounding box (per-glyph :asc + :dsc rows),
+   stored at STORAGE-WIDTH columns per row (the file's raster width, used for the
+   row stride). A glyph is positioned within the cell using its ascent relative
+   to FONT-ASCENT. The output array is CELL-WIDTH x CELL-HEIGHT for ordinary
+   glyphs, or 2*CELL-WIDTH x CELL-HEIGHT for double-wide glyphs (advance >
+   CELL-WIDTH), so full-width glyphs (e.g. CJK in a dual-width font) are kept."
   (let* ((format      (read-u32-le stream))
          (msb-p       (format-msb-p format))
          (msbit-p     (format-msbit-p format))
@@ -250,34 +269,42 @@
              (glyph-asc (getf m :asc))
              (glyph-dsc (getf m :dsc))
              (glyph-ink-h (max 0 (+ glyph-asc glyph-dsc)))
-             ;; Row stride based on cell-width (advance width)
-             (row-stride (%padded-row-stride cell-width pad-bytes))
+             (advance (getf m :w))
+             ;; Double-wide when the advance exceeds the narrow cell width.
+             (out-width (if (and advance (> advance cell-width))
+                            (* 2 cell-width)
+                            cell-width))
+             ;; Row stride is the file's storage raster width, independent of the
+             ;; (possibly narrower) terminal cell width.
+             (row-stride (%padded-row-stride storage-width pad-bytes))
              ;; Position ink within the cell: top row of ink = font-ascent - glyph-ascent
              (y-offset (- font-ascent glyph-asc)))
         (setf (aref bitmaps i)
               (%extract-bitmap-positioned raw (aref offsets i)
-                                          cell-width cell-height glyph-ink-h
-                                          y-offset row-stride msbit-p))))))
-
+                                          out-width cell-height
+                                          glyph-ink-h y-offset
+                                          row-stride msbit-p))))))
 (defun %padded-row-stride (width pad-bytes)
   "Byte width of one bitmap row, padded to PAD-BYTES boundary."
   (let ((raw-bytes (ceiling width 8)))
     (* pad-bytes (ceiling raw-bytes pad-bytes))))
 
-(defun %extract-bitmap-positioned (raw offset cell-width cell-height
+(defun %extract-bitmap-positioned (raw offset out-width cell-height
                                    ink-height y-offset row-stride msbit-p)
   "Unpack a glyph's 1-bit rows into a cell-sized pixel array.
+   OUT-WIDTH is the output cell width (narrow cell width, or 2x for double-wide).
+   ROW-STRIDE is the byte stride of one stored row (from the file's raster width).
    INK-HEIGHT is the number of rows in the raw bitmap data.
    Y-OFFSET is where the ink starts within the cell (from top).
-   Output is CELL-WIDTH x CELL-HEIGHT, row-major, 0=bg 255=fg."
-  (let ((pixels (make-array (* cell-width cell-height)
+   Output is OUT-WIDTH x CELL-HEIGHT, row-major, 0=bg 255=fg."
+  (let ((pixels (make-array (* out-width cell-height)
                             :element-type '(unsigned-byte 8)
                             :initial-element 0)))
     (dotimes (ink-row ink-height)
       (let ((dst-row (+ y-offset ink-row)))
         (when (and (>= dst-row 0) (< dst-row cell-height))
           (let ((row-base (+ offset (* ink-row row-stride))))
-            (dotimes (col cell-width)
+            (dotimes (col out-width)
               (let* ((byte-off (+ row-base (floor col 8)))
                      (byte-val (if (< byte-off (length raw))
                                    (aref raw byte-off)
@@ -287,7 +314,7 @@
                                    (mod col 8)))
                      (bit-val  (ldb (byte 1 bit-pos) byte-val)))
                 (when (= bit-val 1)
-                  (setf (aref pixels (+ (* dst-row cell-width) col)) 255))))))))
+                  (setf (aref pixels (+ (* dst-row out-width) col)) 255))))))))
     pixels))
 
 (defun %extract-bitmap (raw offset width height row-stride msbit-p)

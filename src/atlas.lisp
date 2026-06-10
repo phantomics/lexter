@@ -69,8 +69,19 @@
                              glyph-entries))))
                  (bitmap-font-encoding font)))
       (setf glyph-entries (nreverse glyph-entries))
-      ;; Choose atlas column count
-      (let ((atlas-cols (min 32 (max 2 (length glyph-entries)))))
+      ;; Choose atlas column count so the texture is roughly square and stays
+      ;; within GL_MAX_TEXTURE_SIZE. A fixed small column count makes a large
+      ;; font (e.g. Unifont, ~57k glyphs) produce a texture thousands of pixels
+      ;; tall, exceeding the GL limit and failing tex-image-2d with INVALID_VALUE.
+      ;; SLOT-COUNT counts column slots (double-wide glyphs occupy two).
+      (let* ((slot-count  (loop :for e :in glyph-entries :sum (if (third e) 2 1)))
+             (max-tex     (let ((m (gl:get-integer :max-texture-size)))
+                            (max 1024 (if (numberp m) m (elt m 0)))))
+             (max-cols    (max 2 (floor max-tex cell-w)))
+             ;; cols such that cols*cell-w ~= (slots/cols)*cell-h  =>  square
+             (square-cols (max 2 (ceiling (sqrt (/ (* (max 1 slot-count) (max 1 cell-h))
+                                                   (max 1 cell-w))))))
+             (atlas-cols  (max 2 (min max-cols (max 32 square-cols)))))
         ;; Pack: assign atlas column positions, skipping to next row for wide glyphs        ;; that would straddle a row boundary
         (let ((codepoint-table (make-hash-table :test 'eql))
               (wide-set nil)
@@ -95,10 +106,15 @@
           ;; Compute final atlas dimensions
           (let* ((atlas-rows (1+ cur-row))
                  (tex-w      (* atlas-cols cell-w))
-                 (tex-h      (* atlas-rows cell-h))
-                 (tex-data   (make-array (* tex-w tex-h)
-                                         :element-type '(unsigned-byte 8)
-                                         :initial-element 0)))
+                 (tex-h      (* atlas-rows cell-h)))
+            (when (or (> tex-w max-tex) (> tex-h max-tex))
+              (error "Glyph atlas ~dx~d exceeds GL_MAX_TEXTURE_SIZE (~d). ~
+                      Font has ~d glyphs (~d column slots) at ~dx~d cells -- too ~
+                      large to atlas in a single texture."
+                     tex-w tex-h max-tex (length glyph-entries) slot-count cell-w cell-h))
+            (let ((tex-data (make-array (* tex-w tex-h)
+                                        :element-type '(unsigned-byte 8)
+                                        :initial-element 0)))
             ;; Blit all glyphs into texture
             (maphash (lambda (atlas-pos pixels)
                        (let* ((gc  (mod atlas-pos atlas-cols))
@@ -132,9 +148,9 @@
                :cell-height     cell-h
                :cols            atlas-cols
                :rows            atlas-rows
-               :codepoint-table codepoint-table
-               :wide-set        wide-set
-               :position-pixels pos-pixels))))))))
+                :codepoint-table codepoint-table
+                :wide-set        wide-set
+                :position-pixels pos-pixels)))))))))
 
 ;;; --------------------------------------------------------------------------
 ;;; Cursor glyph generation

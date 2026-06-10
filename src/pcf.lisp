@@ -93,8 +93,12 @@
 
 (defun load-pcf (path)
   "Load an uncompressed PCF bitmap font file. Returns a PCF-FONT struct."
-  (with-open-file (stream path :element-type '(unsigned-byte 8))
-    (%parse-pcf stream)))
+  (if (search ".gz" path :test #'char-equal)
+      (flex:with-input-from-sequence
+          (stream (chipz:decompress nil 'chipz:gzip (alexandria:read-file-into-byte-vector path)))
+        (%parse-pcf stream))
+      (with-open-file (stream path :element-type '(unsigned-byte 8))
+        (%parse-pcf stream))))
 
 ;;;; Parser internals
 
@@ -134,9 +138,9 @@
       (error "Not a PCF file (bad magic #x~8,'0X)" magic)))
   (let* ((table-count (read-u32-le stream))
          (toc (loop :repeat table-count
-                    :collect (list (read-u32-le stream)   ; type
-                                   (read-u32-le stream)   ; format
-                                   (read-u32-le stream)   ; size (bytes)
+                    :collect (list (read-u32-le stream)    ; type
+                                   (read-u32-le stream)    ; format
+                                   (read-u32-le stream)    ; size (bytes)
                                    (read-u32-le stream)))) ; file offset
          (metrics-entry   (find +pcf-metrics+       toc :key #'first))
          (bitmaps-entry   (find +pcf-bitmaps+       toc :key #'first))
@@ -252,14 +256,13 @@
              (y-offset (- font-ascent glyph-asc)))
         (setf (aref bitmaps i)
               (%extract-bitmap-positioned raw (aref offsets i)
-                                          cell-width cell-height
-                                          glyph-ink-h y-offset
-                                          row-stride msbit-p))))))
+                                          cell-width cell-height glyph-ink-h
+                                          y-offset row-stride msbit-p))))))
 
 (defun %padded-row-stride (width pad-bytes)
   "Byte width of one bitmap row, padded to PAD-BYTES boundary."
   (let ((raw-bytes (ceiling width 8)))
-    (* (ceiling raw-bytes pad-bytes) pad-bytes)))
+    (* pad-bytes (ceiling raw-bytes pad-bytes))))
 
 (defun %extract-bitmap-positioned (raw offset cell-width cell-height
                                    ink-height y-offset row-stride msbit-p)

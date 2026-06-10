@@ -14,7 +14,8 @@
            #:bitmap-font-bitmaps
             #:bitmap-font-encoding
             #:bitmap-font-wide-glyphs
-            #:glyph-index))
+            #:glyph-index)
+  (:shadowing-import-from #:chipz #:gzip #:make-decompressing-stream))
 
 (defpackage #:lexter/atlas
   (:use #:cl #:lexter/pcf)

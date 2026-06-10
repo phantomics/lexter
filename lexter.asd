@@ -2,7 +2,7 @@
   :description "Lexter — Lisp-Emergent eXtensible Terminal Emulator Runtime"
   :license "BSD"
   :version "0.1.0"
-  :depends-on (#:cl-glfw3 #:cl-opengl #:cffi #:alexandria #:babel)
+  :depends-on ("cl-glfw3" "cl-opengl" "cffi" "alexandria" "babel" "chipz" "flexi-streams")
   :serial t
   :components ((:file "src/packages")
                (:file "src/pcf")

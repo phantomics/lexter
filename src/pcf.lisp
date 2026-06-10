@@ -139,6 +139,27 @@ For ordinary monospace fonts the overrides are unnecessary."
         (dotimes (i 3) (read-s16 stream msb-p))
         (values font-ascent font-descent max-w)))))
 
+(defparameter +cell-width-reference-codepoints+
+  '(#x4D #x6E #x78 #x6D #x69 #x30 #x6C #x41 #x61)  ; M n x m i 0 l A a
+  "Codepoints of representative narrow ASCII glyphs, used to auto-detect a
+   font's terminal cell width. Every terminal-style bitmap font draws these at
+   its narrow (\"half\") advance, so their advance reveals the cell width even
+   for dual-width fonts (e.g. Unifont) whose glyph 0 / max width is full-width.")
+
+(defun %detect-cell-width (metrics encoding storage-width)
+  "Determine the terminal narrow cell width from a representative ASCII glyph's
+   advance. Returns the minimum advance among the reference glyphs that are
+   present (no ASCII glyph is double-wide, so MIN avoids over-sizing), or
+   STORAGE-WIDTH if none are present (e.g. a CJK-only font)."
+  (let ((widths '()))
+    (dolist (cp +cell-width-reference-codepoints+)
+      (let ((gi (gethash cp encoding)))
+        (when (and gi (< gi (length metrics)))
+          (let ((w (getf (aref metrics gi) :w)))
+            (when (and w (plusp w))
+              (push w widths))))))
+    (if widths (reduce #'min widths) storage-width)))
+
 (defun %parse-pcf (stream &key cell-width cell-height)
   (let ((magic (read-u32-le stream)))
     (unless (= magic #x70636601)
@@ -167,28 +188,33 @@ For ordinary monospace fonts the overrides are unnecessary."
               (progn (seek-to stream (fourth accel-entry))
                      (%parse-accelerators stream))
               (values nil nil nil))
-        ;; Determine cell dimensions. Two distinct widths are involved:
-        ;;   STORAGE-WIDTH -- the glyph bitmap raster width in the file (used for
-        ;;     the row stride). Taken from glyph 0's advance / accelerator max-w.
-        ;;   CELL-WIDTH    -- the terminal's narrow ("half") cell width. Equal to
-        ;;     STORAGE-WIDTH for monospace fonts, but smaller for dual-width fonts
-        ;;     like Unifont (storage 16, narrow cell 8). The caller may override.
-        ;; Glyphs whose advance exceeds CELL-WIDTH are double-wide and are
-        ;; extracted at 2*CELL-WIDTH so full-width glyphs (CJK) are preserved.
-        ;; Height: prefer accelerators (fontAscent + fontDescent), fall back to glyph 0
-        ;; Ascent: prefer accelerators fontAscent, fall back to glyph 0
-        (let* ((storage-width (or glyph0-width accel-max-w))
-               (cell-width  (or cell-width storage-width))
-               (cell-height (or cell-height
-                                (if (and accel-ascent accel-descent)
-                                    (+ accel-ascent accel-descent)
-                                    glyph0-height)))
-               (ascent      (or accel-ascent glyph0-ascent)))
-          (seek-to stream (fourth bitmaps-entry))
-          (let ((bitmaps (%parse-bitmaps stream metrics storage-width cell-width
-                                         cell-height ascent)))
-            (seek-to stream (fourth encodings-entry))
-            (let ((encoding (%parse-encodings stream))
+        ;; Parse encodings up front so cell-width auto-detection can consult a
+        ;; representative ASCII glyph's advance.
+        (seek-to stream (fourth encodings-entry))
+        (let ((encoding (%parse-encodings stream)))
+          ;; Determine cell dimensions. Two distinct widths are involved:
+          ;;   STORAGE-WIDTH -- the glyph bitmap raster width in the file (used
+          ;;     for the row stride). Taken from glyph 0's advance / accel max-w.
+          ;;   CELL-WIDTH    -- the terminal's narrow ("half") cell width. Equal
+          ;;     to STORAGE-WIDTH for monospace fonts, but smaller for dual-width
+          ;;     fonts like Unifont (storage 16, narrow cell 8). It is, in order:
+          ;;     the caller's override, else the advance of a representative ASCII
+          ;;     glyph, else STORAGE-WIDTH.
+          ;; Glyphs whose advance exceeds CELL-WIDTH are double-wide and are
+          ;; extracted at 2*CELL-WIDTH so full-width glyphs (CJK) are preserved.
+          ;; Height: prefer accelerators (fontAscent + fontDescent), else glyph 0.
+          ;; Ascent: prefer accelerators fontAscent, else glyph 0.
+          (let* ((storage-width (or glyph0-width accel-max-w))
+                 (cell-width  (or cell-width
+                                  (%detect-cell-width metrics encoding storage-width)))
+                 (cell-height (or cell-height
+                                  (if (and accel-ascent accel-descent)
+                                      (+ accel-ascent accel-descent)
+                                      glyph0-height)))
+                 (ascent      (or accel-ascent glyph0-ascent)))
+            (seek-to stream (fourth bitmaps-entry))
+            (let ((bitmaps (%parse-bitmaps stream metrics storage-width cell-width
+                                           cell-height ascent))
                   (wide-table nil))
               ;; Detect wide glyphs: any glyph whose :w > cell-width
               (dotimes (i (length metrics))

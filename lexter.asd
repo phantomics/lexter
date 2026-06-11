@@ -103,4 +103,5 @@
   :depends-on ("lexter/unix" "origin" "alexandria")
   :serial t
   :components ((:file "src/packages-origin")
-               (:file "src/origin")))
+               (:file "src/origin")
+               (:file "src/origin-gui")))

@@ -405,8 +405,12 @@ For ordinary monospace fonts the overrides are unnecessary."
    This is useful for fonts like zpix where the bounding box is larger
    than the actual cell size.  Glyphs with DWIDTH > cell-width are
    treated as double-wide and get 2*cell-width pixel arrays."
-  (with-open-file (stream path :direction :input)
-    (%parse-bdf stream :cell-width cell-width :cell-height cell-height)))
+  (if (search ".gz" path :test #'char-equal)
+      (flex:with-input-from-sequence
+          (stream (chipz:decompress nil 'chipz:gzip (alexandria:read-file-into-byte-vector path)))
+        (%parse-bdf stream :cell-width cell-width :cell-height cell-height))
+      (with-open-file (stream path :direction :input)
+        (%parse-bdf stream :cell-width cell-width :cell-height cell-height))))
 
 (defun %bdf-parse-line (line)
   "Parse a BDF line into (keyword . rest-of-line) or NIL for empty/comment."
@@ -436,7 +440,7 @@ For ordinary monospace fonts the overrides are unnecessary."
         (font-y-offset nil)
         (glyph-list '())
         (encoding-table (make-hash-table :test 'eql))
-        (wide-table nil))  ; hash table of wide glyph indices, created on demand
+        (wide-table nil)) ; hash table of wide glyph indices, created on demand
     ;; First pass: read header to get FONTBOUNDINGBOX and FONT_ASCENT
     (loop :for line = (read-line stream nil nil)
           :while line

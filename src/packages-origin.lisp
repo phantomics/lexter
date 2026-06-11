@@ -4,6 +4,9 @@
 ;;; ---------------------------------------------------------------------------
 
 (defpackage #:lexter/origin
-  (:use #:cl #:lexter/pcf #:lexter/atlas #:lexter/grid #:lexter/renderer #:alexandria #:origin)
-  (:export ;; Terminal definition
-           #:define-terminal))
+  (:use #:cl #:alexandria)
+  (:export ;; Terminal definition (Approach B -- cooperative main-thread)
+           #:define-terminal
+           ;; Main-thread dispatcher
+           #:run-main-loop
+           #:stop-main-loop))

@@ -64,6 +64,10 @@
   ;; --- Configuration (consumed by gui-initialize) ---
   (command    nil)
   (args       nil)
+  ;; FONTS: a pre-loaded fallback chain (list of bitmap-font structs). When
+  ;; non-NIL it takes precedence over FONT-PATH. All fonts in the chain must
+  ;; share cell dimensions (build-atlas enforces this).
+  (fonts      nil :type list)
   (font-path  "../terminus-18n.pcf")
   (title      "lexter terminal" :type string))
 
@@ -349,6 +353,7 @@
 (defun make-terminal (command &key
                                 (args nil)
                                 (font-path "../terminus-18n.pcf")
+                                fonts
                                 (cols 80)
                                 (rows 24)
                                 (pixel-scale nil)
@@ -359,10 +364,15 @@ The window, OpenGL context, renderer, and PTY are NOT created yet -- call
 GUI-INITIALIZE on the result (on the main thread, after GLFW has been
 initialized), then drive it with GUI-TICK / GUI-DESTROY. This is the
 constructor half of the Approach B iteration API; RUN-TERMINAL is the
-standalone convenience wrapper around it."
+standalone convenience wrapper around it.
+
+FONTS, if given, is a pre-loaded font fallback chain (list of bitmap-font
+structs) and takes precedence over FONT-PATH; all fonts must share cell
+dimensions. Otherwise FONT-PATH is loaded (PCF, or BDF when it ends in .bdf)."
   (make-unix-terminal :command command
                       :args args
                       :font-path font-path
+                      :fonts fonts
                       :cols cols
                       :rows rows
                       :pixel-scale (or pixel-scale 1)
@@ -379,13 +389,21 @@ the new context current, so the atlas/renderer GL objects belong to it."
          (rows      (unix-terminal-rows term))
          (scale     (unix-terminal-pixel-scale term)))
     (format t "~&=== lexter terminal v0.6 ===~%")
-    (format t "~&Loading font ~a ...~%" font-path)
-    (let* ((font   (load-pcf font-path))
+    ;; Use a provided font fallback chain, or load one from FONT-PATH (BDF when
+    ;; the path ends in .bdf, otherwise PCF).
+    (let* ((font-list (or (unix-terminal-fonts term)
+                          (progn
+                            (format t "~&Loading font ~a ...~%" font-path)
+                            (list (if (search ".bdf" font-path :test #'char-equal)
+                                      (load-bdf font-path)
+                                      (load-pcf font-path))))))
+           (font   (first font-list))
            (cell-w (bitmap-font-cell-width font))
            (cell-h (bitmap-font-cell-height font))
            (win-w  (* cols cell-w scale))
            (win-h  (* rows cell-h scale)))
-      (format t "~&Cell ~dx~d, terminal ~dx~d~%" cell-w cell-h cols rows)
+      (format t "~&Cell ~dx~d, terminal ~dx~d (~d font~:p)~%"
+              cell-w cell-h cols rows (length font-list))
       (format t "~&Pixel scale: ~dx, window ~dx~d~%" scale win-w win-h)
       ;; Create the window (this makes its GL context current).
       (let ((win (glfw:create-window
@@ -397,8 +415,9 @@ the new context current, so the atlas/renderer GL objects belong to it."
                   :opengl-profile :opengl-core-profile
                   :opengl-forward-compat t)))
         (gl:viewport 0 0 win-w win-h)
-        ;; Build atlas with cursor glyphs, then the renderer (in this context).
-        (let ((atlas (build-atlas (list font))))
+        ;; Build atlas over the whole fallback chain, then the renderer (in this
+        ;; context).
+        (let ((atlas (build-atlas font-list)))
           (add-cursor-glyphs atlas)
           (let ((screen   (make-screen :cols cols :rows rows))
                 (display  (make-display-grid :cols cols :rows rows))
@@ -410,6 +429,7 @@ the new context current, so the atlas/renderer GL objects belong to it."
             (setup-default-swatches display)
             ;; Populate the persistent terminal object.
             (setf (unix-terminal-window   term) win
+                  (unix-terminal-fonts    term) font-list
                   (unix-terminal-font     term) font
                   (unix-terminal-cell-w   term) cell-w
                   (unix-terminal-cell-h   term) cell-h
@@ -481,6 +501,7 @@ the new context current, so the atlas/renderer GL objects belong to it."
 (defun run-terminal (command &key
                                (args nil)
                                (font-path "../terminus-18n.pcf")
+                               fonts
                                (cols 80)
                                (rows 24)
                                (pixel-scale nil)
@@ -490,7 +511,12 @@ the new context current, so the atlas/renderer GL objects belong to it."
 
    COMMAND: program to run (e.g. \"/bin/bash\")
    ARGS: list of arguments to pass to command
-   FONT-PATH: path to PCF font file
+   FONT-PATH: path to a PCF (or .bdf) font file, used when FONTS is NIL
+   FONTS: a pre-loaded font fallback chain (list of bitmap-font structs);
+          takes precedence over FONT-PATH. All fonts must share cell
+          dimensions. Example:
+          (run-terminal \"/bin/bash\"
+            :fonts (list (lexter/pcf:load-pcf \"unifont.pcf\")))
    COLS, ROWS: terminal dimensions in characters
    PIXEL-SCALE: integer scaling factor (nil = 1x)
    TITLE: window title
@@ -503,7 +529,7 @@ the new context current, so the atlas/renderer GL objects belong to it."
    Origin's), use MAKE-TERMINAL + GUI-INITIALIZE / GUI-TICK / GUI-DESTROY
    directly instead."
   (glfw:initialize)
-  (let ((term (make-terminal command :args args :font-path font-path
+  (let ((term (make-terminal command :args args :font-path font-path :fonts fonts
                                      :cols cols :rows rows
                                      :pixel-scale pixel-scale :title title)))
     (unwind-protect

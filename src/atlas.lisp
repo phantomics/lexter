@@ -81,7 +81,9 @@
              ;; cols such that cols*cell-w ~= (slots/cols)*cell-h  =>  square
              (square-cols (max 2 (ceiling (sqrt (/ (* (max 1 slot-count) (max 1 cell-h))
                                                    (max 1 cell-w))))))
-             (atlas-cols  (max 2 (min max-cols (max 32 square-cols)))))
+             (atlas-cols  (max 2 (min max-cols (max 32 square-cols))))
+             ;; (atlas-cols (min 32 (max 2 (length glyph-entries))))
+             )
         ;; Pack: assign atlas column positions, skipping to next row for wide glyphs        ;; that would straddle a row boundary
         (let ((codepoint-table (make-hash-table :test 'eql))
               (wide-set nil)

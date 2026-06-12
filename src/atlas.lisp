@@ -140,6 +140,7 @@
               (gl:tex-parameter :texture-2d :texture-mag-filter :nearest)
               (gl:tex-parameter :texture-2d :texture-wrap-s :clamp-to-edge)
               (gl:tex-parameter :texture-2d :texture-wrap-t :clamp-to-edge)
+              (gl:pixel-store :unpack-alignment 1)
               (cffi:with-pointer-to-vector-data (ptr tex-data)
                 (gl:tex-image-2d :texture-2d 0 :r8 tex-w tex-h 0
                                  :red :unsigned-byte ptr))
@@ -260,6 +261,7 @@
                pos-pixels)
       ;; Re-upload texture
       (gl:bind-texture :texture-2d (atlas-texture-id atlas))
+      (gl:pixel-store :unpack-alignment 1) 
       (cffi:with-pointer-to-vector-data (ptr tex-data)
         (gl:tex-image-2d :texture-2d 0 :r8 tex-w tex-h 0 :red :unsigned-byte ptr))
       (gl:bind-texture :texture-2d 0)

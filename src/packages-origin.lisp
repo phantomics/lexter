@@ -9,4 +9,10 @@
            #:define-terminal
            ;; Main-thread dispatcher
            #:run-main-loop
-           #:stop-main-loop))
+           #:stop-main-loop
+           ;; Image launcher (multi-image orbitals)
+           #:define-image
+           #:image-slynk-port
+           #:image-log-file
+           #:generate-orbital-config
+           #:*image-log-directory*))

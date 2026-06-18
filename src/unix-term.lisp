@@ -69,7 +69,10 @@
   ;; share cell dimensions (build-atlas enforces this).
   (fonts      nil :type list)
   (font-path  "../terminus-18n.pcf")
-  (title      "lexter terminal" :type string))
+  (title      "lexter terminal" :type string)
+  ;; When NIL, the GLFW window is created hidden (useful for offscreen capture
+  ;; / headless-ish testing).
+  (visible    t   :type boolean))
 
 ;;; --------------------------------------------------------------------------
 ;;; Keyboard input handling
@@ -312,6 +315,9 @@
                ;; 6. Render frame
                (render-frame (unix-terminal-renderer term)
                              (unix-terminal-display term))
+               ;; 6b. Present offscreen buffer to the window (no-op unless the
+               ;; offscreen render target is enabled).
+               (present-offscreen (unix-terminal-renderer term))
                ;; 7. Swap buffers
                (glfw:swap-buffers window)))))))
     ;; Liveness: alive while running, has a window, and not asked to close.
@@ -357,7 +363,8 @@
                                 (cols 80)
                                 (rows 24)
                                 (pixel-scale nil)
-                                (title "lexter terminal"))
+                                (title "lexter terminal")
+                                (visible t))
   "Create an uninitialized UNIX-TERMINAL with the given configuration.
 
 The window, OpenGL context, renderer, and PTY are NOT created yet -- call
@@ -376,7 +383,8 @@ dimensions. Otherwise FONT-PATH is loaded (PCF, or BDF when it ends in .bdf)."
                       :cols cols
                       :rows rows
                       :pixel-scale (or pixel-scale 1)
-                      :title title))
+                      :title title
+                      :visible visible))
 
 (defmethod gui-initialize ((term unix-terminal))
   "Create TERM's GLFW window, OpenGL context, renderer, VT handler, and PTY.
@@ -410,6 +418,7 @@ the new context current, so the atlas/renderer GL objects belong to it."
                   :title (unix-terminal-title term)
                   :width win-w :height win-h
                   :resizable t
+                  :visible (unix-terminal-visible term)
                   :context-version-major 3
                   :context-version-minor 3
                   :opengl-profile :opengl-core-profile
@@ -506,6 +515,7 @@ the new context current, so the atlas/renderer GL objects belong to it."
                                (rows 24)
                                (pixel-scale nil)
                                (title "lexter terminal")
+                               (visible t)
                                (stop-flag nil))
   "Run a terminal emulator with COMMAND as a standalone, blocking call.
 
@@ -531,13 +541,43 @@ the new context current, so the atlas/renderer GL objects belong to it."
   (glfw:initialize)
   (let ((term (make-terminal command :args args :font-path font-path :fonts fonts
                                      :cols cols :rows rows
-                                     :pixel-scale pixel-scale :title title)))
+                                     :pixel-scale pixel-scale :title title
+                                     :visible visible)))
     (unwind-protect
          (progn
            (gui-initialize term)
            (run-gui-loop (list term) :stop-flag stop-flag))
       (gui-destroy term)
       (glfw:terminate))))
+
+;;; --------------------------------------------------------------------------
+;;; Screenshot capture (testing)
+;;; --------------------------------------------------------------------------
+
+(defun terminal-capture (term)
+  "Render TERM's current screen into the offscreen buffer and return it as an
+   (H W 3) (unsigned-byte 8) array, row 0 = top of the image.
+
+   Forces a full flush + render regardless of dirty state, so the result is
+   deterministic and does not depend on the window being visible -- ideal for
+   tests (create the terminal with :VISIBLE NIL). TERM must already be
+   GUI-INITIALIZEd; its GL context is made current here."
+  (let ((window   (unix-terminal-window term))
+        (renderer (unix-terminal-renderer term))
+        (screen   (vt-handler-screen (unix-terminal-vt-handler term))))
+    (when window (glfw:make-context-current window))
+    (enable-offscreen renderer)
+    ;; Force a full repaint of the active screen.
+    (mark-screen-dirty screen)
+    (flush-to-display screen (unix-terminal-display term)
+                      :atlas (unix-terminal-atlas term)
+                      :space-glyph (screen-blank-glyph screen)
+                      :cursor-blink-on (unix-terminal-cursor-blink-on term))
+    (upload-palette renderer
+                    (screen-palette screen)
+                    (screen-palette-generation screen))
+    (render-frame renderer (unix-terminal-display term))
+    (capture-pixels renderer)))
 
 ;;; --------------------------------------------------------------------------
 ;;; Helpers

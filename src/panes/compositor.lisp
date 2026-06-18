@@ -52,7 +52,9 @@
   (fonts        nil :type list)
   (font-path    "../terminus-18n.pcf")
   (title        "lexter panes" :type string)
-  (prefix-key   :f12))
+  (prefix-key   :f12)
+  ;; When NIL, the GLFW window is created hidden (offscreen capture / testing).
+  (visible      t   :type boolean))
 
 (defun active-workspace (comp)
   "Return the currently active workspace."
@@ -222,6 +224,9 @@
                ;; 6. Render
                (lexter/renderer:render-frame (compositor-renderer comp)
                                              (compositor-display comp))
+               ;; 6b. Present offscreen buffer to the window (no-op unless
+               ;; offscreen rendering is enabled).
+               (lexter/renderer:present-offscreen (compositor-renderer comp))
                ;; 7. Swap buffers
                (glfw:swap-buffers window)))))))
     ;; Liveness: alive while running, has a window, and not asked to close.
@@ -240,7 +245,8 @@
                                    (rows 24)
                                    (pixel-scale nil)
                                    (title "lexter panes")
-                                   (prefix-key :f12))
+                                   (prefix-key :f12)
+                                   (visible t))
   "Create an uninitialized COMPOSITOR for the given WORKSPACES.
 
 The window, OpenGL context, and renderer are NOT created yet -- call
@@ -266,7 +272,8 @@ PREFIX-KEY: key that activates meta-mode (default :f12)"
                    :fonts fonts
                    :font-path font-path
                    :title title
-                   :prefix-key prefix-key))
+                   :prefix-key prefix-key
+                   :visible visible))
 
 (defmethod gui-initialize ((comp compositor))
   "Create COMP's GLFW window, OpenGL context, renderer, and initialize all panes.
@@ -299,6 +306,7 @@ new context current, so the atlas/renderer GL objects belong to it."
                 :title (compositor-title comp)
                 :width win-w :height win-h
                 :resizable t
+                :visible (compositor-visible comp)
                 :context-version-major 3
                 :context-version-minor 3
                 :opengl-profile :opengl-core-profile
@@ -391,6 +399,7 @@ new context current, so the atlas/renderer GL objects belong to it."
                                 (pixel-scale nil)
                                 (title "lexter panes")
                                 (prefix-key :f12)
+                                (visible t)
                                 (stop-flag nil))
   "Run a paned terminal with the given WORKSPACES as a standalone, blocking call.
 
@@ -414,13 +423,43 @@ new context current, so the atlas/renderer GL objects belong to it."
                                      :font-path font-path :fonts fonts
                                      :cols cols :rows rows
                                      :pixel-scale pixel-scale
-                                     :title title :prefix-key prefix-key)))
+                                     :title title :prefix-key prefix-key
+                                     :visible visible)))
     (unwind-protect
          (progn
            (gui-initialize comp)
            (run-gui-loop (list comp) :stop-flag stop-flag))
       (gui-destroy comp)
       (glfw:terminate))))
+
+;;; --------------------------------------------------------------------------
+;;; Screenshot capture (testing)
+;;; --------------------------------------------------------------------------
+
+(defun compositor-capture (comp)
+  "Render COMP's active workspace into the offscreen buffer and return it as an
+   (H W 3) (unsigned-byte 8) array, row 0 = top of the image.
+
+   Forces a full flush + render regardless of dirty state, so the result is
+   deterministic and does not depend on the window being visible (create the
+   compositor with :VISIBLE NIL for tests). COMP must already be GUI-INITIALIZEd;
+   its GL context is made current here."
+  (let ((window   (compositor-window comp))
+        (renderer (compositor-renderer comp))
+        (ws       (active-workspace comp)))
+    (when window (glfw:make-context-current window))
+    (lexter/renderer:enable-offscreen renderer)
+    (when ws
+      (flush-workspace ws (compositor-display comp))
+      (let ((pane (focused-pane ws)))
+        (when pane
+          (multiple-value-bind (palette gen slot) (pane-palette pane)
+            (when palette
+              (let ((s (or slot 0)))
+                (lexter/renderer:upload-palette renderer palette gen s)
+                (lexter/renderer:set-active-palette-slot renderer s)))))))
+    (lexter/renderer:render-frame renderer (compositor-display comp))
+    (lexter/renderer:capture-pixels renderer)))
 
 ;;; --------------------------------------------------------------------------
 ;;; Helper functions (duplicated from unix-term for independence)

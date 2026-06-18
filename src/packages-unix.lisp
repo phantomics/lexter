@@ -50,8 +50,10 @@
         #:lexter/gui)
   (:export #:run-terminal
            #:make-terminal
+           #:terminal-capture
            #:unix-terminal
            #:unix-terminal-window
+           #:unix-terminal-renderer
            #:terminal-screen
            #:terminal-pty
            ;; GUI protocol (re-exported for convenience)

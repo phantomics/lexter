@@ -93,7 +93,14 @@
            #:set-pixel-scale
            #:pixel-scale
            #:scaled-cell-size
-           #:destroy-renderer))
+           #:destroy-renderer
+           ;; Offscreen render target (post-processing + screenshots)
+           #:enable-offscreen
+           #:disable-offscreen
+           #:offscreen-enabled-p
+           #:resize-offscreen
+           #:present-offscreen
+           #:capture-pixels))
 
 ;;; ---------------------------------------------------------------------------
 ;;; Terminal Model (Phase 2)

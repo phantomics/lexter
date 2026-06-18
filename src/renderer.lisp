@@ -37,6 +37,15 @@
   ;; Uniform locations for u_palette_slot
   (simple-palette-slot-loc -1 :type fixnum)
   (layered-palette-slot-loc -1 :type fixnum)
+  ;; --- Offscreen render target (opt-in, for post-processing + screenshots) ---
+  ;; When OFFSCREEN-ENABLED, render-frame draws into OFFSCREEN-FBO (an RGBA8
+  ;; color texture) instead of the default framebuffer; present-offscreen then
+  ;; blits it to the window, and capture-pixels can read it back.
+  (offscreen-enabled nil :type boolean)
+  (offscreen-fbo nil)
+  (offscreen-tex nil)
+  (offscreen-w 0 :type fixnum)
+  (offscreen-h 0 :type fixnum)
   atlas
   (win-w 640 :type fixnum)
   (win-h 480 :type fixnum)
@@ -308,11 +317,116 @@
                              :pixel-scale  pixel-scale))))))
 
 ;;; --------------------------------------------------------------------------
+;;; Offscreen render target (opt-in: post-processing + screenshots)
+;;; --------------------------------------------------------------------------
+
+(defun %ensure-offscreen (rs w h)
+  "Allocate or resize the offscreen FBO + RGBA8 color texture to W x H.
+   A GL context must be current. Returns the FBO id."
+  (let ((tex (render-state-offscreen-tex rs))
+        (fbo (render-state-offscreen-fbo rs)))
+    ;; (Re)allocate the color texture when missing or size changed.
+    (unless (and tex (= (render-state-offscreen-w rs) w)
+                 (= (render-state-offscreen-h rs) h))
+      (unless tex
+        (setf tex (first (gl:gen-textures 1))
+              (render-state-offscreen-tex rs) tex))
+      (gl:bind-texture :texture-2d tex)
+      (gl:tex-parameter :texture-2d :texture-min-filter :nearest)
+      (gl:tex-parameter :texture-2d :texture-mag-filter :nearest)
+      (gl:tex-parameter :texture-2d :texture-wrap-s :clamp-to-edge)
+      (gl:tex-parameter :texture-2d :texture-wrap-t :clamp-to-edge)
+      (gl:tex-image-2d :texture-2d 0 :rgba8 w h 0 :rgba :unsigned-byte
+                       (cffi:null-pointer))
+      (gl:bind-texture :texture-2d 0)
+      (setf (render-state-offscreen-w rs) w
+            (render-state-offscreen-h rs) h))
+    ;; Create the FBO once and attach the (current) texture.
+    (unless fbo
+      (setf fbo (first (gl:gen-framebuffers 1))
+            (render-state-offscreen-fbo rs) fbo))
+    (gl:bind-framebuffer :framebuffer fbo)
+    (gl:framebuffer-texture-2d :framebuffer :color-attachment0 :texture-2d tex 0)
+    (let ((status (gl:check-framebuffer-status :framebuffer)))
+      (unless (member status '(:framebuffer-complete :framebuffer-complete-oes))
+        (gl:bind-framebuffer :framebuffer 0)
+        (error "Offscreen framebuffer incomplete: ~a" status)))
+    (gl:bind-framebuffer :framebuffer 0)
+    fbo))
+
+(defun enable-offscreen (rs)
+  "Turn on offscreen rendering. Subsequent RENDER-FRAME calls draw into an FBO
+   sized to the current window; PRESENT-OFFSCREEN blits it to the window and
+   CAPTURE-PIXELS can read it back."
+  (%ensure-offscreen rs (render-state-win-w rs) (render-state-win-h rs))
+  (setf (render-state-offscreen-enabled rs) t))
+
+(defun disable-offscreen (rs)
+  "Turn off offscreen rendering (RENDER-FRAME draws to the window directly)."
+  (setf (render-state-offscreen-enabled rs) nil))
+
+(defun offscreen-enabled-p (rs)
+  (render-state-offscreen-enabled rs))
+
+(defun resize-offscreen (rs w h)
+  "Resize the offscreen target to W x H if it exists."
+  (when (render-state-offscreen-fbo rs)
+    (%ensure-offscreen rs w h)))
+
+(defun present-offscreen (rs)
+  "Blit the offscreen color buffer to the default framebuffer so the window
+   shows the rendered frame. No-op when offscreen rendering is disabled.
+   (Phase 2 will replace this 1:1 blit with the post-processing effect chain.)"
+  (when (and (render-state-offscreen-enabled rs)
+             (render-state-offscreen-fbo rs))
+    (let ((w (render-state-offscreen-w rs))
+          (h (render-state-offscreen-h rs)))
+      (gl:bind-framebuffer :read-framebuffer (render-state-offscreen-fbo rs))
+      (gl:bind-framebuffer :draw-framebuffer 0)
+      (%gl:blit-framebuffer 0 0 w h 0 0 w h :color-buffer-bit :nearest)
+      (gl:bind-framebuffer :framebuffer 0))))
+
+(defun capture-pixels (rs)
+  "Read the offscreen color buffer back as an (H W 3) (unsigned-byte 8) array,
+   row 0 = top of the image (GL's bottom-up order is flipped here). Offscreen
+   rendering must be enabled and a frame must have been rendered into it."
+  (unless (and (render-state-offscreen-enabled rs)
+               (render-state-offscreen-fbo rs))
+    (error "capture-pixels: offscreen rendering is not enabled"))
+  (let* ((w (render-state-offscreen-w rs))
+         (h (render-state-offscreen-h rs)))
+    (gl:bind-framebuffer :read-framebuffer (render-state-offscreen-fbo rs))
+    (gl:read-buffer :color-attachment0)
+    ;; Tightly-packed rows: avoid the default 4-byte pack alignment skewing
+    ;; rows whose byte width (w*3) is not a multiple of 4.
+    (gl:pixel-store :pack-alignment 1)
+    (let ((flat (gl:read-pixels 0 0 w h :rgb :unsigned-byte))
+          (out  (make-array (list h w 3) :element-type '(unsigned-byte 8))))
+      (gl:bind-framebuffer :read-framebuffer 0)
+      ;; FLAT is bottom-up row-major (W*3 per row); flip to top-down (H W 3).
+      (dotimes (row h)
+        (let ((src-row (* (- h 1 row) w 3)))
+          (dotimes (col w)
+            (let ((src (+ src-row (* col 3))))
+              (setf (aref out row col 0) (aref flat src)
+                    (aref out row col 1) (aref flat (+ src 1))
+                    (aref out row col 2) (aref flat (+ src 2)))))))
+      out)))
+
+;;; --------------------------------------------------------------------------
 ;;; Per-frame render
 ;;; --------------------------------------------------------------------------
 
 (defun render-frame (rs grid)
-  "Render one frame.  Call after making the GL context current."
+  "Render one frame.  Call after making the GL context current.
+   When offscreen rendering is enabled, draws into the offscreen FBO; otherwise
+   draws to the default framebuffer."
+  (if (render-state-offscreen-enabled rs)
+      (progn
+        (%ensure-offscreen rs (render-state-win-w rs) (render-state-win-h rs))
+        (gl:bind-framebuffer :framebuffer (render-state-offscreen-fbo rs))
+        (gl:viewport 0 0 (render-state-offscreen-w rs) (render-state-offscreen-h rs)))
+      (gl:bind-framebuffer :framebuffer 0))
   (gl:clear-color 0.0 0.0 0.0 1.0)
   (gl:clear :color-buffer-bit)
   ;; Upload swatch table to GPU if changed
@@ -388,6 +502,8 @@
   (setf (render-state-win-w rs) win-w
         (render-state-win-h rs) win-h)
   (gl:viewport 0 0 win-w win-h)
+  ;; Keep the offscreen target matched to the window size.
+  (resize-offscreen rs win-w win-h)
   (let ((atlas (render-state-atlas rs))
         (scale (render-state-pixel-scale rs)))
     (%set-uniforms (render-state-simple-prog rs)  atlas win-w win-h scale)
@@ -430,4 +546,11 @@
                            (render-state-palette-ubo rs)))
   (gl:delete-textures (list (render-state-swatch-texture rs)))
   (gl:delete-vertex-arrays (list (render-state-simple-vao  rs)
-                                 (render-state-layered-vao rs))))
+                                 (render-state-layered-vao rs)))
+  ;; Offscreen render target, if allocated.
+  (when (render-state-offscreen-fbo rs)
+    (gl:delete-framebuffers (list (render-state-offscreen-fbo rs)))
+    (setf (render-state-offscreen-fbo rs) nil))
+  (when (render-state-offscreen-tex rs)
+    (gl:delete-textures (list (render-state-offscreen-tex rs)))
+    (setf (render-state-offscreen-tex rs) nil)))

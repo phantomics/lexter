@@ -93,8 +93,10 @@
    ;; Compositor entry point
    #:run-paned-terminal
    #:make-paned-compositor
+   #:compositor-capture
    #:compositor
    #:compositor-window
+   #:compositor-renderer
    #:*prefix-key*
    ;; GUI protocol (re-exported for convenience)
    #:gui-initialize

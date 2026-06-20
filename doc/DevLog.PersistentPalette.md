@@ -253,3 +253,102 @@ referencing cells without any swatch or cell rebuild.
   foreground/background/cursor," which interact with how the default
   swatch (index 0) maps onto palette entries. Defining that mapping
   precisely is a small design task to settle when the OSC handlers land.
+
+
+---
+
+
+# Appendix: OSC Palette Control (closing the deferred OSC item)
+
+**Date:** 2026-06-06
+
+This appendix documents the follow-up that wired the OSC palette-control
+sequences to the persistent-palette API. It does not revise the material
+above; it records the work that resolved the "VT handler OSC parsing"
+item listed in *Outstanding Work*.
+
+## Trigger
+
+The terminal roguelike *zangband* rendered with completely wrong colors:
+what should be white showed as ANSI dark red, gray as dark green, and a
+pink/violet color as bright green. The mapping was systematic -- each of
+the game's colors appeared as the *default xterm color for that color's
+index*.
+
+## Diagnosis
+
+The PTY child runs with `TERM=xterm-256color` (set in `pty.lisp`), whose
+terminfo advertises `ccc`/`initc` (can-change-color). Programs that
+install a custom palette -- as the Angband family does via curses
+`init_color` -- therefore cause ncurses to emit the `initc` capability,
+i.e. **OSC 4** sequences (`ESC ] 4 ; index ; rgb:RR/GG/BB ESC \`). The
+app then draws glyphs by palette index, trusting the terminal to honor
+the redefined colors.
+
+Lexter's `handle-osc` implemented only OSC 0/2 (window title); OSC 4 (and
+104/10/11/12) fell through to the `:unknown-osc` callback and were
+dropped. So the palette stayed at the xterm defaults while the app used
+its own index meaning -- e.g. the app's index 1 ("white") rendered as
+xterm palette[1] (dark red), index 2 ("slate") as xterm green, and so on,
+exactly matching the report.
+
+This was precisely the gap the original log deferred: the screen-owned
+palette and its mutators (`set-palette-entry-rgb8`, `reset-palette`,
+`make-default-palette`) existed; they were simply never connected to OSC.
+
+## Implementation
+
+All in `src/vt-handler.lisp`:
+
+- **Color-spec parser** `%parse-osc-color`, accepting the X color formats
+  ncurses/xterm emit: `rgb:R/G/B` with **1-4 hex digits per channel**
+  (scaled to 8-bit; xterm's `initc` uses 2-digit, others 4-digit), and
+  `#RGB` / `#RRGGBB` / `#RRRRGGGGBBBB`. A query (`?`) returns NIL.
+- `handle-osc` was restructured to parse the leading `Ps` number even when
+  there is no `;` (so a bare `OSC 104` -- reset-all -- is recognized),
+  then dispatch:
+  - **OSC 4** -> `set-palette-entry-rgb8` for each `index;spec` pair.
+  - **OSC 104** -> `reset-palette` (no args) or reset the listed indices
+    to their `make-default-palette` values.
+  - **OSC 10 / 11** -> set the default foreground / background. Lexter has
+    no separate default-fg/bg color, so these map (approximately) to
+    palette index 7 and 0 -- the SGR 39/49 defaults.
+  - **OSC 12** (cursor color) -> parsed but unsupported; the cursor is
+    drawn by reverse-video, so there is no cursor-color slot to set.
+
+### Shared across both screen buffers
+
+Each screen owns its own palette (the design above), and a full-screen
+program like zangband sets OSC 4 *after* switching to the alternate
+screen. To make the behavior order-independent and to match real
+terminals' single shared palette, every OSC palette change is applied to
+**all** of the handler's buffers (`%handler-screens` returns the distinct
+active / primary / alternate screens). `set-palette-entry*` /
+`reset-palette` already bump `palette-generation`, so the renderer
+re-uploads the affected buffer's UBO on the next frame automatically.
+
+## Verification
+
+Headless self-checks: `%parse-osc-color` returns `(255 128 0)` for
+`rgb:ff/80/00`, `rgb:ffff/8000/0000`, and `#ff8000`, and NIL for `?`.
+Feeding OSC 4/104/10 through `process-output` confirms: OSC 4 sets the
+index on both the alternate and primary buffers; `OSC 104;n` resets index
+`n` to its xterm default; bare `OSC 104` resets the whole palette; and
+`OSC 10` retargets palette index 7. Live confirmation in zangband (correct
+colors, restored on exit) is the user's.
+
+## Remaining nuance
+
+The OSC 10/11 default-fg/bg mapping onto palette indices 7/0 is an
+approximation: an app that changes the default foreground *and* uses the
+named color 7 explicitly would see both move together. A faithful model
+would give the screen separate default-fg/bg colors consulted by SGR
+39/49; that remains a small future refinement. OSC color *queries* (apps
+asking the terminal to report a color) are ignored, as Lexter has no OSC
+reply channel wired up.
+
+## Files
+
+| File | Action | Description |
+|------|--------|-------------|
+| `src/vt-handler.lisp` | Modified | OSC color-spec parser; split/helpers; `handle-osc` rewritten to dispatch OSC 4/104/10/11/12 to the per-screen palette mutators across all buffers |

@@ -760,22 +760,116 @@
 ;;; OSC sequence handlers
 ;;; --------------------------------------------------------------------------
 
+;;; --- OSC palette control (OSC 4/104 and OSC 10/11/12) ------------------------
+
+(defun %split-on-char (string char)
+  "Split STRING into a list of substrings on CHAR (no empty-trimming)."
+  (loop :with start = 0
+        :for pos = (position char string :start start)
+        :collect (subseq string start (or pos (length string)))
+        :while pos
+        :do (setf start (1+ pos))))
+
+(defun %scale-hex-component (str)
+  "Parse a 1-4 digit hex STR and scale it to an 8-bit value (0-255), or NIL."
+  (let ((digits (length str)))
+    (when (<= 1 digits 4)
+      (let ((v (parse-integer str :radix 16 :junk-allowed t)))
+        (when v
+          (let ((maxv (1- (expt 16 digits))))
+            (if (zerop maxv) 0 (round (* v 255) maxv))))))))
+
+(defun %parse-osc-color (spec)
+  "Parse an OSC color SPEC into (VALUES R G B) in 0-255, or NIL if unparseable.
+   Accepts the X color formats ncurses/xterm emit: rgb:R/G/B (1-4 hex digits per
+   channel) and #RGB / #RRGGBB / #RRRRGGGGBBBB. A query (?) returns NIL."
+  (cond
+    ((and (>= (length spec) 4) (string-equal "rgb:" spec :end2 4))
+     (let ((parts (%split-on-char (subseq spec 4) #\/)))
+       (when (= (length parts) 3)
+         (let ((r (%scale-hex-component (first parts)))
+               (g (%scale-hex-component (second parts)))
+               (b (%scale-hex-component (third parts))))
+           (when (and r g b) (values r g b))))))
+    ((and (> (length spec) 1) (char= (char spec 0) #\#))
+     (let* ((hex (subseq spec 1)) (n (length hex)))
+       (when (and (plusp n) (zerop (mod n 3)))
+         (let ((d (floor n 3)))
+           (let ((r (%scale-hex-component (subseq hex 0 d)))
+                 (g (%scale-hex-component (subseq hex d (* 2 d))))
+                 (b (%scale-hex-component (subseq hex (* 2 d) (* 3 d)))))
+             (when (and r g b) (values r g b)))))))
+    (t nil)))
+
+(defun %handler-screens (handler)
+  "Return the distinct, non-NIL screen buffers owned by HANDLER (active, primary,
+   and alternate). Palette changes are applied to all of them so OSC color
+   redefinitions are shared across the normal and alternate screens."
+  (remove-duplicates
+   (remove nil (list (vt-handler-screen handler)
+                     (vt-handler-primary-screen handler)
+                     (vt-handler-alt-screen handler)))))
+
+(defun %osc-set-palette-entry (handler idx r g b)
+  "Set palette index IDX to R/G/B (0-255) on every buffer of HANDLER."
+  (when (<= 0 idx 255)
+    (dolist (sc (%handler-screens handler))
+      (set-palette-entry-rgb8 sc idx r g b))))
+
+(defun %osc-set-color-4 (handler data)
+  "Handle OSC 4 data: idx;spec[;idx;spec]... -- set palette colors."
+  (loop :for (idx-str spec) :on (%split-on-char data #\;) :by #'cddr
+        :do (let ((idx (and idx-str (parse-integer idx-str :junk-allowed t))))
+              (when (and idx spec)
+                (multiple-value-bind (r g b) (%parse-osc-color spec)
+                  (when r (%osc-set-palette-entry handler idx r g b)))))))
+
+(defun %osc-reset-color-104 (handler data)
+  "Handle OSC 104 data: empty -> reset the whole palette; otherwise reset the
+   listed indices to their default values."
+  (if (zerop (length data))
+      (dolist (sc (%handler-screens handler)) (reset-palette sc))
+      (let ((def (make-default-palette)))
+        (dolist (idx-str (%split-on-char data #\;))
+          (let ((idx (parse-integer idx-str :junk-allowed t)))
+            (when (and idx (<= 0 idx 255))
+              (let ((base (* idx 4)))
+                (dolist (sc (%handler-screens handler))
+                  (set-palette-entry sc idx
+                                     (aref def base) (aref def (+ base 1))
+                                     (aref def (+ base 2)))))))))))
+
+(defun %osc-set-default-color (handler data palette-index)
+  "Handle OSC 10/11 (default fg/bg): set PALETTE-INDEX from the first spec in
+   DATA. This is an approximation -- Lexter has no separate default-fg/bg color,
+   so OSC 10 maps to palette index 7 and OSC 11 to index 0 (the SGR 39/49
+   defaults)."
+  (let ((spec (first (%split-on-char data #\;))))
+    (when spec
+      (multiple-value-bind (r g b) (%parse-osc-color spec)
+        (when r (%osc-set-palette-entry handler palette-index r g b))))))
+
 (defun handle-osc (handler)
-  "Handle OSC sequence."
+  "Handle an OSC sequence (window title and palette control)."
   (let* ((str (vt-handler-osc-string handler))
-         (semi-pos (position #\; str)))
-    (when semi-pos
-      (let ((ps (parse-integer str :end semi-pos :junk-allowed t))
-            (data (subseq str (1+ semi-pos))))
-        (case ps
-          ((0 2) ; Set window title
-           (setf (vt-handler-window-title handler) data)
-           (when (vt-handler-callback handler)
-             (funcall (vt-handler-callback handler) :set-title data)))
-          (otherwise
-           (when (vt-handler-callback handler)
-             (funcall (vt-handler-callback handler) :unknown-osc
-                      (list :ps ps :data data)))))))))
+         (semi-pos (position #\; str))
+         (ps (parse-integer str :end (or semi-pos (length str)) :junk-allowed t))
+         (data (if semi-pos (subseq str (1+ semi-pos)) "")))
+    (when ps
+      (case ps
+        ((0 2) ; Set window title
+         (setf (vt-handler-window-title handler) data)
+         (when (vt-handler-callback handler)
+           (funcall (vt-handler-callback handler) :set-title data)))
+        (4   (%osc-set-color-4 handler data))     ; set palette color(s)
+        (104 (%osc-reset-color-104 handler data)) ; reset palette color(s)
+        (10  (%osc-set-default-color handler data 7))  ; default foreground
+        (11  (%osc-set-default-color handler data 0))  ; default background
+        (12  nil)  ; cursor color: parsed but unsupported (no cursor-colour model)
+        (otherwise
+         (when (vt-handler-callback handler)
+           (funcall (vt-handler-callback handler) :unknown-osc
+                    (list :ps ps :data data))))))))
 
 ;;; --------------------------------------------------------------------------
 ;;; Reset

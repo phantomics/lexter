@@ -62,7 +62,7 @@ for v1; explicit ports can be supplied to avoid it."
 ;;; Child argv construction
 ;;; -----------------------------------------------------------------------
 
-(defun %build-child-argv (&key config slynk-port)
+(defun %build-child-argv (&key config slynk-port impulse-socket)
   "Build the argv list to spawn a Lexter child image.
 
 Uses the running SBCL binary, a deterministic init (--no-userinit
@@ -84,9 +84,10 @@ reference packages loaded by earlier ones."
           "--eval" (format nil "(push #P~S asdf:*central-registry*)" lexter-dir)
           "--eval" "(funcall (read-from-string \"ql:quickload\") \"lexter/origin\")"
           "--eval" (format nil "(funcall (read-from-string \"lexter/origin::%child-boot\") ~
-                                  :config ~A :slynk-port ~D)"
+                                  :config ~A :slynk-port ~D :impulse-socket ~A)"
                            (if config (prin1-to-string (namestring config)) "nil")
-                           slynk-port))))
+                           slynk-port
+                           (if impulse-socket (prin1-to-string impulse-socket) "nil")))))
 
 ;;; -----------------------------------------------------------------------
 ;;; Parent-side: register an image orbital
@@ -95,7 +96,12 @@ reference packages loaded by earlier ones."
 (defun %default-log-file (canonical-name)
   (merge-pathnames (format nil "~A.log" canonical-name) *image-log-directory*))
 
-(defun define-image (name &key config slynk-port log-file
+(defun %default-impulse-socket (canonical-name)
+  (namestring
+   (merge-pathnames (format nil "~A.impulse.sock" canonical-name)
+                    *image-log-directory*)))
+
+(defun define-image (name &key config slynk-port log-file impulse-socket
                             (restart-policy :transient)
                             (max-restarts 5)
                             description)
@@ -106,19 +112,26 @@ CONFIG is a pathname/namestring of a Lisp config file the child loads to
 declare its cooperative terminals (and any local setup).  May be NIL.
 SLYNK-PORT is the port the child's Slynk server listens on; if NIL, a
 free port is allocated and recorded.
+IMPULSE-SOCKET is the Unix-socket path the child's Impulse listener binds;
+if NIL, a default under *IMAGE-LOG-DIRECTORY* is used and recorded.
 LOG-FILE is where the child's stdout/stderr are written; defaults to
 <*image-log-directory*>/<name>.log.
 
 The orbital is registered but not started.  Call (ORIGIN:START name) to
 spawn the image, and (ORIGIN:STOP name) / (ORIGIN:KILL name) to tear it
-down.  Restart policy and supervision behave as for any orbital."
+down.  Restart policy and supervision behave as for any orbital.  Once
+running, the image is reachable for structured control via Impulse at its
+socket -- (impulse:connect (lexter/origin:impulse-socket-path name))."
   (let* ((canonical (%canonical-name name))
          (port (or slynk-port (%free-port)))
          (log  (or log-file (%default-log-file canonical)))
-         (argv (%build-child-argv :config config :slynk-port port)))
+         (sock (or impulse-socket (%default-impulse-socket canonical)))
+         (argv (%build-child-argv :config config :slynk-port port
+                                  :impulse-socket sock)))
     (ensure-directories-exist log)
     (setf (gethash canonical *image-metadata*)
-          (list :slynk-port port :log-file log :config config))
+          (list :slynk-port port :log-file log :config config
+                :impulse-socket sock))
     (origin:define-process name
       :execution-mode :image
       :image-command argv
@@ -137,6 +150,10 @@ down.  Restart policy and supervision behave as for any orbital."
   "Return the log-file pathname for image orbital NAME, or NIL."
   (getf (gethash (%canonical-name name) *image-metadata*) :log-file))
 
+(defun impulse-socket-path (name)
+  "Return the Impulse Unix-socket path for image orbital NAME, or NIL."
+  (getf (gethash (%canonical-name name) *image-metadata*) :impulse-socket))
+
 ;;; -----------------------------------------------------------------------
 ;;; Config generation stub
 ;;; -----------------------------------------------------------------------
@@ -152,17 +169,21 @@ Currently a no-op placeholder that reserves the API and returns NIL."
 ;;; Child-side: boot recipe (runs inside the spawned image)
 ;;; -----------------------------------------------------------------------
 
-(defun %child-boot (&key config slynk-port)
+(defun %child-boot (&key config slynk-port impulse-socket)
   "Boot recipe executed inside a spawned Lexter image.
 
-Starts a Slynk server for interactivity, starts this image's own local
-Origin supervisor, loads the user CONFIG (which declares cooperative
-terminals), then enters the cooperative main loop -- autostarting every
-cooperative orbital the config registered.  Blocks the image's main
-thread for its lifetime."
+Starts a Slynk server for human interactivity and an Impulse listener for
+structured control, starts this image's own local Origin supervisor, loads
+the user CONFIG (which declares cooperative terminals), then enters the
+cooperative main loop -- autostarting every cooperative orbital the config
+registered.  Blocks the image's main thread for its lifetime; Slynk and
+Impulse each run on their own threads."
   (when slynk-port
     (funcall (read-from-string "slynk:create-server")
              :port slynk-port :dont-close t))
+  (when impulse-socket
+    (impulse:start-listener :path impulse-socket
+                            :tier impulse:+tier-read-write+))
   (origin:start-supervisor)
   (when config
     (load config))

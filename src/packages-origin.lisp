@@ -14,5 +14,6 @@
            #:define-image
            #:image-slynk-port
            #:image-log-file
+           #:impulse-socket-path
            #:generate-orbital-config
            #:*image-log-directory*))

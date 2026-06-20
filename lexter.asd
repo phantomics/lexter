@@ -100,7 +100,7 @@
   :description "Origin process manager integration for Lexter"
   :license "BSD"
   :version "0.1.0"
-  :depends-on ("lexter/unix" "origin" "alexandria" "slynk")
+  :depends-on ("lexter/unix" "origin" "impulse" "alexandria" "slynk")
   :serial t
   :components ((:file "src/packages-origin")
                (:file "src/origin")

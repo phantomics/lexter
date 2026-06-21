@@ -11,7 +11,7 @@
 ;;; Constants (must match grid.lisp)
 ;;; --------------------------------------------------------------------------
 
-(defconstant +layered-stride+ 12)   ; bytes per layered instance
+(defconstant +layered-stride+ 16)   ; bytes per layered instance (must match grid.lisp)
 (defconstant +max-palette-slots+ 4  "Number of palette slots in the UBO.")
 (defconstant +palette-slot-size+ 4096 "Bytes per palette slot (256 x vec4).")
 
@@ -91,11 +91,12 @@
     (gl:bind-buffer :array-buffer 0)
     vbo))
 
-;;; Simple instance layout (8 bytes):
+;;; Simple instance layout (12 bytes):
 ;;;   offset 0: int16  col         → i_cell.x
 ;;;   offset 2: int16  row         → i_cell.y
-;;;   offset 4: uint16 glyph       → i_glyph
-;;;   offset 6: uint16 swatch_idx  → i_swatch
+;;;   offset 4: uint32 glyph       → i_glyph
+;;;   offset 8: uint16 swatch_idx  → i_swatch
+;;;   offset 10: (pad)
 (defun %make-simple-vao (corner-vbo)
   (let ((vao (first (gl:gen-vertex-arrays 1)))
         (vbo (first (gl:gen-buffers 1))))
@@ -104,11 +105,11 @@
     (gl:bind-buffer :array-buffer corner-vbo)
     (gl:vertex-attrib-pointer 0 2 :float nil 8 0)
     (gl:enable-vertex-attrib-array 0)
-    ;; Instance attributes (stride 8)
+    ;; Instance attributes (stride +simple-stride+ = 12)
     (gl:bind-buffer :array-buffer vbo)
-    (%gl:vertex-attrib-ipointer 1 2 :short          8 (cffi:make-pointer 0))  ; i_cell
-    (%gl:vertex-attrib-ipointer 2 1 :unsigned-short 8 (cffi:make-pointer 4))  ; i_glyph
-    (%gl:vertex-attrib-ipointer 3 1 :unsigned-short 8 (cffi:make-pointer 6))  ; i_swatch
+    (%gl:vertex-attrib-ipointer 1 2 :short          +simple-stride+ (cffi:make-pointer 0))  ; i_cell
+    (%gl:vertex-attrib-ipointer 2 1 :unsigned-int   +simple-stride+ (cffi:make-pointer 4))  ; i_glyph
+    (%gl:vertex-attrib-ipointer 3 1 :unsigned-short +simple-stride+ (cffi:make-pointer 8))  ; i_swatch
     (gl:enable-vertex-attrib-array 1)
     (gl:enable-vertex-attrib-array 2)
     (gl:enable-vertex-attrib-array 3)
@@ -118,15 +119,16 @@
     (gl:bind-vertex-array 0)
     (values vao vbo)))
 
-;;; Layered instance layout (12 bytes):
+;;; Layered instance layout (16 bytes):
 ;;;   offset  0: int16  col           → i_cell.x
 ;;;   offset  2: int16  row           → i_cell.y
-;;;   offset  4: uint16 glyph         → i_glyph
-;;;   offset  6: uint8  ink-idx       → i_ink_bg.x
-;;;   offset  7: uint8  bg-idx        → i_ink_bg.y
-;;;   offset  8: uint8  trans-side    → i_ts
-;;;   offset  9: uint8  (pad)
-;;;   offset 10: uint16 swatch_idx    → i_swatch
+;;;   offset  4: uint32 glyph         → i_glyph
+;;;   offset  8: uint8  ink-idx       → i_ink_bg.x
+;;;   offset  9: uint8  bg-idx        → i_ink_bg.y
+;;;   offset 10: uint8  trans-side    → i_ts
+;;;   offset 11: uint8  (pad)
+;;;   offset 12: uint16 swatch_idx    → i_swatch
+;;;   offset 14: (pad)
 (defun %make-layered-vao (corner-vbo)
   (let ((vao (first (gl:gen-vertex-arrays 1)))
         (vbo (first (gl:gen-buffers 1))))
@@ -135,13 +137,13 @@
     (gl:bind-buffer :array-buffer corner-vbo)
     (gl:vertex-attrib-pointer 0 2 :float nil 8 0)
     (gl:enable-vertex-attrib-array 0)
-    ;; Instance attributes (stride 12) — initial pointers at offset 0
+    ;; Instance attributes (stride +layered-stride+ = 16) — initial pointers at offset 0
     (gl:bind-buffer :array-buffer vbo)
-    (%gl:vertex-attrib-ipointer 1 2 :short          12 (cffi:make-pointer 0))
-    (%gl:vertex-attrib-ipointer 2 1 :unsigned-short 12 (cffi:make-pointer 4))
-    (%gl:vertex-attrib-ipointer 3 2 :unsigned-byte  12 (cffi:make-pointer 6))
-    (%gl:vertex-attrib-ipointer 4 1 :unsigned-byte  12 (cffi:make-pointer 8))
-    (%gl:vertex-attrib-ipointer 5 1 :unsigned-short 12 (cffi:make-pointer 10))
+    (%gl:vertex-attrib-ipointer 1 2 :short          +layered-stride+ (cffi:make-pointer 0))
+    (%gl:vertex-attrib-ipointer 2 1 :unsigned-int   +layered-stride+ (cffi:make-pointer 4))
+    (%gl:vertex-attrib-ipointer 3 2 :unsigned-byte  +layered-stride+ (cffi:make-pointer 8))
+    (%gl:vertex-attrib-ipointer 4 1 :unsigned-byte  +layered-stride+ (cffi:make-pointer 10))
+    (%gl:vertex-attrib-ipointer 5 1 :unsigned-short +layered-stride+ (cffi:make-pointer 12))
     (gl:enable-vertex-attrib-array 1)
     (gl:enable-vertex-attrib-array 2)
     (gl:enable-vertex-attrib-array 3)
@@ -481,13 +483,13 @@
                   (%gl:vertex-attrib-ipointer
                    1 2 :short          +layered-stride+ (cffi:make-pointer (+ byte-off 0)))
                   (%gl:vertex-attrib-ipointer
-                   2 1 :unsigned-short +layered-stride+ (cffi:make-pointer (+ byte-off 4)))
+                   2 1 :unsigned-int   +layered-stride+ (cffi:make-pointer (+ byte-off 4)))
                   (%gl:vertex-attrib-ipointer
-                   3 2 :unsigned-byte  +layered-stride+ (cffi:make-pointer (+ byte-off 6)))
+                   3 2 :unsigned-byte  +layered-stride+ (cffi:make-pointer (+ byte-off 8)))
                   (%gl:vertex-attrib-ipointer
-                   4 1 :unsigned-byte  +layered-stride+ (cffi:make-pointer (+ byte-off 8)))
+                   4 1 :unsigned-byte  +layered-stride+ (cffi:make-pointer (+ byte-off 10)))
                   (%gl:vertex-attrib-ipointer
-                   5 1 :unsigned-short +layered-stride+ (cffi:make-pointer (+ byte-off 10)))
+                   5 1 :unsigned-short +layered-stride+ (cffi:make-pointer (+ byte-off 12)))
                   (%gl:draw-arrays-instanced :triangle-strip 0 4 count)
                   (incf byte-off (* count +layered-stride+)))))))))
   (gl:bind-vertex-array 0)

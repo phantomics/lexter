@@ -132,7 +132,8 @@
     (setf (vt-handler-parser handler)
           (cl-vt:make-vt-parser (lambda (parser action byte)
                                   (dispatch-action handler parser action byte))
-                                handler))
+                                :user-data handler
+                                :utf8 t))
     handler))
 
 ;;; --------------------------------------------------------------------------

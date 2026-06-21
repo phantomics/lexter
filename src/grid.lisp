@@ -21,9 +21,12 @@
 ;;; Constants
 ;;; --------------------------------------------------------------------------
 
-(defconstant +simple-stride+  8)
-;; Layered instance: col(2) row(2) glyph(2) ink(1) bg(1) ts(1) pad(1) swatch_idx(2) = 12
-(defconstant +layered-stride+ 12)
+;; Simple instance: col(2) row(2) glyph(4) swatch(2) pad(2) = 12
+;; (glyph is 32-bit so atlas positions can exceed 65535 for very large fonts;
+;;  2 pad bytes keep the next instance's 32-bit glyph 4-byte aligned.)
+(defconstant +simple-stride+  12)
+;; Layered instance: col(2) row(2) glyph(4) ink(1) bg(1) ts(1) pad(1) swatch(2) pad(2) = 16
+(defconstant +layered-stride+ 16)
 (defconstant +max-layers+ 3)
 (defconstant +swatch-slots+ 4)
 
@@ -33,7 +36,7 @@
 
 (defstruct cell-layer
   "One layer within a layered cell."
-  (glyph-idx        0    :type (unsigned-byte 16))
+  (glyph-idx        0    :type (unsigned-byte 32))
   (ink-idx          0    :type (unsigned-byte 2))   ; swatch slot for ink
   (bg-idx           0    :type (unsigned-byte 2))   ; swatch slot for bg (layer 0 only)
   ;; :none = fully opaque both sides (layer 0)
@@ -58,7 +61,7 @@
   (swatch-count  256 :type fixnum)
   (swatch-data   #() :type (simple-array (unsigned-byte 8) (*)))
   ;; --- Simple path storage (per-cell) ---
-  (glyphs        #() :type (simple-array (unsigned-byte 16) (*)))
+  (glyphs        #() :type (simple-array (unsigned-byte 32) (*)))
   (swatch-indices #() :type (simple-array (unsigned-byte 16) (*)))
   ;; --- Wide character support ---
   (wide-flags    #*  :type simple-bit-vector)    ; 1 = left half of wide char
@@ -105,7 +108,7 @@
                 :swatch-data    (make-array (* swatch-count +swatch-slots+)
                                             :element-type '(unsigned-byte 8)
                                             :initial-element 0)
-                :glyphs         (make-array n :element-type '(unsigned-byte 16) :initial-element 0)
+                :glyphs         (make-array n :element-type '(unsigned-byte 32) :initial-element 0)
                 :swatch-indices (make-array n :element-type '(unsigned-byte 16) :initial-element 0)
                 :wide-flags     (make-array n :element-type 'bit :initial-element 0)
                 :continuation-flags (make-array n :element-type 'bit :initial-element 0)
@@ -289,10 +292,16 @@
 ;;; Render data builder
 ;;; --------------------------------------------------------------------------
 
-(declaim (inline %u16-lo %u16-hi))
+(declaim (inline %u16-lo %u16-hi %u32-b0 %u32-b1 %u32-b2 %u32-b3))
 
 (defun %u16-lo (v) (ldb (byte 8 0) v))
 (defun %u16-hi (v) (ldb (byte 8 8) v))
+
+;; Little-endian byte extractors for 32-bit glyph indices.
+(defun %u32-b0 (v) (ldb (byte 8 0) v))
+(defun %u32-b1 (v) (ldb (byte 8 8) v))
+(defun %u32-b2 (v) (ldb (byte 8 16) v))
+(defun %u32-b3 (v) (ldb (byte 8 24) v))
 
 (defun build-render-data (grid &key force-full)
   "Build GPU instance buffers using pre-allocated storage.
@@ -333,16 +342,20 @@
                      (sw-gpu (if (= 1 (sbit (display-grid-wide-flags grid) i))
                                  (logior sw-idx #x8000)
                                  sw-idx)))
+                ;; i_cell (col,row int16) at 0-3
                 (setf (aref sbuf si)       (%u16-lo col)
                       (aref sbuf (+ si 1)) (%u16-hi col)
                       (aref sbuf (+ si 2)) (%u16-lo row)
                       (aref sbuf (+ si 3)) (%u16-hi row))
+                ;; i_glyph (uint32) at 4-7
                 (let ((glyph (aref (display-grid-glyphs grid) i)))
-                  (setf (aref sbuf (+ si 4)) (%u16-lo glyph)
-                        (aref sbuf (+ si 5)) (%u16-hi glyph)))
-                ;; Swatch index (with wide flag in bit 15) at offset 6-7
-                (setf (aref sbuf (+ si 6)) (%u16-lo sw-gpu)
-                      (aref sbuf (+ si 7)) (%u16-hi sw-gpu))
+                  (setf (aref sbuf (+ si 4)) (%u32-b0 glyph)
+                        (aref sbuf (+ si 5)) (%u32-b1 glyph)
+                        (aref sbuf (+ si 6)) (%u32-b2 glyph)
+                        (aref sbuf (+ si 7)) (%u32-b3 glyph)))
+                ;; i_swatch (uint16, wide flag in bit 15) at 8-9; bytes 10-11 pad
+                (setf (aref sbuf (+ si 8)) (%u16-lo sw-gpu)
+                      (aref sbuf (+ si 9)) (%u16-hi sw-gpu))
                 (incf si +simple-stride+)
                 (incf sc))
               ;; --- Layered cell ---
@@ -359,19 +372,24 @@
                                  (ts  (ecase (cell-layer-transparent-side layer)
                                         (:none 2) (:bg 0) (:fg 1)))
                                  (glyph (cell-layer-glyph-idx layer)))
-                            (setf (aref lbuf idx)       (%u16-lo col)
-                                  (aref lbuf (+ idx 1)) (%u16-hi col)
-                                  (aref lbuf (+ idx 2)) (%u16-lo row)
-                                  (aref lbuf (+ idx 3)) (%u16-hi row)
-                                  (aref lbuf (+ idx 4)) (%u16-lo glyph)
-                                  (aref lbuf (+ idx 5)) (%u16-hi glyph)
-                                  (aref lbuf (+ idx 6)) (cell-layer-ink-idx layer)
-                                  (aref lbuf (+ idx 7)) (cell-layer-bg-idx layer)
-                                  (aref lbuf (+ idx 8)) ts
-                                  (aref lbuf (+ idx 9)) 0
-                                  ;; Swatch index as uint16 at offset 10-11
-                                  (aref lbuf (+ idx 10)) (%u16-lo sw-idx)
-                                  (aref lbuf (+ idx 11)) (%u16-hi sw-idx))
+                             (setf ;; i_cell (col,row int16) at 0-3
+                                   (aref lbuf idx)       (%u16-lo col)
+                                   (aref lbuf (+ idx 1)) (%u16-hi col)
+                                   (aref lbuf (+ idx 2)) (%u16-lo row)
+                                   (aref lbuf (+ idx 3)) (%u16-hi row)
+                                   ;; i_glyph (uint32) at 4-7
+                                   (aref lbuf (+ idx 4)) (%u32-b0 glyph)
+                                   (aref lbuf (+ idx 5)) (%u32-b1 glyph)
+                                   (aref lbuf (+ idx 6)) (%u32-b2 glyph)
+                                   (aref lbuf (+ idx 7)) (%u32-b3 glyph)
+                                   ;; i_ink_bg (uint8 x2) at 8-9, i_ts (uint8) at 10, pad 11
+                                   (aref lbuf (+ idx 8)) (cell-layer-ink-idx layer)
+                                   (aref lbuf (+ idx 9)) (cell-layer-bg-idx layer)
+                                   (aref lbuf (+ idx 10)) ts
+                                   (aref lbuf (+ idx 11)) 0
+                                   ;; i_swatch (uint16) at 12-13; bytes 14-15 pad
+                                   (aref lbuf (+ idx 12)) (%u16-lo sw-idx)
+                                   (aref lbuf (+ idx 13)) (%u16-hi sw-idx))
                             (incf (aref li ln) +layered-stride+)
                             (incf (aref lc ln))))))))))))))
     ;; Compact layered data: move each layer's data to be contiguous
@@ -402,7 +420,7 @@
   (let* ((old-cols (display-grid-cols grid))
          (old-rows (display-grid-rows grid))
          (new-n    (* new-cols new-rows))
-         (new-glyphs (make-array new-n :element-type '(unsigned-byte 16) :initial-element blank-glyph))
+         (new-glyphs (make-array new-n :element-type '(unsigned-byte 32) :initial-element blank-glyph))
          (new-swatch-indices (make-array new-n :element-type '(unsigned-byte 16) :initial-element 0))
          (new-wide-flags (make-array new-n :element-type 'bit :initial-element 0))
          (new-continuation-flags (make-array new-n :element-type 'bit :initial-element 0))

@@ -193,7 +193,7 @@
 
 (defstruct model-layer
   "A layer within a layered cell."
-  (glyph-idx   0    :type (unsigned-byte 16))
+  (glyph-idx   0    :type (unsigned-byte 32))
   (ink-slot    1    :type (unsigned-byte 2))   ; swatch slot for ink
   (bg-slot     0    :type (unsigned-byte 2))   ; swatch slot for bg (layer 0)
   (transparent-side :none :type keyword))
@@ -221,7 +221,9 @@
   (blank-glyph 0 :type fixnum)
   ;; --- Cell data (simple path) ---
   ;; Indexed by (row * cols + col)
-  (glyphs        #() :type (simple-array (unsigned-byte 16) (*)))
+  ;; Glyph indices are atlas positions, which can exceed 16 bits for very large
+  ;; fonts (e.g. Unifont's atlas has ~107k cells), so they are stored as 32-bit.
+  (glyphs        #() :type (simple-array (unsigned-byte 32) (*)))
   (swatch-indices #() :type (simple-array (unsigned-byte 16) (*)))
   (attrs         #() :type (simple-array (unsigned-byte 32) (*)))
   ;; --- Wide character flags ---
@@ -274,7 +276,7 @@
      :cols            cols
      :rows            rows
      :mode            mode
-     :glyphs          (make-array n :element-type '(unsigned-byte 16) :initial-element 32)
+     :glyphs          (make-array n :element-type '(unsigned-byte 32) :initial-element 32)
      :swatch-indices  (make-array n :element-type '(unsigned-byte 16) :initial-element 0)
      :attrs           (make-array n :element-type '(unsigned-byte 32) :initial-element 0)
      :wide-flags      (make-array n :element-type 'bit :initial-element 0)
@@ -823,7 +825,7 @@
          (old-rows (screen-rows screen))
          (new-n (* new-cols new-rows))
          (blank (screen-blank-glyph screen))
-         (new-glyphs (make-array new-n :element-type '(unsigned-byte 16) :initial-element blank))
+         (new-glyphs (make-array new-n :element-type '(unsigned-byte 32) :initial-element blank))
          (new-swatch-indices (make-array new-n :element-type '(unsigned-byte 16) :initial-element 0))
          (new-attrs (make-array new-n :element-type '(unsigned-byte 32) :initial-element 0))
          (new-wide-flags (make-array new-n :element-type 'bit :initial-element 0))

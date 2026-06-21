@@ -208,10 +208,13 @@ Example:
     (setf (gethash canonical *terminal-specs*)
           (list* :command command lexter-args))
     ;; Register as a cooperative process (no entry-point / stop-function;
-    ;; the executor hooks handle everything).
-    (origin:define-process name
-      :execution-mode :cooperative
-      :restart-policy restart-policy
-      :max-restarts max-restarts
-      :description (or description
-                       (format nil "Lexter terminal: ~A" command)))))
+    ;; the executor hooks handle everything), and tag it with the Impulse
+    ;; :LEXTER-HOST control type so it answers the terminal sub-vocabulary.
+    (prog1
+        (origin:define-process name
+          :execution-mode :cooperative
+          :restart-policy restart-policy
+          :max-restarts max-restarts
+          :description (or description
+                           (format nil "Lexter terminal: ~A" command)))
+      (setf (impulse:orbital-control-type canonical) :lexter-host))))

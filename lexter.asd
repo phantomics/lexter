@@ -105,4 +105,16 @@
   :components ((:file "src/packages-origin")
                (:file "src/origin")
                (:file "src/origin-gui")
-               (:file "src/origin-image")))
+               (:file "src/origin-image")
+               (:file "src/origin-impulse")))
+
+;;; Origin/Impulse integration tests (headless: fake cooperative executor,
+;;; no display).
+(asdf:defsystem #:lexter/origin-tests
+  :description "Tests for the Lexter Origin/Impulse integration"
+  :license "BSD"
+  :depends-on ("lexter/origin" "hamcrest/fiveam")
+  :serial t
+  :components ((:file "tests/origin-impulse-tests"))
+  :perform (test-op (o s)
+             (uiop:symbol-call :lexter/origin-tests :run-all-tests)))

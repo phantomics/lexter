@@ -164,3 +164,47 @@ the terminal with the new value."
             (:pixel-scale (setf (lexter/unix-term::unix-terminal-pixel-scale term) v))))))
     (impulse:commit-spec :generic orbital gen))
   spec)
+
+;;; -----------------------------------------------------------------------
+;;; Restart state handoff (Phase 9): a native, in-heap example
+;;; -----------------------------------------------------------------------
+;;;
+;;; nginx (a foreign orbital) hands off nothing; a Lexter terminal is the
+;;; native counterpart whose precious state is application data in the heap, not
+;;; kernel FDs -- so the Tether serializes the data. The MVP carries the
+;;; terminal's geometry and scrollback depth (:application) and its cursor
+;;; position (:session) across a clean restart. Import is fail-safe: it only
+;;; restores the cursor into an already-rebuilt screen, so a fresh window always
+;;; comes up regardless.
+
+(defmethod impulse:export-state ((type (eql :lexter-host)) orbital)
+  (let ((term (%live-terminal orbital)))
+    (when term
+      (let ((screen (lexter/unix-term::unix-terminal-screen term)))
+        (impulse:make-handoff-state :lexter-host
+          (append
+           (list :application
+                 (list :cols (lexter/unix-term::unix-terminal-cols term)
+                       :rows (lexter/unix-term::unix-terminal-rows term)
+                       :scrollback-lines (if screen
+                                             (lexter/model:scrollback-lines screen)
+                                             0)))
+           (when screen
+             (list :session
+                   (list :cursor-col (lexter/model:cursor-col screen)
+                         :cursor-row (lexter/model:cursor-row screen))))))))))
+
+(defmethod impulse:import-state ((type (eql :lexter-host)) orbital state)
+  (when (impulse:handoff-compatible-p state)
+    (let ((term (%live-terminal orbital))
+          (session (impulse:handoff-stratum state :session)))
+      (when (and term session)
+        (let ((screen (lexter/unix-term::unix-terminal-screen term)))
+          (when screen
+            (lexter/model:set-cursor-position screen
+                                              (getf session :cursor-col)
+                                              (getf session :cursor-row))
+            t))))))
+
+(defmethod impulse:handoff-strata-for ((type (eql :lexter-host)))
+  '(:application :session))

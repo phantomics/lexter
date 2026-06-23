@@ -40,7 +40,12 @@
            #:vt-handler-cp437-table
            #:vt-handler-in-alt-screen
            #:vt-handler-resize-all
+           #:vt-handler-recording
            #:process-output
+           ;; Raw-input recording (test rig)
+           #:start-recording
+           #:stop-recording
+           #:recording-active-p
            ;; Debug
            #:*debug-vt*))
 
@@ -51,9 +56,14 @@
   (:export #:run-terminal
            #:make-terminal
            #:terminal-capture
+           #:terminal-start-recording
+           #:terminal-stop-recording
+           #:terminal-reset
+           #:terminal-config-plist
            #:unix-terminal
            #:unix-terminal-window
            #:unix-terminal-renderer
+           #:unix-terminal-vt-handler
            #:terminal-screen
            #:terminal-pty
            ;; GUI protocol (re-exported for convenience)

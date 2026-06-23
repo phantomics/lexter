@@ -72,7 +72,11 @@
   (title      "lexter terminal" :type string)
   ;; When NIL, the GLFW window is created hidden (useful for offscreen capture
   ;; / headless-ish testing).
-  (visible    t   :type boolean))
+  (visible    t   :type boolean)
+  ;; When T, no PTY/child process is spawned: the terminal is built purely for
+  ;; headless replay (feed bytes via PROCESS-OUTPUT, then TERMINAL-CAPTURE).
+  ;; GUI-TICK's PTY polling / child-liveness checks are skipped in this mode.
+  (no-pty     nil :type boolean))
 
 ;;; --------------------------------------------------------------------------
 ;;; Keyboard input handling
@@ -280,11 +284,13 @@
            (dt (- current-time (unix-terminal-last-tick-time term)))
            (blink-toggled (update-cursor-blink term (coerce dt 'single-float))))
       (setf (unix-terminal-last-tick-time term) current-time)
-      ;; 1. Process PTY output
-      (process-pty-output term)
-      ;; 2. Check if child is still alive
+      ;; 1. Process PTY output (headless replay terminals have no PTY)
+      (unless (unix-terminal-no-pty term)
+        (process-pty-output term))
+      ;; 2. Check if child is still alive (skipped without a PTY)
       (cond
-        ((not (pty-check-child (unix-terminal-pty term)))
+        ((and (not (unix-terminal-no-pty term))
+              (not (pty-check-child (unix-terminal-pty term))))
          (setf (unix-terminal-running term) nil))
         (t
          ;; 3. Handle any pending resize (always needs render)
@@ -364,7 +370,8 @@
                                 (rows 24)
                                 (pixel-scale nil)
                                 (title "lexter terminal")
-                                (visible t))
+                                (visible t)
+                                (no-pty nil))
   "Create an uninitialized UNIX-TERMINAL with the given configuration.
 
 The window, OpenGL context, renderer, and PTY are NOT created yet -- call
@@ -375,7 +382,12 @@ standalone convenience wrapper around it.
 
 FONTS, if given, is a pre-loaded font fallback chain (list of bitmap-font
 structs) and takes precedence over FONT-PATH; all fonts must share cell
-dimensions. Otherwise FONT-PATH is loaded (PCF, or BDF when it ends in .bdf)."
+dimensions. Otherwise FONT-PATH is loaded (PCF, or BDF when it ends in .bdf).
+
+NO-PTY, when T, builds a headless replay terminal: no child process is spawned
+and COMMAND may be NIL. Drive it by feeding bytes to PROCESS-OUTPUT and reading
+back pixels with TERMINAL-CAPTURE (combine with :VISIBLE NIL for a hidden
+window)."
   (make-unix-terminal :command command
                       :args args
                       :font-path font-path
@@ -384,7 +396,8 @@ dimensions. Otherwise FONT-PATH is loaded (PCF, or BDF when it ends in .bdf)."
                       :rows rows
                       :pixel-scale (or pixel-scale 1)
                       :title title
-                      :visible visible))
+                      :visible visible
+                      :no-pty no-pty))
 
 (defmethod gui-initialize ((term unix-terminal))
   "Create TERM's GLFW window, OpenGL context, renderer, VT handler, and PTY.
@@ -451,12 +464,16 @@ the new context current, so the atlas/renderer GL objects belong to it."
             ;; Create VT handler (pass atlas for codepoint -> glyph mapping).
             (setf (unix-terminal-vt-handler term)
                   (make-vt-handler screen atlas :callback (make-vt-callback term)))
-            ;; Spawn child process.
-            (format t "~&Spawning: ~a~{ ~a~}~%" command args)
-            (setf (unix-terminal-pty term)
-                  (pty-fork command :cols cols :rows rows :args args))
-            (pty-set-nonblocking (unix-terminal-pty term))
-            (format t "~&Child PID: ~d~%" (pty-child-pid (unix-terminal-pty term)))
+            ;; Spawn child process (unless this is a headless replay terminal).
+            (cond
+              ((unix-terminal-no-pty term)
+               (format t "~&Headless replay terminal (no PTY spawned)~%"))
+              (t
+               (format t "~&Spawning: ~a~{ ~a~}~%" command args)
+               (setf (unix-terminal-pty term)
+                     (pty-fork command :cols cols :rows rows :args args))
+               (pty-set-nonblocking (unix-terminal-pty term))
+               (format t "~&Child PID: ~d~%" (pty-child-pid (unix-terminal-pty term)))))
             ;; Set up GLFW callbacks, bound to this terminal's window.
             ;; (Single-window for now; multi-window dispatch via a window->object
             ;;  registry is a deferred, registry-ready extension.)
@@ -551,6 +568,21 @@ the new context current, so the atlas/renderer GL objects belong to it."
       (glfw:terminate))))
 
 ;;; --------------------------------------------------------------------------
+;;; Raw-input recording (test rig authoring)
+;;; --------------------------------------------------------------------------
+
+(defun terminal-start-recording (term)
+  "Begin recording the raw byte stream this terminal receives from its PTY.
+   Used to author screenshot-test fixtures from a live session. Returns TERM."
+  (start-recording (unix-terminal-vt-handler term))
+  term)
+
+(defun terminal-stop-recording (term)
+  "Stop recording and return the captured bytes as a fresh simple
+   (unsigned-byte 8) vector (or NIL if recording was not active)."
+  (stop-recording (unix-terminal-vt-handler term)))
+
+;;; --------------------------------------------------------------------------
 ;;; Screenshot capture (testing)
 ;;; --------------------------------------------------------------------------
 
@@ -590,3 +622,37 @@ the new context current, so the atlas/renderer GL objects belong to it."
   "Initialize default swatches in display grid."
   ;; Swatch 0: black bg, white fg (default)
   (lexter/grid:set-swatch display 0  0 7 7 0))
+
+;;; --------------------------------------------------------------------------
+;;; Headless replay support (test rig)
+;;; --------------------------------------------------------------------------
+
+(defun terminal-config-plist (term)
+  "Return the durable test-config plist describing TERM, suitable for pasting
+   into a WITH-TERMINAL-TEST-CONFIG form. CELL-WIDTH/CELL-HEIGHT come from the
+   loaded font and are informational (the font determines them)."
+  (list :font-path   (unix-terminal-font-path term)
+        :cols        (unix-terminal-cols term)
+        :rows        (unix-terminal-rows term)
+        :cell-width  (unix-terminal-cell-w term)
+        :cell-height (unix-terminal-cell-h term)
+        :pixel-scale (unix-terminal-pixel-scale term)))
+
+(defun terminal-reset (term)
+  "Reset TERM to a blank initial screen, reusing its window, atlas, and
+   renderer. Intended for headless replay so successive fixtures each start from
+   a clean slate without rebuilding the (expensive) GL atlas. Returns TERM."
+  (let* ((cols   (unix-terminal-cols term))
+         (rows   (unix-terminal-rows term))
+         (atlas  (unix-terminal-atlas term))
+         (screen (make-screen :cols cols :rows rows))
+         (display (make-display-grid :cols cols :rows rows)))
+    (setf (unix-terminal-screen term)  screen
+          (unix-terminal-display term) display
+          (unix-terminal-vt-handler term)
+          (make-vt-handler screen atlas :callback (make-vt-callback term)))
+    (setup-default-swatches display)
+    (upload-palette (unix-terminal-renderer term)
+                    (screen-palette screen)
+                    (screen-palette-generation screen))
+    term))

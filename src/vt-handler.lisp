@@ -97,6 +97,10 @@
   (bold-as-bright  nil :type boolean)
   ;; CP437 translation table (nil = use default from lexter/telnet)
   (cp437-table     nil :type (or null (simple-array (unsigned-byte 32) (256))))
+  ;; Raw-input recording (test rig). NIL = off; otherwise an adjustable
+  ;; (unsigned-byte 8) vector with a fill pointer that accumulates every byte
+  ;; fed to PROCESS-OUTPUT. Recording is a pure tap: it never alters parsing.
+  (recording       nil :type (or null (array (unsigned-byte 8) (*))))
   )
 
 ;;; --------------------------------------------------------------------------
@@ -142,8 +146,45 @@
 
 (defun process-output (handler data &key (start 0) end)
   "Process terminal output DATA through the handler.
-   DATA should be a (vector (unsigned-byte 8))."
+   DATA should be a (vector (unsigned-byte 8)).
+
+   When recording is active (see START-RECORDING), every byte in the processed
+   range is appended to the recording buffer *before* parsing, capturing the
+   exact host->terminal stream for later deterministic replay. Recording is a
+   pure tap and does not change parsing behavior."
+  (let ((rec (vt-handler-recording handler)))
+    (when rec
+      (loop :for i :from start :below (or end (length data))
+            :do (vector-push-extend (aref data i) rec))))
   (cl-vt:vt-parse (vt-handler-parser handler) data start end))
+
+;;; --------------------------------------------------------------------------
+;;; Raw-input recording (test rig authoring)
+;;; --------------------------------------------------------------------------
+
+(defun start-recording (handler)
+  "Begin recording the raw byte stream fed to PROCESS-OUTPUT.
+   Allocates a fresh growable buffer, discarding any previous recording.
+   Returns HANDLER."
+  (setf (vt-handler-recording handler)
+        (make-array 4096 :element-type '(unsigned-byte 8)
+                         :adjustable t :fill-pointer 0))
+  handler)
+
+(defun stop-recording (handler)
+  "Stop recording and return the captured bytes as a fresh simple
+   (unsigned-byte 8) vector. Returns NIL if recording was not active."
+  (let ((rec (vt-handler-recording handler)))
+    (setf (vt-handler-recording handler) nil)
+    (when rec
+      (let ((out (make-array (fill-pointer rec)
+                             :element-type '(unsigned-byte 8))))
+        (replace out rec)
+        out))))
+
+(defun recording-active-p (handler)
+  "Return T if HANDLER is currently recording its input stream."
+  (and (vt-handler-recording handler) t))
 
 ;;; --------------------------------------------------------------------------
 ;;; Action dispatch

@@ -193,6 +193,68 @@ handler through the mailbox and still returns correct results."
         (assert-that result (has-plist-entries :cols 77 :rows 25))))))
 
 ;;; -----------------------------------------------------------------------
+;;; Restart state handoff (Phase 9)
+;;; -----------------------------------------------------------------------
+
+(defun setup-terminal-with-screen (name &key (cols 80) (rows 24))
+  "define-terminal NAME and place a headless terminal carrying a fresh model
+SCREEN into *gui-objects*. Returns the screen."
+  (apply #'lexter/origin:define-terminal name "/bin/bash" (list :cols cols :rows rows))
+  (let ((term (lexter/unix-term:make-terminal "/bin/bash" :cols cols :rows rows))
+        (screen (lexter/model:make-screen :cols cols :rows rows)))
+    (setf (lexter/unix-term::unix-terminal-screen term) screen)
+    (push (cons (%canon name) term) lexter/origin::*gui-objects*)
+    screen))
+
+(def-test handoff-advertised-in-describe ()
+  "describe advertises the strata a Lexter terminal can hand off."
+  (with-clean
+    (lexter/origin:define-terminal :bash "/bin/bash" :cols 80 :rows 24)
+    (is (equal '(:application :session)
+               (getf (impulse:describe-orbital (origin:find-process "bash"))
+                     :handoff)))))
+
+(def-test handoff-exports-geometry-and-cursor ()
+  "export-state captures the terminal geometry (:application) and cursor
+position (:session) as a versioned handoff datum."
+  (with-clean
+    (let ((screen (setup-terminal-with-screen :bash :cols 100 :rows 40)))
+      (lexter/model:set-cursor-position screen 7 11)
+      (let ((state (impulse:export-state :lexter-host (origin:find-process "bash"))))
+        (is-true (impulse:handoff-state-p state))
+        (let ((app (impulse:handoff-stratum state :application))
+              (sess (impulse:handoff-stratum state :session)))
+          (is (= 100 (getf app :cols)))
+          (is (= 40 (getf app :rows)))
+          (is (= 7 (getf sess :cursor-col)))
+          (is (= 11 (getf sess :cursor-row))))))))
+
+(def-test handoff-imports-cursor-into-fresh-screen ()
+  "import-state restores the cursor position into a freshly-rebuilt terminal --
+the native in-heap handoff round-trip."
+  (with-clean
+    ;; Source terminal with a positioned cursor.
+    (let ((screen-a (setup-terminal-with-screen :a :cols 80 :rows 24)))
+      (lexter/model:set-cursor-position screen-a 5 3)
+      (let ((state (impulse:export-state :lexter-host (origin:find-process "a"))))
+        ;; A fresh terminal (cursor at origin) receives the state.
+        (let ((screen-b (setup-terminal-with-screen :b :cols 80 :rows 24)))
+          (is (= 0 (lexter/model:cursor-col screen-b)))
+          (is-true (impulse:import-state :lexter-host (origin:find-process "b") state))
+          (is (= 5 (lexter/model:cursor-col screen-b)))
+          (is (= 3 (lexter/model:cursor-row screen-b))))))))
+
+(def-test handoff-import-version-mismatch-is-safe ()
+  "An incompatible handoff version is ignored (fail-safe) -- the cursor stays
+at the fresh origin."
+  (with-clean
+    (let ((screen (setup-terminal-with-screen :bash :cols 80 :rows 24))
+          (bad (impulse:make-handoff-state :lexter-host
+                 '(:session (:cursor-col 9 :cursor-row 9)) :version 999)))
+      (is-false (impulse:import-state :lexter-host (origin:find-process "bash") bad))
+      (is (= 0 (lexter/model:cursor-col screen))))))
+
+;;; -----------------------------------------------------------------------
 ;;; Runner
 ;;; -----------------------------------------------------------------------
 

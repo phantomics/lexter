@@ -26,6 +26,15 @@
                (:file "src/vt-handler")
                (:file "src/unix-term")))
 
+;;; Screenshot-based test rig (raw-input recording + deterministic replay)
+(asdf:defsystem #:lexter/test
+  :description "Screenshot-based test rig for Lexter (record + replay + checksum)"
+  :license "BSD"
+  :version "0.1.0"
+  :depends-on (#:lexter/unix #:cl-glfw3)
+  :serial t
+  :components ((:file "src/test-rig")))
+
 ;;; Pane multiplexer subsystem
 (asdf:defsystem #:lexter/panes
   :description "Pane multiplexer for Lexter"

@@ -46,6 +46,12 @@
            #:start-recording
            #:stop-recording
            #:recording-active-p
+           ;; Mouse reporting (xterm modes 1000/1002/1003/1006)
+           #:vt-handler-mouse-tracking
+           #:vt-handler-mouse-encoding
+           #:mouse-report-bytes
+           #:encode-mouse-sgr
+           #:encode-mouse-x10
            ;; Debug
            #:*debug-vt*))
 

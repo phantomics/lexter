@@ -31,6 +31,19 @@
   (pixel-scale  1   :type fixnum)
   ;; Meta-mode state
   (prefix-active nil :type boolean)
+  ;; --- Mouse state ---
+  ;; Last known cursor position in window pixels (the GLFW mouse-button callback
+  ;; carries no coordinates, so we track them from the cursor-pos callback).
+  (mouse-x 0.0d0 :type double-float)
+  (mouse-y 0.0d0 :type double-float)
+  ;; Pane that grabbed the pointer on button-press; receives all motion/release
+  ;; until every button is released (drag capture). NIL when idle.
+  (mouse-capture-pane nil)
+  ;; Currently held xterm button codes (0 left, 1 middle, 2 right).
+  (mouse-buttons '() :type list)
+  ;; Last window cell a motion event was delivered for (cell-granularity dedupe);
+  ;; (col . row) or NIL.
+  (mouse-last-cell nil)
   ;; Cursor blink
   (cursor-blink-on t :type boolean)
   (cursor-blink-time 0.0 :type single-float)
@@ -137,6 +150,118 @@
          (pane (when ws (focused-pane ws))))
     (when pane
       (pane-handle-char pane codepoint))))
+
+;;; --------------------------------------------------------------------------
+;;; Mouse handling
+;;; --------------------------------------------------------------------------
+
+;; GLFW decodes mouse buttons to :left / :right / :3(middle); GLFW's button
+;; order (0 left, 1 right, 2 middle) differs from xterm's (0 left, 1 middle,
+;; 2 right). Map by keyword so we are robust to either decoding.
+(defparameter *glfw->xterm-button*
+  '((:left . 0) (:1 . 0)
+    (:3 . 1) (:middle . 1)
+    (:right . 2) (:2 . 2)
+    (:4 . 64) (:5 . 65))
+  "Maps a cl-glfw3 mouse-button keyword to an xterm button code.")
+
+(defun %glfw-button->xterm (button-kw)
+  "Translate a GLFW mouse-button keyword to an xterm button code, or NIL."
+  (cdr (assoc button-kw *glfw->xterm-button*)))
+
+(defun compositor-pixel->cell (comp x y)
+  "Convert window pixel coordinates X,Y to 0-based window cell (col,row),
+   clamped to the grid. Returns (values col row)."
+  (let* ((cw (* (compositor-cell-w comp) (compositor-pixel-scale comp)))
+         (ch (* (compositor-cell-h comp) (compositor-pixel-scale comp)))
+         (col (floor x cw))
+         (row (floor y ch)))
+    (values (max 0 (min (1- (compositor-cols comp)) col))
+            (max 0 (min (1- (compositor-rows comp)) row)))))
+
+(defun compositor-pane-at (comp col row)
+  "Return the active-workspace pane whose grid rectangle contains window cell
+   (COL,ROW), or NIL. First match wins (panes are expected to be disjoint)."
+  (let ((ws (active-workspace comp)))
+    (when ws
+      (dolist (pane (workspace-panes ws))
+        (let ((c0 (pane-col pane)) (r0 (pane-row pane)))
+          (when (and (<= c0 col (+ c0 (pane-width pane) -1))
+                     (<= r0 row (+ r0 (pane-height pane) -1)))
+            (return pane)))))))
+
+(defun pane-content-cell (pane wincol winrow)
+  "Translate window cell (WINCOL,WINROW) into PANE content-space cells.
+   Returns (values ccol crow inside-p) where INSIDE-P is true only when the
+   point lands within the pane's content area (excluding header/scroll chrome)."
+  (let* ((ccol (- wincol (pane-col pane)))
+         (crow (- winrow (content-row pane)))
+         (inside (and (<= 0 ccol) (< ccol (content-width pane))
+                      (<= 0 crow) (< crow (content-height pane)))))
+    (values ccol crow inside)))
+
+(defun %compositor-deliver-button (comp pane wincol winrow button action mods)
+  "Deliver a button event to PANE in its content space, if inside its content."
+  (when pane
+    (multiple-value-bind (ccol crow inside) (pane-content-cell pane wincol winrow)
+      (when inside
+        (pane-handle-mouse-button pane ccol crow button action mods)))))
+
+(defun handle-compositor-mouse-button (comp button-kw action mods)
+  "Route a GLFW mouse button event: focus + drag-capture + delivery."
+  (let ((button (%glfw-button->xterm button-kw)))
+    (when button
+      (multiple-value-bind (col row) (compositor-pixel->cell comp
+                                                             (compositor-mouse-x comp)
+                                                             (compositor-mouse-y comp))
+        (cond
+          ((eq action :press)
+           (pushnew button (compositor-mouse-buttons comp))
+           (let ((pane (compositor-pane-at comp col row)))
+             ;; Capture the pointer for the drag and focus the pane on click.
+             (setf (compositor-mouse-capture-pane comp) pane)
+             (when (and pane (pane-focusable pane))
+               (let ((ws (active-workspace comp)))
+                 (when ws (focus-pane ws pane))))
+             (%compositor-deliver-button comp pane col row button :press mods)))
+          (t ; :release -> goes to the capturing pane (or pane under cursor)
+           (setf (compositor-mouse-buttons comp)
+                 (remove button (compositor-mouse-buttons comp)))
+           (let ((pane (or (compositor-mouse-capture-pane comp)
+                           (compositor-pane-at comp col row))))
+             (%compositor-deliver-button comp pane col row button :release mods))
+           ;; Release the grab once no buttons remain held.
+           (when (null (compositor-mouse-buttons comp))
+             (setf (compositor-mouse-capture-pane comp) nil))))))))
+
+(defun handle-compositor-cursor-pos (comp x y)
+  "Track the cursor and deliver per-cell motion to the captured / hovered pane."
+  (setf (compositor-mouse-x comp) x
+        (compositor-mouse-y comp) y)
+  (multiple-value-bind (col row) (compositor-pixel->cell comp x y)
+    (let ((last (compositor-mouse-last-cell comp)))
+      (unless (and last (= (car last) col) (= (cdr last) row))
+        (setf (compositor-mouse-last-cell comp) (cons col row))
+        (let ((pane (or (compositor-mouse-capture-pane comp)
+                        (compositor-pane-at comp col row))))
+          (when pane
+            (multiple-value-bind (ccol crow inside) (pane-content-cell pane col row)
+              (when inside
+                ;; GLFW cursor-pos carries no modifier state; pass NIL.
+                (pane-handle-mouse-motion pane ccol crow
+                                          (compositor-mouse-buttons comp) nil)))))))))
+
+(defun handle-compositor-scroll (comp dx dy)
+  "Route a scroll-wheel event to the captured / hovered pane."
+  (multiple-value-bind (col row) (compositor-pixel->cell comp
+                                                         (compositor-mouse-x comp)
+                                                         (compositor-mouse-y comp))
+    (let ((pane (or (compositor-mouse-capture-pane comp)
+                    (compositor-pane-at comp col row))))
+      (when pane
+        (multiple-value-bind (ccol crow inside) (pane-content-cell pane col row)
+          (when inside
+            (pane-handle-scroll pane ccol crow (round dx) (round dy) nil)))))))
 
 ;;; --------------------------------------------------------------------------
 ;;; Resize handling
@@ -343,6 +468,19 @@ new context current, so the atlas/renderer GL objects belong to it."
             (declare (ignore window))
             (handle-compositor-char comp codepoint))
           (glfw:set-char-callback 'char-callback win)
+          ;; Mouse callbacks (button, motion, wheel).
+          (glfw:def-mouse-button-callback mouse-button-callback (window button action mod-keys)
+            (declare (ignore window))
+            (handle-compositor-mouse-button comp button action mod-keys))
+          (glfw:set-mouse-button-callback 'mouse-button-callback win)
+          (glfw:def-cursor-pos-callback cursor-pos-callback (window x y)
+            (declare (ignore window))
+            (handle-compositor-cursor-pos comp x y))
+          (glfw:set-cursor-position-callback 'cursor-pos-callback win)
+          (glfw:def-scroll-callback scroll-callback (window x y)
+            (declare (ignore window))
+            (handle-compositor-scroll comp x y))
+          (glfw:set-scroll-callback 'scroll-callback win)
           (glfw:def-framebuffer-size-callback fb-size-callback (window width height)
             (declare (ignore window))
             (let ((new-cols (floor width (* cell-w scale)))

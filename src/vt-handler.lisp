@@ -101,6 +101,17 @@
   ;; (unsigned-byte 8) vector with a fill pointer that accumulates every byte
   ;; fed to PROCESS-OUTPUT. Recording is a pure tap: it never alters parsing.
   (recording       nil :type (or null (array (unsigned-byte 8) (*))))
+  ;; Mouse reporting (xterm DEC private modes). MOUSE-TRACKING selects WHICH
+  ;; events the application wants reported:
+  ;;   NIL      -> off
+  ;;   :normal  -> mode 1000: button press/release only
+  ;;   :button  -> mode 1002: + motion while a button is held (drag)
+  ;;   :any     -> mode 1003: + all motion
+  ;; MOUSE-ENCODING selects HOW events are encoded (orthogonal axis):
+  ;;   :x10     -> legacy CSI M Cb Cx Cy (default; 223-cell coordinate cap)
+  ;;   :sgr     -> mode 1006: CSI < b ; x ; y M/m (no cap, explicit press/release)
+  (mouse-tracking  nil :type (member nil :normal :button :any))
+  (mouse-encoding  :x10 :type (member :x10 :sgr))
   )
 
 ;;; --------------------------------------------------------------------------
@@ -717,6 +728,12 @@
       (1049 ; Save cursor, switch to a freshly-cleared alternate screen
        (%save-alt-cursor handler)
        (%enter-alt-screen handler :clear t))
+      ;; Mouse tracking modes (1000/1002/1003 select the tracking level;
+      ;; 1006 selects SGR encoding -- an orthogonal axis).
+      (1000 (setf (vt-handler-mouse-tracking handler) :normal))
+      (1002 (setf (vt-handler-mouse-tracking handler) :button))
+      (1003 (setf (vt-handler-mouse-tracking handler) :any))
+      (1006 (setf (vt-handler-mouse-encoding handler) :sgr))
       (otherwise
        (when (vt-handler-callback handler)
          (funcall (vt-handler-callback handler) :unknown-decset mode))))))
@@ -740,9 +757,80 @@
       (1049 ; Switch back to primary screen and restore cursor
        (%exit-alt-screen handler)
        (%restore-alt-cursor handler))
+      ;; Mouse tracking off. The three tracking levels collapse to one slot, so
+      ;; resetting any of them turns reporting off (apps reset symmetrically).
+      ((1000 1002 1003) (setf (vt-handler-mouse-tracking handler) nil))
+      (1006 (setf (vt-handler-mouse-encoding handler) :x10))
       (otherwise
        (when (vt-handler-callback handler)
          (funcall (vt-handler-callback handler) :unknown-decrst mode))))))
+
+;;; --------------------------------------------------------------------------
+;;; Mouse event encoding (xterm reporting modes 1000/1002/1003 + 1006)
+;;; --------------------------------------------------------------------------
+;;;
+;;; xterm button codes (the low value passed as BUTTON here):
+;;;   0 left, 1 middle, 2 right, 3 "no button" (used for bare motion in 1003),
+;;;   64 wheel-up, 65 wheel-down, 66 wheel-left, 67 wheel-right.
+;;; Modifier bits OR'd in: shift 4, meta/alt 8, control 16. Motion bit: 32.
+
+(defun %ascii-bytes (string)
+  "Convert an all-ASCII STRING to a simple (unsigned-byte 8) vector."
+  (let ((out (make-array (length string) :element-type '(unsigned-byte 8))))
+    (dotimes (i (length string) out)
+      (setf (aref out i) (char-code (char string i))))))
+
+(defun %mouse-modifier-bits (mods)
+  "Sum the xterm modifier bits for the GLFW MODS list (:shift :control :alt)."
+  (logior (if (member :shift   mods) 4  0)
+          (if (member :alt     mods) 8  0)
+          (if (member :control mods) 16 0)))
+
+(defun encode-mouse-sgr (cb col row press-p)
+  "Pure SGR (1006) encoder. CB is the full button code (button + modifier +
+   motion bits). COL/ROW are 0-based; emitted 1-based. PRESS-P selects the
+   final 'M' (press/motion) vs 'm' (release). Returns an (unsigned-byte 8)
+   vector. No coordinate limit."
+  (%ascii-bytes (format nil "~C[<~D;~D;~D~C"
+                        (code-char 27) cb (1+ col) (1+ row)
+                        (if press-p #\M #\m))))
+
+(defun encode-mouse-x10 (cb col row)
+  "Pure X10/normal encoder: CSI M (32+cb) (32+col+1) (32+row+1). Returns an
+   (unsigned-byte 8) vector, or NIL when a coordinate exceeds the 223-cell
+   limit the encoding cannot represent."
+  (when (and (<= 0 col 222) (<= 0 row 222))
+    (make-array 6 :element-type '(unsigned-byte 8)
+                  :initial-contents (list 27 #x5B #x4D
+                                          (logand (+ 32 cb) #xFF)
+                                          (+ 33 col) (+ 33 row)))))
+
+(defun mouse-report-bytes (handler col row button action mods &key motion)
+  "Return the byte sequence reporting a mouse event for HANDLER's active mouse
+   mode, or NIL when the event is not reported (tracking off, or a motion event
+   the current tracking level ignores). COL/ROW are 0-based pane-relative cells.
+   BUTTON is an xterm button code (see above). ACTION is :press or :release
+   (wheel events use :press). MOTION non-NIL marks a motion event.
+
+   Gating by tracking level:
+     :normal -> motion never reported
+     :button -> motion reported only while a button is held (BUTTON /= 3)
+     :any    -> all motion reported"
+  (let ((mode (vt-handler-mouse-tracking handler)))
+    (cond
+      ((null mode) nil)
+      ((and motion (eq mode :normal)) nil)
+      ((and motion (eq mode :button) (= button 3)) nil)
+      (t
+       (let ((mod+motion (logior (%mouse-modifier-bits mods) (if motion 32 0))))
+         (ecase (vt-handler-mouse-encoding handler)
+           (:sgr (encode-mouse-sgr (logior button mod+motion) col row
+                                   (eq action :press)))
+           ;; X10 release reports the ambiguous "button 3"; press/wheel keep
+           ;; their button. (Default path until an app requests 1006.)
+           (:x10 (encode-mouse-x10
+                  (logior (if (eq action :release) 3 button) mod+motion)
+                  col row))))))))
 
 ;;; --------------------------------------------------------------------------
 ;;; ESC sequence handlers
@@ -926,6 +1014,9 @@
           (vt-handler-current-attrs handler) 0)
     ;; Reset modes
     (setf (vt-handler-autowrap handler) t)
+    ;; Reset mouse reporting (RIS must release any application mouse grab)
+    (setf (vt-handler-mouse-tracking handler) nil
+          (vt-handler-mouse-encoding handler) :x10)
     ;; Clear screen
     (erase-in-display screen 2)
     ;; Home cursor

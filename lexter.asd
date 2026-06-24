@@ -51,6 +51,17 @@
                (:file "src/panes/workspace")
                (:file "src/panes/compositor")))
 
+;;; Mouse-reporting + routing unit tests (pure: no GL / display required)
+(asdf:defsystem #:lexter/mouse-tests
+  :description "Unit tests for Lexter mouse reporting and pointer routing"
+  :license "BSD"
+  :version "0.1.0"
+  :depends-on (#:lexter/panes)
+  :serial t
+  :components ((:file "tests/mouse-tests"))
+  :perform (test-op (o s)
+             (uiop:symbol-call :lexter/panes :run-all-tests)))
+
 ;;; TN3270 client library (standalone, no pane dependency)
 (asdf:defsystem #:lexter/tn3270
   :description "TN3270/TN3270E client library for Lexter"

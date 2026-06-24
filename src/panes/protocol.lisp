@@ -40,10 +40,16 @@
               :documentation "Back-reference to containing workspace, if any.")
    (input-redirect :accessor pane-input-redirect
                    :initform nil
-                   :documentation "Function to redirect input to, or NIL for normal routing.
-                    Signature: (funcall redirect pane :key key scancode action mods)
-                             or (funcall redirect pane :char codepoint).
-                    Used for modal dialogs and other input interception."))
+                    :documentation "Function to redirect input to, or NIL for normal routing.
+                     Signatures:
+                       (funcall redirect pane :key key scancode action mods)
+                       (funcall redirect pane :char codepoint)
+                       (funcall redirect pane :mouse-button col row button action mods)
+                       (funcall redirect pane :mouse-motion col row buttons mods)
+                       (funcall redirect pane :scroll col row dx dy mods)
+                     Used for modal dialogs and other input interception. An
+                     active redirect captures pointer (including wheel) events
+                     as well as keyboard events."))
   (:documentation "Base class for all pane types."))
 
 ;;; --------------------------------------------------------------------------
@@ -67,6 +73,26 @@
    "Handle a character input event directed at this pane.
     CODEPOINT is a Unicode codepoint (integer).
     Return T if handled, NIL to fall through to default behavior."))
+
+(defgeneric pane-handle-mouse-button (pane col row button action mods)
+  (:documentation
+   "Handle a mouse button event directed at this pane.
+    COL/ROW are 0-based cells in the pane's own content space (the compositor
+    has already subtracted the pane's grid offset). BUTTON is an xterm button
+    code (0 left, 1 middle, 2 right, 64/65 wheel). ACTION is :press/:release.
+    MODS is a list of modifier keywords. Return T if handled."))
+
+(defgeneric pane-handle-mouse-motion (pane col row buttons mods)
+  (:documentation
+   "Handle pointer motion (one event per cell change) directed at this pane.
+    COL/ROW are 0-based pane-content cells. BUTTONS is the list of currently
+    held xterm button codes (NIL when none). Return T if handled."))
+
+(defgeneric pane-handle-scroll (pane col row dx dy mods)
+  (:documentation
+   "Handle a scroll-wheel event directed at this pane. COL/ROW are 0-based
+    pane-content cells. DX/DY are integer wheel deltas (DY>0 = up). Return T
+    if handled."))
 
 (defgeneric pane-process-output (pane)
   (:documentation
@@ -152,6 +178,21 @@
   (declare (ignore codepoint))
   nil)
 
+(defmethod pane-handle-mouse-button ((pane pane) col row button action mods)
+  "Default: not handled."
+  (declare (ignore col row button action mods))
+  nil)
+
+(defmethod pane-handle-mouse-motion ((pane pane) col row buttons mods)
+  "Default: not handled."
+  (declare (ignore col row buttons mods))
+  nil)
+
+(defmethod pane-handle-scroll ((pane pane) col row dx dy mods)
+  "Default: not handled."
+  (declare (ignore col row dx dy mods))
+  nil)
+
 (defmethod pane-process-output ((pane pane))
   "Default: no I/O to process."
   nil)
@@ -223,6 +264,28 @@
         (funcall redirect pane :char codepoint)
         (call-next-method))))
 
+(defmethod pane-handle-mouse-button :around ((pane pane) col row button action mods)
+  "Divert mouse button events to an active input redirect."
+  (let ((redirect (pane-input-redirect pane)))
+    (if (and redirect (not *redirect-suppressed*))
+        (funcall redirect pane :mouse-button col row button action mods)
+        (call-next-method))))
+
+(defmethod pane-handle-mouse-motion :around ((pane pane) col row buttons mods)
+  "Divert pointer motion events to an active input redirect."
+  (let ((redirect (pane-input-redirect pane)))
+    (if (and redirect (not *redirect-suppressed*))
+        (funcall redirect pane :mouse-motion col row buttons mods)
+        (call-next-method))))
+
+(defmethod pane-handle-scroll :around ((pane pane) col row dx dy mods)
+  "Divert scroll-wheel events to an active input redirect (so a modal redirect
+   captures the wheel as well as buttons and keys)."
+  (let ((redirect (pane-input-redirect pane)))
+    (if (and redirect (not *redirect-suppressed*))
+        (funcall redirect pane :scroll col row dx dy mods)
+        (call-next-method))))
+
 ;;; --------------------------------------------------------------------------
 ;;; Input forwarding (for use by redirect functions)
 ;;; --------------------------------------------------------------------------
@@ -240,3 +303,18 @@
    to the pane after inspecting or transforming them."
   (let ((*redirect-suppressed* t))
     (pane-handle-char pane codepoint)))
+
+(defun pane-forward-mouse-button (pane col row button action mods)
+  "Forward a mouse button event to the pane's normal handler, bypassing redirect."
+  (let ((*redirect-suppressed* t))
+    (pane-handle-mouse-button pane col row button action mods)))
+
+(defun pane-forward-mouse-motion (pane col row buttons mods)
+  "Forward a pointer motion event to the pane's normal handler, bypassing redirect."
+  (let ((*redirect-suppressed* t))
+    (pane-handle-mouse-motion pane col row buttons mods)))
+
+(defun pane-forward-scroll (pane col row dx dy mods)
+  "Forward a scroll event to the pane's normal handler, bypassing redirect."
+  (let ((*redirect-suppressed* t))
+    (pane-handle-scroll pane col row dx dy mods)))

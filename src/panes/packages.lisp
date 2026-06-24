@@ -15,6 +15,9 @@
    #:pane-flush
    #:pane-handle-key
    #:pane-handle-char
+   #:pane-handle-mouse-button
+   #:pane-handle-mouse-motion
+   #:pane-handle-scroll
    #:pane-process-output
    #:pane-resize
    #:pane-dirty-p
@@ -25,6 +28,9 @@
    #:pane-input-redirect
    #:pane-forward-key
    #:pane-forward-char
+   #:pane-forward-mouse-button
+   #:pane-forward-mouse-motion
+   #:pane-forward-scroll
    #:*redirect-suppressed*
    #:scroll-state
    #:content-width

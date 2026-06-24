@@ -274,6 +274,73 @@
       (vt-pane-write-bytes pane (vt-pane-write-buffer pane) :end n))
     t))
 
+;;; --------------------------------------------------------------------------
+;;; Mouse reporting (xterm modes 1000/1002/1003/1006)
+;;; --------------------------------------------------------------------------
+
+(defun %vt-pane-send-mouse (pane bytes)
+  "Write a mouse report BYTES vector to the backend. Returns T."
+  (when bytes
+    (vt-pane-write-bytes pane bytes :end (length bytes))
+    t))
+
+(defmethod pane-handle-mouse-button ((pane vt-pane) col row button action mods)
+  "Report a button event to the application when a mouse mode is active.
+   Falls through (returns NIL) when no mode is active, so the compositor / APL
+   layer can use the event for focus, selection, etc."
+  (let ((handler (vt-pane-vt-handler pane)))
+    (when (and handler (vt-pane-backend-alive-p pane)
+               (lexter/vt-handler:vt-handler-mouse-tracking handler))
+      (%vt-pane-send-mouse
+       pane (lexter/vt-handler:mouse-report-bytes handler col row button action mods)))))
+
+(defmethod pane-handle-mouse-motion ((pane vt-pane) col row buttons mods)
+  "Report motion to the application. MOUSE-REPORT-BYTES gates by tracking level
+   (ignored entirely for :normal, button-held-only for :button)."
+  (let ((handler (vt-pane-vt-handler pane)))
+    (when (and handler (vt-pane-backend-alive-p pane)
+               (lexter/vt-handler:vt-handler-mouse-tracking handler))
+      ;; Representative held button (xterm uses 3 = "no button" for bare motion).
+      (let ((button (or (first buttons) 3)))
+        (%vt-pane-send-mouse
+         pane (lexter/vt-handler:mouse-report-bytes
+               handler col row button :press mods :motion t))))))
+
+(defmethod pane-handle-scroll ((pane vt-pane) col row dx dy mods)
+  "Wheel precedence: (1) mouse mode active -> report as buttons 64-67;
+   (2) no mode, alternate screen -> translate to arrow keys; (3) no mode,
+   primary screen -> drive local scrollback."
+  (let ((handler (vt-pane-vt-handler pane)))
+    (cond
+      ;; (1) Application requested mouse reporting.
+      ((and handler (vt-pane-backend-alive-p pane)
+            (lexter/vt-handler:vt-handler-mouse-tracking handler))
+       (let ((button (cond ((plusp dy) 64) ((minusp dy) 65)
+                           ((plusp dx) 66) ((minusp dx) 67) (t nil))))
+         (when button
+           (%vt-pane-send-mouse
+            pane (lexter/vt-handler:mouse-report-bytes handler col row button :press mods)))))
+      ;; (2) Alternate screen, no mode: wheel -> arrow keys (one per notch).
+      ((and handler (lexter/vt-handler:vt-handler-in-alt-screen handler)
+            (vt-pane-backend-alive-p pane))
+       (let* ((key (cond ((plusp dy) :up) ((minusp dy) :down) (t nil)))
+              (seq (and key (cdr (assoc key *key-sequences*)))))
+         (when seq
+           (dotimes (i (abs dy) t)
+             (vt-pane-write-bytes pane seq :end (length seq))))))
+      ;; (3) Primary screen, no mode: local scrollback.
+      (t
+       (%vt-pane-scroll-local pane dy)))))
+
+(defun %vt-pane-scroll-local (pane dy)
+  "Adjust the pane's scrollback viewport by DY lines (positive = back in
+   history). Returns T if anything could change."
+  (let ((screen (vt-pane-active-screen pane)))
+    (when screen
+      (let ((offset (lexter/model:scrollback-viewport-offset screen)))
+        (lexter/model:set-scrollback-viewport screen (+ offset dy))
+        t))))
+
 (defmethod pane-process-output ((pane vt-pane))
   "Read and process any available backend output."
   (unless (vt-pane-backend-alive-p pane)

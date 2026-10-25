@@ -1,6 +1,6 @@
 (in-package #:lexter/origin)
 
-(defun define-terminal (name command &rest args
+(defun define-bg-terminal (name command &rest args
                         &key (restart-policy :transient)
                           (max-restarts 5)
                           (description nil)
@@ -9,14 +9,22 @@
 NAME is the Origin process name (symbol or string).
 COMMAND is the shell command to run (e.g. \"/bin/bash\").
 Remaining keyword arguments are passed to LEXTER/UNIX-TERM:RUN-TERMINAL.
+This terminal will run in a background thread; this is considered
+wrong for GUI-manifesting threads and is prohibited in MacOS, but this was
+the initial proof of concept implementation for Lexter process management
+via Origin.
+ 
 Origin-specific keywords:
   :RESTART-POLICY  - :ALWAYS, :NEVER, or :TRANSIENT (default :TRANSIENT)
   :MAX-RESTARTS    - integer (default 5)
   :DESCRIPTION     - string (default auto-generated)
+
 Example:
-  (lexter/origin:define-terminal :bash \"/bin/bash\"
+  (lexter/origin:define-bg-terminal :bash \"/bin/bash\"
     :cols 80 :rows 24
     :font-path \"/path/to/terminus-18n.pcf\")
+  (origin:start-supervisor)
+
   (origin:start :bash)"
   (let ((stop-flag (list t))
         (lexter-args (alexandria:remove-from-plist

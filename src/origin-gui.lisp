@@ -189,6 +189,8 @@ Remaining keyword arguments are passed to MAKE-TERMINAL.
 
 The terminal is registered but not started.  Call (ORIGIN:START name)
 after RUN-MAIN-LOOP is running, or use RUN-MAIN-LOOP's :AUTOSTART.
+This terminal runs the Lexter process in a main thread, as proper for
+a GUI thread, but it blocks the REPL in turn.
 
 Origin-specific keywords:
   :RESTART-POLICY  - :ALWAYS, :NEVER, or :TRANSIENT (default :TRANSIENT)
@@ -208,13 +210,10 @@ Example:
     (setf (gethash canonical *terminal-specs*)
           (list* :command command lexter-args))
     ;; Register as a cooperative process (no entry-point / stop-function;
-    ;; the executor hooks handle everything), and tag it with the Impulse
-    ;; :LEXTER-HOST control type so it answers the terminal sub-vocabulary.
-    (prog1
-        (origin:define-process name
-          :execution-mode :cooperative
-          :restart-policy restart-policy
-          :max-restarts max-restarts
-          :description (or description
-                           (format nil "Lexter terminal: ~A" command)))
-      (setf (impulse:orbital-control-type canonical) :lexter-host))))
+    ;; the executor hooks handle everything).
+    (origin:define-process name
+      :execution-mode :cooperative
+      :restart-policy restart-policy
+      :max-restarts max-restarts
+      :description (or description
+                       (format nil "Lexter terminal: ~A" command)))))

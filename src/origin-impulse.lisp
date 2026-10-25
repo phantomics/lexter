@@ -20,6 +20,95 @@
 ;;;; so a status read or a configure that touches GL/terminal state runs where
 ;;;; it is safe to, with no code here.
 
+#|
+
+---------------------------------------------------------------------------
+REPL examples
+---------------------------------------------------------------------------
+
+Assume a running Lexter terminal orbital, defined and started under the
+main-thread dispatcher:
+
+  (lexter/origin:define-terminal :bash "/bin/bash" :cols 80 :rows 24
+                                 :font-path "~/src/chat/terminus-18n.pcf")
+  (origin:start-supervisor)
+  (lexter/origin:run-main-loop :autostart '(:bash))   ; blocks the main thread
+
+The examples below run from another thread -- a Slynk REPL in the same
+image, or, for a Lexter *image* orbital, the parent core over the Impulse
+socket. Every call returns a response datum; IMPULSE:RESPONSE-RESULT pulls
+the payload out of an (:OK :RESULT ... ) reply.
+
+--- STATUS: observed state, universal + typed window fields ---------------
+
+  (impulse:request :bash :status)
+  ;; => (:OK :RESULT (:NAME "bash" :STATUS :RUNNING :EXECUTION-MODE :COOPERATIVE
+  ;;                  :ALIVE T :READY T ... :HEALTH (:ALIVE T :READY T :STARTED T)
+  ;;                  :COLS 80 :ROWS 24 :PIXEL-SCALE 1 :TITLE "lexter terminal"
+  ;;                  :WINDOW-ALIVE T :SCROLLBACK-LINES 142
+  ;;                  :CURSOR (:COL 12 :ROW 7) :PID 48213) :ID NIL)
+
+  (impulse:with-connection (s (lexter/origin:impulse-socket-path :lexter-image)
+                              :tier impulse:+tier-read-write+)
+    (impulse:session-request s "bash" :status :query '(:cols :rows :cursor)))
+
+  ;; Narrow to chosen leaves (GraphQL-style field selection):
+  (impulse:response-result
+    (impulse:request :bash :status :query '(:cols :rows :scrollback-lines :cursor)))
+  ;; => (:COLS 80 :ROWS 24 :SCROLLBACK-LINES 142 :CURSOR (:COL 12 :ROW 7))
+
+  ;; Other strata of the same verb: declared spec, or the dependency topology:
+  (impulse:request :bash :status :args '(:view :spec))
+  (impulse:request :bash :status :args '(:view :topology))
+
+--- DESCRIBE: discover the :LEXTER-HOST surface --------------------------
+
+  (impulse:response-result (impulse:request :bash :describe))
+  ;; => (:ORBITAL "bash" :CONTROL-TYPE :LEXTER-HOST
+  ;;     :VERBS ((:VERB :DESCRIBE :EFFECT :SAFE ...) (:VERB :CONFIGURE ...) ...)
+  ;;     :QUERIES ((:VERB :STATUS :LEAVES ((:COLS :TYPE :INTEGER :ACCESS :READ-ONLY)
+  ;;                                       (:SCROLLBACK-LINES ...) (:CURSOR ...) ...)))
+  ;;     :CONFIG-SCHEMA ((:COLS :TYPE :INTEGER :ACCESS :READ-WRITE)
+  ;;                     (:ROWS ...) (:PIXEL-SCALE ...) (:FONT-PATH ...) (:TITLE ...))
+  ;;     :HANDOFF (:APPLICATION :SESSION) :SUB-VOCABULARIES NIL)
+  ;;
+  ;; A tool renders an inspector/editor from this -- no Lexter-specific
+  ;; knowledge baked in.
+
+--- CONFIGURE / APPLY: set window parameters ----------------------------
+
+  ;; CONFIGURE -- an immediate, validated, idempotent parameter set. Live-
+  ;; settable knobs (title, pixel-scale) take effect now; geometry/font are
+  ;; written to the rebuild spec and applied on the next restart.
+  (impulse:request :bash :configure :args '(:pixel-scale 2 :title "shell"))
+  ;; => (:OK :RESULT (:NAME "bash" :COMMITTED T :SPEC (... :PIXEL-SCALE 2 ...)) ...)
+
+  ;; APPLY -- the declarative desired-state verb. :DRY-RUN validates and
+  ;; reports without mutating:
+  (impulse:request :bash :apply :args '(:spec (:cols 120 :rows 40) :dry-run t))
+  ;; => (:OK :RESULT (:NAME "bash" :VALID T :DRY-RUN T :SPEC (... :COLS 120 ...)) ...)
+
+  ;; Commit it (geometry change applies on the next restart):
+  (impulse:request :bash :apply :args '(:spec (:cols 120 :rows 40)))
+
+  ;; An invalid parameter comes back as a structured error, not a crash:
+  (impulse:request :bash :configure :args '(:cols -5))
+  ;; => (:ERROR :CONDITION (:TYPE :INVALID-SPEC :KEY :COLS :VALUE -5
+  ;;                        :REASON "must be a positive integer") :ID NIL)
+
+--- Over the Impulse socket (a Lexter image orbital from the parent) -----
+
+  (impulse:with-connection (s "/run/origin/lexter.sock"
+                              :tier impulse:+tier-read-write+)
+    (impulse:session-request s "bash" :status :query '(:cols :rows :cursor)))
+
+--- Fleet addressing (every terminal at once) ---------------------------
+
+  (impulse:request :all :status :query '(:title :scrollback-lines))
+  (impulse:request '(:where (:eq :app :terminal)) :configure :args '(:pixel-scale 2))
+
+|#
+
 (in-package #:lexter/origin)
 
 ;;; -----------------------------------------------------------------------

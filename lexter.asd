@@ -59,7 +59,7 @@
   :depends-on (#:lexter/panes)
   :serial t
   :components ((:file "tests/mouse-tests"))
-  :perform (test-op (o s)
+  :perform (asdf:test-op (o s)
              (uiop:symbol-call :lexter/panes :run-all-tests)))
 
 ;;; TN3270 client library (standalone, no pane dependency)
@@ -136,5 +136,5 @@
   :depends-on ("lexter/origin" "hamcrest/fiveam")
   :serial t
   :components ((:file "tests/origin-impulse-tests"))
-  :perform (test-op (o s)
+  :perform (asdf:test-op (o s)
              (uiop:symbol-call :lexter/origin-tests :run-all-tests)))

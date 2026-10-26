@@ -1,0 +1,7 @@
+# CODEOWNERS — the steward of the LEXTER namespace approves every allocation
+#
+# Numbers are allocated by appending to the ledger (Compass §13). Requiring
+# review from code owners makes the steward's approval a condition of merging
+# any allocation (LEXTER-DRAFT-compass-migration-D9).
+
+/doc/REGISTRY.sexp @phantomics

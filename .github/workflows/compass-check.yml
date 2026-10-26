@@ -1,0 +1,77 @@
+# compass-check.yml — Build the Compass toolchain and check Lexter's documentation corpus
+#
+# Adopted under LEXTER-DRAFT-compass-migration-D9. The check compares the
+# ledger, doc/REGISTRY.sexp, with the branch a pull request merges into, so
+# that ledger/append-only sees what the merge would change. Make this job a
+# required status check of the default branch, and require review from code
+# owners, so that .github/CODEOWNERS makes the steward approve every allocation.
+#
+# COMPASS_REV pins the toolchain to a Compass release tag
+# (LEXTER-DRAFT-compass-migration-D9); updating the toolchain is a change to
+# that line. Compass has published no tag yet, so it names the commit of
+# version 0.2.0 until the first tag exists.
+#
+# The check skips documents without front-matter (--skip-unmarked) while the
+# migration is under way; Phase 2 of LEXTER-DRAFT-compass-migration removes
+# the flag once every document has front-matter.
+
+name: compass-check
+
+on:
+  pull_request:
+  push:
+    branches: [master, main]
+
+permissions:
+  contents: read
+
+env:
+  COMPASS_REPO: phantomics/compass
+  COMPASS_REV: 9a6ab23fa4a7ab6425034ec795af766bca90ee61   # Compass 0.2.0; replace with its first release tag
+  QL_DIST: http://beta.quicklisp.org/dist/quicklisp/2023-06-18/distinfo.txt
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Lexter
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history: Git-derived fields, code references, the base ledger
+
+      - name: Check out the Compass toolchain
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.COMPASS_REPO }}
+          ref: ${{ env.COMPASS_REV }}
+          path: .compass
+
+      - name: Install SBCL
+        run: sudo apt-get update && sudo apt-get install -y sbcl
+
+      - name: Install Quicklisp, pinned to the dist the toolchain is built with
+        run: |
+          curl -fsSL -o /tmp/quicklisp.lisp https://beta.quicklisp.org/quicklisp.lisp
+          sbcl --non-interactive --load /tmp/quicklisp.lisp \
+               --eval "(quicklisp-quickstart:install :dist-url \"$QL_DIST\")"
+
+      - name: Build the toolchain
+        run: make -C .compass build
+
+      - name: Check the corpus
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ -n "$BASE_REF" ]; then
+            base="origin/$BASE_REF"
+          elif [ -n "$BEFORE" ] && git rev-parse --verify --quiet "$BEFORE^{commit}" > /dev/null; then
+            base="$BEFORE"
+          else
+            base=""
+          fi
+          .compass/bin/compass version
+          .compass/bin/compass check --skip-unmarked ${base:+--base "$base"}
+
+      - name: Check the index
+        run: .compass/bin/compass index --check

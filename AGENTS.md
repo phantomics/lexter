@@ -21,7 +21,9 @@ demand only if you need the source text — do not preload it.
 
 Run `compass check` before finishing any change to the documentation, and fix
 the errors it reports in the files you changed. `compass help` lists the other
-commands (`show`, `outline`, `refs`, `index`, `rules`).
+commands (`show`, `outline`, `refs`, `index`, `next`, `rules`, and others).
+Numbers are assigned with `compass assign` only when a person asks for it; never
+edit the ledger, `doc/REGISTRY.sexp`, by hand.
 
 Project-specific facts the skills cannot infer:
 
@@ -32,8 +34,9 @@ Project-specific facts the skills cannot infer:
 - Federated repositories: COMPASS (`../../lisp/compass`), CLASSIC
   (`../../lisp/classic`), ORIGIN (`../../lisp/origin`), as listed in
   `compass.sexp`
-- Migration: the documents in `doc/` predate Compass and have no
-  front-matter yet; run checks with `compass check --skip-unmarked`
+- Migration: under way, following `doc/Plan.CompassMigration.md`
+  (LEXTER-DRAFT-compass-migration). The Logs in `doc/` predate Compass and
+  have no front-matter yet; run checks with `compass check --skip-unmarked`
 
 Essentials (full rules in Compass.md): every document opens with a §7 YAML
 front-matter block; genre and status use the controlled vocabularies; decision

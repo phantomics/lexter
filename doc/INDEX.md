@@ -11,6 +11,7 @@ Table: Documents in the LEXTER namespace.
 | ID | Title | Genre | Scope | Status | Component |
 |---|---|---|---|---|---|
 | [LEXTER-DRAFT-compass-migration](Plan.CompassMigration.md) | Compass Migration: Development Plan | Plan | project | Draft | — |
+| [LEXTER-DRAFT-compass-migration-log](Log.CompassMigration.md) | Compass Migration: Development Log | Log | project | Draft | — |
 | [LEXTER-DRAFT-encoding-ranges](Log.EncodingRanges.md) | Encoding Ranges: Development Log | Log | component | Draft | vt |
 | [LEXTER-DRAFT-enhanced-dual-width](Log.EnhancedDualWidth.md) | Enhanced Dual-Width Font Support: Development Log | Log | component | Draft | fonts |
 | [LEXTER-DRAFT-gui-lifecycle](Log.GUILifecycle.md) | GUI Lifecycle (Iteration API): Development Log | Log | component | Draft | gui |
@@ -37,6 +38,9 @@ Table: Decision, open-question, and memo records in the LEXTER namespace.
 | [LEXTER-DRAFT-compass-migration-D8](Plan.CompassMigration.md#lexter-draft-compass-migration-d8--dates-in-the-text-are-kept-and-corrected-where-git-contradicts-them) | Decision | Dates in the text are kept, and corrected where Git contradicts them | Proposed | LEXTER-DRAFT-compass-migration |
 | [LEXTER-DRAFT-compass-migration-D9](Plan.CompassMigration.md#lexter-draft-compass-migration-d9--ci-and-code-owners-mirror-origin) | Decision | CI and code owners mirror Origin | Proposed | LEXTER-DRAFT-compass-migration |
 | [LEXTER-DRAFT-compass-migration-D10](Plan.CompassMigration.md#lexter-draft-compass-migration-d10--structure-changes-content-is-not-refreshed) | Decision | Structure changes; content is not refreshed | Proposed | LEXTER-DRAFT-compass-migration |
+| [LEXTER-DRAFT-compass-migration-log-D1](Log.CompassMigration.md#lexter-draft-compass-migration-log-d1--pinning-is-brought-forward-into-phase-2) | Decision | Pinning is brought forward into Phase 2 | Proposed | LEXTER-DRAFT-compass-migration-log |
+| [LEXTER-DRAFT-compass-migration-log-D2](Log.CompassMigration.md#lexter-draft-compass-migration-log-d2--a-decision-written-as-a-section-becomes-a-record-placed-first) | Decision | A decision written as a section becomes a record, placed first | Proposed | LEXTER-DRAFT-compass-migration-log |
+| [LEXTER-DRAFT-compass-migration-log-D3](Log.CompassMigration.md#lexter-draft-compass-migration-log-d3--a-stewards-answer-to-an-open-question-is-recorded-as-a-resolution) | Decision | A steward's answer to an open question is recorded as a Resolution | Proposed | LEXTER-DRAFT-compass-migration-log |
 | [LEXTER-DRAFT-enhanced-dual-width-D1](Log.EnhancedDualWidth.md#lexter-draft-enhanced-dual-width-d1--separate-storage-width-from-cell-width) | Decision | Separate storage width from cell width | Proposed | LEXTER-DRAFT-enhanced-dual-width |
 | [LEXTER-DRAFT-enhanced-dual-width-D2](Log.EnhancedDualWidth.md#lexter-draft-enhanced-dual-width-d2--a-manual-override-first-auto-detection-second) | Decision | A manual override first, auto-detection second | Proposed | LEXTER-DRAFT-enhanced-dual-width |
 | [LEXTER-DRAFT-enhanced-dual-width-D3](Log.EnhancedDualWidth.md#lexter-draft-enhanced-dual-width-d3--auto-detect-cell-width-from-a-representative-ascii-glyph) | Decision | Auto-detect cell width from a representative ASCII glyph | Proposed | LEXTER-DRAFT-enhanced-dual-width |

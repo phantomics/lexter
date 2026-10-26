@@ -34,10 +34,11 @@ Project-specific facts the skills cannot infer:
 - Federated repositories: COMPASS (`../../lisp/compass`), CLASSIC
   (`../../lisp/classic`), ORIGIN (`../../lisp/origin`), as listed in
   `compass.sexp`
-- Migration: under way, following `doc/Plan.CompassMigration.md`
-  (LEXTER-DRAFT-compass-migration). Every document carries front-matter, and
-  `compass check` runs without `--skip-unmarked`; the Logs' bodies are being
-  brought into conformance in batches (Phase 3 of the plan)
+- Migration: complete, following `doc/Plan.CompassMigration.md`
+  (LEXTER-DRAFT-compass-migration) and recorded in `doc/Log.CompassMigration.md`
+  (LEXTER-DRAFT-compass-migration-log). Every document carries front-matter, and
+  `compass check` runs without `--skip-unmarked`; the documents await the
+  steward's review and `compass assign`
 
 Essentials (full rules in Compass.md): every document opens with a §7 YAML
 front-matter block; genre and status use the controlled vocabularies; decision

@@ -201,7 +201,7 @@ Table: The commits each Log's references are expected to pin to, confirmed per r
 | `Log.PersistentPalette.md` | `0cdd2af`; update `5885398` | `5860229`, `5885398` |
 | `Log.GUILifecycle.md` | `4313881` | `4313881` |
 | `Log.MultiBuffer.md` | `b693eac`; update `4864f01` | `b693eac`, `4864f01` |
-| `Log.EnhancedDualWidth.md` | `3201c61`, `2f78659`; precursor fixes to be identified | `2f78659` |
+| `Log.EnhancedDualWidth.md` | `3201c61`, `2f78659`; precursor fixes `48b917f` and `4313881` | `2f78659` |
 | `Log.OffscreenFBO.md` | `1a59f24` | `1a59f24` |
 | `Log.EncodingRanges.md` | `fbf8817` | `fbf8817` |
 | `Log.ScreenshotTestRig.md` | `1f07ee8` | `1f07ee8` |
@@ -443,7 +443,7 @@ Table: Changes specific to each Log, besides the common treatment.
 
 | Log | Specific changes |
 |---|---|
-| `Log.EncodingRanges.md` | Part 1 becomes the body and Part 2 an Update (LEXTER-DRAFT-compass-migration-D5); the candidate fixes become `LEXTER-DRAFT-encoding-ranges-O1` (LEXTER-DRAFT-compass-migration-D6); the `(pending)` Files rows move to Outstanding Work |
+| `Log.EncodingRanges.md` | Part 1 becomes the body and Part 2 an Update (LEXTER-DRAFT-compass-migration-D5); the candidate fixes become `LEXTER-DRAFT-encoding-ranges-O1` (LEXTER-DRAFT-compass-migration-D6); the `(pending)` Files rows move to the Update's Outstanding Work; a Design Decisions section is added with a migration note, since Part 1 records no decisions |
 | `Log.InputRedirect.md` | Implementation and Verification sections added (its line references and transcript citation were done in Phase 2) |
 | `Log.MouseReporting.md` | Bold-lead decisions become records, and the "Deferred" paragraph moves to Outstanding Work; Future work becomes Outstanding Work; the Files list becomes a table |
 | `Log.MultiBuffer.md` | The addendum becomes an Update (LEXTER-DRAFT-compass-migration-D5) |
@@ -453,7 +453,7 @@ Table: Changes specific to each Log, besides the common treatment.
 | `Log.ScreenshotTestRig.md` | Bold-lead decisions become records; the Files list becomes a table; Outstanding Work gathered from the deferred items |
 | `Log.StopFlag.md` | The common treatment only (its line references and the Origin reference were pinned in Phase 2) |
 | `Log.GUILifecycle.md` | The "Design: Approach B" section becomes `LEXTER-DRAFT-gui-lifecycle-D7`, placed first among the records |
-| `Log.EnhancedDualWidth.md` | The common treatment only; the precursor fixes' commits identified |
+| `Log.EnhancedDualWidth.md` | The precursor fixes' commits identified (`48b917f`, `4313881`), and their section moved under Implementation |
 
 The work is committed in batches. Each batch is checked before the next.
 

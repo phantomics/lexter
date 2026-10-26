@@ -11,6 +11,8 @@ provenance:
   assistant:   opencode
 relates-to:
   - LEXTER-DRAFT-enhanced-dual-width
+open-questions:
+  - LEXTER-DRAFT-encoding-ranges-O1
 ---
 
 # Encoding Ranges: Development Log
@@ -26,20 +28,28 @@ and parsing pipelines:
    continuation bytes fall in 0x80-0x9F are eaten by the VT parser's C1 control
    handling, so they never render. *Diagnosed; fix approach under discussion.*
 
-**Date:** 2026-06-06
+**Date:** 2026-06-21
+
+*Migration note (2026-10-25):* the original Log was dated 2026-06-06. The
+date is corrected to that of commit `fbf8817`, which holds the work
+(LEXTER-DRAFT-compass-migration-D8). The Log was in two parts. Part 1,
+"32-bit glyph index (fixed)", is the body below, with its Problem, Fix,
+and Verification as the Log's Problem, Implementation, and Verification.
+Part 2, "3-byte UTF-8 vs. 8-bit C1 controls (diagnosed)", is the Update
+that follows it (LEXTER-DRAFT-compass-migration-D5).
 
 
-## Part 1 -- 32-bit glyph index (fixed)
-
-### Problem
+## Problem
 
 Loading Unifont and printing high-codepoint characters produced wrong glyphs
 for a large, scattered set of characters. The glyph index that travels from the
 screen model to the GPU was stored as `(unsigned-byte 16)` end to end:
 
 - `model.lisp` `screen-glyphs`, `grid.lisp` display-grid glyphs and
-  `cell-layer` glyph-idx,
-- `build-render-data` packed the glyph as two bytes,
+  `cell-layer` glyph-idx (`src/model.lisp@5885398`,
+  `src/grid.lisp@5885398`),
+- `build-render-data` (`src/grid.lisp:build-render-data@5885398`) packed
+  the glyph as two bytes,
 - the instance vertex attribute `i_glyph` was `:unsigned-short`.
 
 The glyph index is an **atlas column-slot position** (`row*cols + col`, with
@@ -51,29 +61,35 @@ glyphs (37.5%) land at atlas positions > 65535**. Their 16-bit index wraps
 `mod 65536` and renders the *wrong* (aliased) glyph. The probe against a live
 atlas confirmed `max atlas-pos = 107095`.
 
-### Fix
+## Design Decisions
+
+*Migration note (2026-10-25):* this part of the Log recorded no decisions
+as numbered items. The fix it chose is described under Implementation.
+
+
+## Implementation
 
 Widen the glyph index to 32-bit along the whole model -> GPU path (the GLSL
 `i_glyph` was already `uint`):
 
-- **`model.lisp`** -- `screen-glyphs` and `model-layer` glyph-idx ->
+- **`model.lisp`** (`src/model.lisp@fbf8817`) -- `screen-glyphs` and `model-layer` glyph-idx ->
   `(unsigned-byte 32)`.
-- **`grid.lisp`** -- `+simple-stride+` 8 -> 12 and `+layered-stride+` 12 -> 16
+- **`grid.lisp`** (`src/grid.lisp@fbf8817`) -- `+simple-stride+` 8 -> 12 and `+layered-stride+` 12 -> 16
   (glyph grows 2 -> 4 bytes; 2 trailing pad bytes keep the next instance's
   32-bit glyph 4-byte aligned). `display-grid` glyphs and `cell-layer` glyph-idx
   -> uint32. Added little-endian `%u32-b0..b3` packers. `build-render-data`
-  rewrites the simple and layered instance offsets (glyph as 4 bytes at 4-7,
+  (`src/grid.lisp:build-render-data@fbf8817`) rewrites the simple and layered instance offsets (glyph as 4 bytes at 4-7,
   remaining fields shifted).
-- **`renderer.lisp`** -- the simple and layered VAO attribute pointers:
+- **`renderer.lisp`** (`src/renderer.lisp@fbf8817`) -- the simple and layered VAO attribute pointers:
   `i_glyph` `:unsigned-short` -> `:unsigned-int` at offset 4, with downstream
   attribute offsets and strides updated; same in `render-frame`'s per-layer
-  re-pointer. Also reconciled a duplicate `+layered-stride+` constant
+  re-pointer (`src/renderer.lisp:render-frame@fbf8817`). Also reconciled a duplicate `+layered-stride+` constant
   (renderer.lisp shared the same symbol via `:use`).
 - **`shaders.lisp`** -- unchanged (`i_glyph` already `uint`).
 
 Swatch indices stay 16-bit (their range is <= 2048 plus a wide-flag bit).
 
-### Verification
+## Verification
 
 Clean compile/load of `lexter`, `lexter/unix`, `lexter/panes`. A round trip
 confirms a glyph index of 100,000 survives `write-char-at` -> `cell-glyph`
@@ -82,7 +98,38 @@ confirms a glyph index of 100,000 survives `write-char-at` -> `cell-glyph`
 formerly-aliased high glyphs is the user's.
 
 
-## Part 2 -- 3-byte UTF-8 vs. 8-bit C1 controls (diagnosed)
+## Files
+
+Table: Files changed in commit `fbf8817`.
+
+| File | Action | Description |
+|------|--------|-------------|
+| `src/model.lisp` | Modified | `screen-glyphs` + `model-layer` glyph-idx -> uint32 |
+| `src/grid.lisp` | Modified | strides 12/16; display-grid glyphs + cell-layer glyph-idx uint32; `%u32` packers; `build-render-data` offsets |
+| `src/renderer.lisp` | Modified | simple/layered VAO + per-layer pointers: `i_glyph` `:unsigned-int`; stride/offset updates; dedup `+layered-stride+` |
+
+*Migration note (2026-10-25):* two rows marked "(pending)" are moved to
+the Update's Outstanding Work: `src/vt-handler.lisp`, for the UTF-8/C1
+fix, and cl-vt, for a possible UTF-8 mode, each with the approach "under
+discussion". Commit `fbf8817` also changed `src/vt-handler.lisp`, where
+`make-vt-handler` (`src/vt-handler.lisp:make-vt-handler@fbf8817`) passes
+`:user-data handler` and `:utf8 t` to `cl-vt:make-vt-parser`. This Log
+does not describe that change, and the migration does not interpret it
+(LEXTER-DRAFT-compass-migration-D10).
+
+
+## Outstanding Work
+
+*Migration note (2026-10-25):* the Log's outstanding items all concern the
+UTF-8/C1 problem; they are listed with the Update that records it.
+
+
+## Update 2026-06-21 — UTF-8 vs. 8-bit C1 controls
+
+*Migration note (2026-10-25):* this section was "Part 2 -- 3-byte UTF-8
+vs. 8-bit C1 controls (diagnosed)". It records a diagnosis, committed
+with the body in `fbf8817`. Its candidate fixes become the open question
+LEXTER-DRAFT-encoding-ranges-O1 (LEXTER-DRAFT-compass-migration-D6).
 
 ### Symptom
 
@@ -110,12 +157,15 @@ Everything downstream of the codepoint was fine. The failure had to be in the
 VT500 state machine that treats 0x80-0x9F as 8-bit C1 controls
 (`cl-vt/tables.lisp`): 0x80-0x8F execute, 0x9B enters CSI, 0x9D enters OSC, and
 so on. Lexter's UTF-8 assembly happens *after* the parser, in `handle-print`
-(the parser's `:print` callback). So the continuation byte 0x8C is consumed by
+(the parser's `:print` callback; `src/vt-handler.lisp:handle-print@fbf8817`). So the continuation byte 0x8C is consumed by
 the parser as a C1 control and never reaches the UTF-8 decoder -- the sequence
 is left incomplete and nothing is printed.
 
-A headless test fed byte sequences through `process-output` and inspected the
+A headless test fed byte sequences through `process-output`
+(`src/vt-handler.lisp:process-output@fbf8817`) and inspected the
 handler's UTF-8 state:
+
+Table: Byte sequences fed through `process-output`, and whether each printed.
 
 | Input | bytes | result |
 |-------|-------|--------|
@@ -147,7 +197,11 @@ never be interpreted as a control; only an actual code point U+008C should be.
 cl-vt is a pure byte-oriented parser with no UTF-8 awareness and no mode to
 disable C1, so the fix has to change where/how UTF-8 is decoded relative to it.
 
-### Candidate fixes (decision pending)
+### LEXTER-DRAFT-encoding-ranges-O1 — Where UTF-8 is decoded relative to cl-vt
+
+*Migration note (2026-10-25):* this was the section "Candidate fixes
+(decision pending)", recorded as an open question; its text is
+unchanged.
 
 1. **UTF-8 front-end in Lexter.** Rewrite `process-output` to route ground-state
    high bytes (and in-progress UTF-8 continuations) to `handle-print` directly,
@@ -169,20 +223,13 @@ window title) is still handled byte-wise (mojibake), as it is today.
 The architectural choice between these is the subject of ongoing discussion (see
 the project notes following this log).
 
+### Outstanding Work
 
-## Files
+*Migration note (2026-10-25):* the first two items were the Files rows
+marked "(pending)"; the rest were the Log's "Outstanding work".
 
-| File | Action | Description |
-|------|--------|-------------|
-| `src/model.lisp` | Modified | `screen-glyphs` + `model-layer` glyph-idx -> uint32 |
-| `src/grid.lisp` | Modified | strides 12/16; display-grid glyphs + cell-layer glyph-idx uint32; `%u32` packers; `build-render-data` offsets |
-| `src/renderer.lisp` | Modified | simple/layered VAO + per-layer pointers: `i_glyph` `:unsigned-int`; stride/offset updates; dedup `+layered-stride+` |
-| `src/vt-handler.lisp` | (pending) | UTF-8/C1 fix -- approach under discussion |
-| cl-vt | (pending) | possible UTF-8 mode -- approach under discussion |
-
-
-## Outstanding work
-
+- **`src/vt-handler.lisp`.** UTF-8/C1 fix -- approach under discussion.
+- **cl-vt.** Possible UTF-8 mode -- approach under discussion.
 - **Implement the UTF-8/C1 fix** once the approach is chosen (front-end vs.
   cl-vt UTF-8 mode).
 - **UTF-8 in OSC/DCS strings.** Decode non-ASCII inside string-collecting states

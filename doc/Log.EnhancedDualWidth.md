@@ -9,6 +9,12 @@ language:      en
 status:        Draft
 provenance:
   assistant:   opencode
+decisions:
+  - LEXTER-DRAFT-enhanced-dual-width-D1
+  - LEXTER-DRAFT-enhanced-dual-width-D2
+  - LEXTER-DRAFT-enhanced-dual-width-D3
+  - LEXTER-DRAFT-enhanced-dual-width-D4
+  - LEXTER-DRAFT-enhanced-dual-width-D5
 ---
 
 # Enhanced Dual-Width Font Support: Development Log
@@ -22,13 +28,18 @@ reshaping the glyph atlas so a 57,000-glyph font does not overflow the GPU's
 maximum texture size. It also folds in two small precursor fixes uncovered along
 the way.
 
-**Date:** 2026-06-06
+**Date:** 2026-06-10
+
+*Migration note (2026-10-25):* the original Log was dated 2026-06-06. The
+date is corrected to that of commits `3201c61` and `2f78659`, which hold
+the work (LEXTER-DRAFT-compass-migration-D8).
 
 
 ## Problem
 
 Lexter already had the *machinery* for double-width glyphs -- the atlas packs
-wide glyphs into two columns, `atlas-glyph-wide-p` drives a double-width cursor
+wide glyphs into two columns, `atlas-glyph-wide-p`
+(`src/atlas.lisp:atlas-glyph-wide-p@3d9c371`) drives a double-width cursor
 advance, and the BDF CJK demo (zpix) exercised the whole path. But loading
 Unifont (`unifont-17.0.04.pcf`, ~57k glyphs, 8x16 narrow / 16x16 full) failed
 in three distinct ways:
@@ -58,7 +69,7 @@ laid into a 16-px cell (double-width), and the wide test `:w > cell-width`
 
 Dumping raw metrics for representative glyphs made the structure plain:
 
-```
+```text
 glyph0  w=16  rb-lb=16     (full-width)
 M a i $ &  w=8  rb-lb=8 lb=0  (narrow ASCII)
 U+4E00  w=16 rb-lb=16        (full-width CJK)
@@ -78,7 +89,8 @@ The `$%&` observation was a red herring: those glyphs have the same `w=8`
 advance as the letters; their ink simply uses the full 8 px (columns 0-7) while
 `M` reaches column 6. A 1-px design difference, not a spacing bug.
 
-**The atlas overflow.** `build-atlas` hard-capped the atlas at 32 columns. With
+**The atlas overflow.** `build-atlas` (`src/atlas.lisp:build-atlas@3d9c371`)
+hard-capped the atlas at 32 columns. With
 ~107k column slots (counting double-wide CJK), 32 columns forced a texture
 **256 x 53,456 px** -- thousands of pixels past any GPU's `GL_MAX_TEXTURE_SIZE`,
 hence the `INVALID_VALUE` from `glTexImage2D`.
@@ -86,105 +98,166 @@ hence the `INVALID_VALUE` from `glTexImage2D`.
 
 ## Design Decisions
 
-### 1. Separate storage width from cell width
+### LEXTER-DRAFT-enhanced-dual-width-D1 — Separate storage width from cell width
 
-The PCF loader now computes both. `storage-width = (or glyph0-width
-accel-max-w)` (the file's raster width, used for the row stride -- unchanged
-source). `cell-width` is the narrow terminal cell, determined independently.
-For monospace fonts the two are equal, so behavior is byte-for-byte identical;
-they diverge only for dual-width fonts. This was the key conceptual move that
-unblocked everything else.
+**Status:** Proposed
 
-### 2. A manual override first, auto-detection second
+**Context:** The PCF loader had been using a single `cell-width` for
+everything, derived from glyph 0's advance. A dual-width font has two
+widths the loader had conflated: the storage width of its bitmap rasters
+and the narrow cell width of the terminal (see Investigation).
 
-The work was staged deliberately. **First**, `load-pcf` gained `:cell-width`
-and `:cell-height` keyword overrides (parity with `load-bdf`), so a user could
-force `(load-pcf "unifont.pcf" :cell-width 8 :cell-height 16)` and test the
-rendering path before committing to any heuristic. **Then**, once that was
-confirmed working in a live terminal, auto-detection was added so the override
-becomes unnecessary. This kept each step independently testable and low-risk.
+**Decision:** The PCF loader now computes both. `storage-width = (or
+glyph0-width accel-max-w)` (the file's raster width, used for the row
+stride -- unchanged source). `cell-width` is the narrow terminal cell,
+determined independently.
 
-### 3. Auto-detect cell width from a representative ASCII glyph
+**Alternatives:**
+- A single width for both, as before. Rejected: in Unifont glyph 0 is
+  full-width, so every narrow glyph was laid into a 16-px cell and no
+  glyph was flagged wide.
 
-This is how real terminals size a cell: from a reference glyph, not from the
-font's max width. `%detect-cell-width` looks up the advance of a set of
-representative narrow ASCII codepoints (`M n x m i 0 l A a`) via the encodings
-table and takes the **minimum** advance among those present. Rationale:
+For monospace fonts the two are equal, so behavior is byte-for-byte
+identical; they diverge only for dual-width fonts. This was the key
+conceptual move that unblocked everything else.
 
-- No ASCII letter/digit is ever double-wide, so the minimum can't be inflated
-  by a full-width glyph.
-- The minimum is robust against a font that happens to draw one reference glyph
-  slightly wider.
-- If none of the reference glyphs exist (a CJK-only font), it falls back to
-  `storage-width` -- the previous behavior.
+### LEXTER-DRAFT-enhanced-dual-width-D2 — A manual override first, auto-detection second
+
+**Status:** Proposed
+
+**Context:** The rendering path for a separate cell width had to be
+tested before committing to any heuristic for detecting it.
+
+**Decision:** The work was staged deliberately. **First**, `load-pcf`
+gained `:cell-width` and `:cell-height` keyword overrides (parity with
+`load-bdf`), so a user could force
+`(load-pcf "unifont.pcf" :cell-width 8 :cell-height 16)` and test the
+rendering path before committing to any heuristic. **Then**, once that
+was confirmed working in a live terminal, auto-detection was added so
+the override becomes unnecessary.
+
+**Alternatives:**
+- None recorded.
+
+This kept each step independently testable and low-risk.
+
+### LEXTER-DRAFT-enhanced-dual-width-D3 — Auto-detect cell width from a representative ASCII glyph
+
+**Status:** Proposed
+
+**Context:** Without an override, the loader must determine the narrow
+cell width itself. This is how real terminals size a cell: from a
+reference glyph, not from the font's max width.
+
+**Decision:** `%detect-cell-width` looks up the advance of a set of
+representative narrow ASCII codepoints (`M n x m i 0 l A a`) via the
+encodings table and takes the **minimum** advance among those present.
+Rationale:
+
+- No ASCII letter/digit is ever double-wide, so the minimum can't be
+  inflated by a full-width glyph.
+- The minimum is robust against a font that happens to draw one
+  reference glyph slightly wider.
+- If none of the reference glyphs exist (a CJK-only font), it falls
+  back to `storage-width` -- the previous behavior.
+
+**Alternatives:**
+- Sizing the cell from the font's max width. Rejected: real terminals
+  size a cell from a reference glyph, and a full-width glyph would
+  inflate it.
 
 For Unifont this yields 8; for monospace fonts it yields the cell width
-(identical to the old glyph-0 logic). Implementing this required parsing the
-encodings table *before* computing the cell width (it was previously parsed
-after the bitmaps) -- a small reorder of independent table seeks.
+(identical to the old glyph-0 logic). Implementing this required parsing
+the encodings table *before* computing the cell width (it was previously
+parsed after the bitmaps) -- a small reorder of independent table seeks.
 
-The override still wins when supplied, so the order is: explicit override ->
-reference-glyph detection -> storage-width fallback.
+The override still wins when supplied, so the order is: explicit override
+-> reference-glyph detection -> storage-width fallback.
 
-### 4. Wide-aware bitmap extraction in the PCF loader
+### LEXTER-DRAFT-enhanced-dual-width-D4 — Wide-aware bitmap extraction in the PCF loader
 
-Detecting the right cell width is not enough: with `cell-width=8`, the extractor
-also has to (a) read each row at the file's 16-px storage stride and (b) emit
-full-width glyphs at `2*cell-width` so CJK is not truncated. The BDF path
-already did this (it renders wide glyphs into `2*cell-width`); the PCF path did
-not. `%parse-bitmaps` now, per glyph: takes the row stride from `storage-width`,
-computes `out-width = (if (> advance cell-width) (* 2 cell-width) cell-width)`,
-and extracts `out-width` columns. `%extract-bitmap-positioned`'s width parameter
-was renamed `out-width` to make the output-width / row-stride distinction
-explicit. The wide-glyph set (still built from `:w > cell-width`) now matches
-the doubled bitmaps, and the existing atlas wide-packing consumes them
+**Status:** Proposed
+
+**Context:** Detecting the right cell width is not enough: with
+`cell-width=8`, the extractor also has to (a) read each row at the
+file's 16-px storage stride and (b) emit full-width glyphs at
+`2*cell-width` so CJK is not truncated. The BDF path already did this
+(it renders wide glyphs into `2*cell-width`); the PCF path did not.
+
+**Decision:** `%parse-bitmaps` now, per glyph: takes the row stride from
+`storage-width`, computes
+`out-width = (if (> advance cell-width) (* 2 cell-width) cell-width)`,
+and extracts `out-width` columns. `%extract-bitmap-positioned`'s width
+parameter was renamed `out-width` to make the output-width / row-stride
+distinction explicit.
+
+**Alternatives:**
+- None recorded.
+
+The wide-glyph set (still built from `:w > cell-width`) now matches the
+doubled bitmaps, and the existing atlas wide-packing consumes them
 unchanged.
 
-### 5. Reshape the atlas to a roughly-square, limit-bounded layout
+### LEXTER-DRAFT-enhanced-dual-width-D5 — Reshape the atlas to a roughly-square, limit-bounded layout
 
-The fixed 32-column atlas was replaced with a layout chosen so the texture is
-roughly square and fits the GPU limit:
+**Status:** Proposed
+
+**Context:** `build-atlas` hard-capped the atlas at 32 columns, which for
+Unifont forced a texture of 256 x 53,456 px, past any GPU's
+`GL_MAX_TEXTURE_SIZE` (see Investigation).
+
+**Decision:** The fixed 32-column atlas was replaced with a layout chosen
+so the texture is roughly square and fits the GPU limit:
 
 - `slot-count` counts column slots (a double-wide glyph occupies two);
-- `square-cols = ceil(sqrt(slot-count * cell-h / cell-w))`, floored at 32 so
-  small fonts behave as before, and capped at `floor(GL_MAX_TEXTURE_SIZE /
-  cell-w)`;
-- a fast, descriptive error fires if even a square layout would exceed the
-  limit, replacing the cryptic GL error.
+- `square-cols = ceil(sqrt(slot-count * cell-h / cell-w))`, floored at
+  32 so small fonts behave as before, and capped at
+  `floor(GL_MAX_TEXTURE_SIZE / cell-w)`;
+- a fast, descriptive error fires if even a square layout would exceed
+  the limit, replacing the cryptic GL error.
+
+**Alternatives:**
+- The fixed 32-column layout. Rejected: it overflows the texture limit
+  for a font of Unifont's size.
+- A power-of-two column count, for cheaper indexing. Rejected: with the
+  column count in a uniform, a power-of-two count is no cheaper to
+  index, as explained below.
 
 For Unifont this produces **3704 x 3696 px**, comfortably within the 4096
-minimum that GL 3.3 guarantees. Monospace fonts keep ~32 columns, so their
-atlas is unchanged.
+minimum that GL 3.3 guarantees. Monospace fonts keep ~32 columns, so
+their atlas is unchanged.
 
-A performance question was raised and settled here: does a non-power-of-two
-column count cost more to index? No. The `atlas-pos -> (col, row)` decode is in
-the **vertex shader** (`int gc = i_glyph % u_atlas_size.x; ...`), `u_atlas_size`
-is a **uniform**, so the GLSL compiler could not strength-reduce `% 32` to a
-mask even at 32 columns -- a general integer division was already being used.
-The decode is GPU-side and per-vertex (a few thousand divisions per frame),
-not on any CPU hot path, so 32 vs 463 columns is immaterial. (If it ever
-mattered, the fix would be to bake the column count as a shader `#define`
-constant, not to keep a power-of-two atlas.)
-
+A performance question was raised and settled here: does a
+non-power-of-two column count cost more to index? No. The
+`atlas-pos -> (col, row)` decode is in the **vertex shader**
+(`int gc = i_glyph % u_atlas_size.x; ...`), `u_atlas_size` is a
+**uniform**, so the GLSL compiler could not strength-reduce `% 32` to a
+mask even at 32 columns -- a general integer division was already being
+used. The decode is GPU-side and per-vertex (a few thousand divisions per
+frame), not on any CPU hot path, so 32 vs 463 columns is immaterial. (If
+it ever mattered, the fix would be to bake the column count as a shader
+`#define` constant, not to keep a power-of-two atlas.)
 
 ## Implementation
 
 ### `src/pcf.lisp`
 
-- `load-pcf` gained `&key cell-width cell-height`, threaded into `%parse-pcf`
+- `load-pcf` (`src/pcf.lisp:load-pcf@2f78659`) gained `&key cell-width cell-height`, threaded into `%parse-pcf`
   (both the plain and `.gz` paths).
-- `%parse-pcf` now parses the encodings table up front, computes
+- `%parse-pcf` (`src/pcf.lisp:%parse-pcf@2f78659`) now parses the encodings table up front, computes
   `storage-width` and `cell-width` (override -> `%detect-cell-width` ->
   `storage-width`) separately, and passes both to `%parse-bitmaps`.
-- `%detect-cell-width` + `+cell-width-reference-codepoints+` implement the
+- `%detect-cell-width` (`src/pcf.lisp:%detect-cell-width@2f78659`) +
+  `+cell-width-reference-codepoints+` implement the
   reference-ASCII-glyph heuristic.
-- `%parse-bitmaps` is wide-aware: storage-width row stride, per-glyph
+- `%parse-bitmaps` (`src/pcf.lisp:%parse-bitmaps@2f78659`) is wide-aware: storage-width row stride, per-glyph
   `out-width`, double-wide extraction.
-- `%extract-bitmap-positioned`'s width parameter renamed to `out-width`.
+- `%extract-bitmap-positioned`
+  (`src/pcf.lisp:%extract-bitmap-positioned@2f78659`)'s width parameter renamed to `out-width`.
 
 ### `src/atlas.lisp`
 
-- `build-atlas` replaces the fixed 32-column cap with the square,
+- `build-atlas` (`src/atlas.lisp:build-atlas@3201c61`) replaces the fixed 32-column cap with the square,
   limit-bounded `atlas-cols` computation, plus a descriptive over-limit error.
 
 ### No changes elsewhere
@@ -193,8 +266,14 @@ The atlas wide-glyph packing, the double-width cursor advance, the vertex
 shader's UV decode, and the screen/VT pipeline were all already in place from
 the CJK BDF demo and needed no modification.
 
+### Precursor fixes (uncovered while testing narrow fonts)
 
-## Precursor fixes (uncovered while testing narrow fonts)
+*Migration note (2026-10-25):* this was a section of its own, after
+Implementation. The over-read fix is in commit `48b917f`
+(`src/pcf.lisp@48b917f`). The cursor lookup was in the 3270 work of
+commit `4313881` (`src/tn3270-pane/tn3270-pane.lisp@4313881`), which
+replaced the `:cursor-block` lookup with a reverse-video cursor and kept
+the lookup by `+cursor-block-glyph+` as a comment.
 
 These two PCF-loader bugs predate the dual-width work but were found and fixed
 on the way, and the dual-width rendering depends on them being correct:
@@ -230,10 +309,16 @@ confirmed Unifont now renders correctly in `run-paned-terminal`.
 
 ## Files
 
+Table: Files changed in commits `3201c61` and `2f78659`.
+
 | File | Action | Description |
 |------|--------|-------------|
 | `src/pcf.lisp` | Modified | storage-width/cell-width split; `load-pcf` overrides; `%detect-cell-width` + reference codepoints; wide-aware `%parse-bitmaps`; `%extract-bitmap-positioned` param rename |
 | `src/atlas.lisp` | Modified | square, `GL_MAX_TEXTURE_SIZE`-bounded atlas layout; over-limit error |
+
+*Migration note (2026-10-25):* commit `3201c61` also changed
+`src/pbm.lisp`, adding `.pbm.gz` support, and commit `2f78659` replaced
+`cp437.pbm` with `cp437.pbm.gz`; this table does not list them.
 
 
 ## Outstanding Work

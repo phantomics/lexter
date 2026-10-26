@@ -1,3 +1,18 @@
+---
+id:            LEXTER-DRAFT-screenshot-test-rig
+title:         "Screenshot Test Rig: Development Log"
+genre:         Log
+scope:         component
+project:       Lexter
+component:     test
+language:      en
+status:        Draft
+provenance:
+  assistant:   opencode
+relates-to:
+  - LEXTER-DRAFT-offscreen-fbo
+---
+
 # Screenshot Test Rig: Development Log
 
 This document chronicles the design and implementation of Lexter's

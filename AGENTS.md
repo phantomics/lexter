@@ -35,8 +35,9 @@ Project-specific facts the skills cannot infer:
   (`../../lisp/classic`), ORIGIN (`../../lisp/origin`), as listed in
   `compass.sexp`
 - Migration: under way, following `doc/Plan.CompassMigration.md`
-  (LEXTER-DRAFT-compass-migration). The Logs in `doc/` predate Compass and
-  have no front-matter yet; run checks with `compass check --skip-unmarked`
+  (LEXTER-DRAFT-compass-migration). Every document carries front-matter, and
+  `compass check` runs without `--skip-unmarked`; the Logs' bodies are being
+  brought into conformance in batches (Phase 3 of the plan)
 
 Essentials (full rules in Compass.md): every document opens with a §7 YAML
 front-matter block; genre and status use the controlled vocabularies; decision

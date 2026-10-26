@@ -1,3 +1,20 @@
+---
+id:            LEXTER-DRAFT-input-redirect
+title:         "Input Redirect and Chrome Mixins: Development Log"
+genre:         Log
+scope:         component
+project:       Lexter
+component:     panes
+language:      en
+status:        Draft
+provenance:
+  assistant:   opencode
+cites:
+  - title:    "Session transcript ses_2263-Lexter6"
+    locator:  "session-ses_2263-Lexter6.md, lines 862, 965, and 1044"
+    external: true
+---
+
 # Input Redirect and Chrome Mixins: Development Log
 
 This document chronicles the design of Lexter's input redirect system
@@ -31,15 +48,15 @@ Generalizing, a "modal dialog" needs three things:
    disappears, returning the pane to normal operation.
 
 The compositor at the time had none of these. Panes flushed to the grid
-in list order (`flush-workspace`, `workspace.lisp:101`); the focused
+in list order (`flush-workspace`, `src/panes/workspace.lisp:flush-workspace@b4d874d`); the focused
 pane received all non-meta keystrokes (`handle-compositor-key`,
-`compositor.lisp:67`); and there was no notion of one pane temporarily
+`src/panes/compositor.lisp:handle-compositor-key@b4d874d`); and there was no notion of one pane temporarily
 standing in front of another.
 
 
 ## The Original Plan: An Overlay Stack
 
-The first design (recorded in `session-ses_2263-Lexter6.md:862`
+The first design (recorded in *Session transcript ses_2263-Lexter6*, line 862
 onward, "Option A") added modality as a *workspace-level* concept: an
 overlay stack parallel to the pane list.
 
@@ -105,7 +122,7 @@ router has to change. The redirect is invisible to all of them.
 **Question:** Where does "this is modal right now" live?
 
 **Decision:** On the base `pane` class, as a single `input-redirect`
-slot (`protocol.lisp:41`) defaulting to NIL. NIL means normal routing;
+slot (`src/panes/protocol.lisp#L41@b4d874d`) defaulting to NIL. NIL means normal routing;
 a function means input is intercepted. Any pane type inherits the
 capability for free; nothing needs a special "dialog" subclass to be
 modal.
@@ -122,7 +139,7 @@ modal.
 compositor's routing code?
 
 **Decision:** `:around` methods on `pane-handle-key` and
-`pane-handle-char` (`protocol.lisp:210-224`) check the redirect slot
+`pane-handle-char` (`src/panes/protocol.lisp#L210-L224@b4d874d`) check the redirect slot
 and, if set, call the redirect function *instead of* `call-next-method`:
 
 ```lisp
@@ -135,7 +152,7 @@ and, if set, call the redirect function *instead of* `call-next-method`:
 
 This is the crux of why the approach is light. The compositor's
 `handle-compositor-key` / `handle-compositor-char`
-(`compositor.lisp:67`, `compositor.lisp:120`) still do nothing but
+(`src/panes/compositor.lisp:handle-compositor-key@b4d874d`, `src/panes/compositor.lisp:handle-compositor-char@b4d874d`) still do nothing but
 `(pane-handle-key (focused-pane ws) ...)`. They are completely unaware
 that redirection exists. Modality is a property of the method dispatch
 on the pane, not a branch in the router. Add the `:around` methods once
@@ -168,8 +185,8 @@ does it forward an event without the `:around` method catching it again
 and recursing forever?
 
 **Decision:** A dynamic variable `*redirect-suppressed*`
-(`protocol.lisp:205`) plus two helpers, `pane-forward-key` and
-`pane-forward-char` (`protocol.lisp:230-242`). The helpers bind
+(`src/panes/protocol.lisp:*redirect-suppressed*@b4d874d`) plus two helpers, `pane-forward-key` and
+`pane-forward-char` (`src/panes/protocol.lisp#L230-L242@b4d874d`). The helpers bind
 `*redirect-suppressed*` to T around a re-dispatch, and the `:around`
 methods honor that binding by falling through to `call-next-method`:
 
@@ -205,7 +222,7 @@ analogue because there was never a focus transfer.
 (`chrome-mixin.lisp`) already reserves regions of a pane and delegates
 their drawing to a single workspace-level `decorator` function. That
 decorator inspects pane state -- explicitly including `input-redirect`
-(noted at `chrome-mixin.lisp:9-11`) -- to decide what to draw. When a
+(noted at `src/panes/chrome-mixin.lisp#L9-L11@b4d874d`) -- to decide what to draw. When a
 redirect is active, the decorator paints the modal dialog's frame and
 prompt over the pane's content. Input behavior (redirect) and dialog
 appearance (chrome decorator) are orthogonal systems that compose:
@@ -222,30 +239,30 @@ single themeable function.
 
 ### Reserved regions and content geometry
 
-`chrome-pane` (`chrome-mixin.lisp:19`) adds slots for a scroll-bar
+`chrome-pane` (`src/panes/chrome-mixin.lisp:chrome-pane@b4d874d`) adds slots for a scroll-bar
 column, header rows, and footer rows. The content-geometry generics
 shrink to exclude whatever chrome is present:
 
 - `content-width` = `pane-width` minus the scroll-bar column
-  (`chrome-mixin.lisp:58`)
+  (`src/panes/chrome-mixin.lisp:content-width@b4d874d`)
 - `content-height` = `pane-height` minus header and footer
-  (`chrome-mixin.lisp:63`)
-- `content-row` = `pane-row` plus header height (`chrome-mixin.lisp:69`)
+  (`src/panes/chrome-mixin.lisp:content-height@b4d874d`)
+- `content-row` = `pane-row` plus header height (`src/panes/chrome-mixin.lisp:content-row@b4d874d`)
 
 A pane's screen model is built to `content-width` x `content-height`,
 so the screen never overwrites the reserved edges. This is the
 "screen model need not match the allocated rectangle" insight from the
-scroll-bar design discussion (`session-ses_2263-Lexter6.md:965`): an
+scroll-bar design discussion (*Session transcript ses_2263-Lexter6*, line 965): an
 80-column pane with a scroll bar runs a 79-column screen.
 
 ### Flush delegates chrome to the decorator
 
-A `pane-flush :around` method (`chrome-mixin.lisp:103`) flushes the
+A `pane-flush :around` method (`src/panes/chrome-mixin.lisp:pane-flush@b4d874d`) flushes the
 pane's content via `call-next-method`, then calls the workspace
 decorator once per active chrome element, passing a mode keyword
 (`:header`, `:footer`, `:scroll-bar`) and the geometry/data for that
 element. The decorator is also invoked with `:borders` at the
-workspace level (`workspace.lisp:126`). One function, dispatched on a
+workspace level (`src/panes/workspace.lisp#L126@b4d874d`). One function, dispatched on a
 mode keyword, draws every piece of chrome in the system -- borders,
 headers, footers, scroll bars, and (when a redirect is active) modal
 dialogs. This is the single-point-of-control the scroll-bar discussion
@@ -254,19 +271,19 @@ recommended (Option B mixin, with workspace access).
 ### Workspace back-reference
 
 For a pane to reach its decorator it needs its workspace. The base pane
-carries a `workspace` back-reference (`protocol.lisp:38`), set in the
-workspace's `initialize-instance :after` (`workspace.lisp:44`). This
+carries a `workspace` back-reference (`src/panes/protocol.lisp#L38@b4d874d`), set in the
+workspace's `initialize-instance :after` (`src/panes/workspace.lisp:initialize-instance@b4d874d`). This
 directly answers the design question raised in the session
-(`session-ses_2263-Lexter6.md:1044`): methods specialized on a pane can
+(*Session transcript ses_2263-Lexter6*, line 1044): methods specialized on a pane can
 reach the workspace, so chrome drawing can be informed by
 workspace-level state.
 
 ### Scroll-bar geometry and future mouse support
 
-`scroll-bar-thumb-geometry` (`chrome-mixin.lisp:81`) computes thumb
+`scroll-bar-thumb-geometry` (`src/panes/chrome-mixin.lisp:scroll-bar-thumb-geometry@b4d874d`) computes thumb
 position and height from the pane's `scroll-state`
 (total-lines / viewport-offset / visible-rows), with a one-cell minimum
-thumb. `scroll-bar-hit-test` (`chrome-mixin.lisp:158`) maps a grid
+thumb. `scroll-bar-hit-test` (`src/panes/chrome-mixin.lisp:scroll-bar-hit-test@b4d874d`) maps a grid
 coordinate to `:thumb`, `:track`, or NIL. Nothing consumes the hit-test
 yet; it exists so that the mouse-input work to come can make scroll bars
 (and, by the same token, dialog controls) interactive without reworking

@@ -374,9 +374,35 @@ consistent with Classic and Origin.
 2. **`relates-to`** is filled only where one Log builds on or names
    another's work: for example Persistent Palette and Palette Paging, and
    Screenshot Test Rig and Offscreen FBO.
-3. **`AGENTS.md`** drops the `--skip-unmarked` instruction, and the
+3. **Pin the flagged code references**, brought forward from Phase 3.
+   Once the Logs carry front-matter, `compass check` reads their bodies,
+   and `ref/code-pinned` reports every reference that names a location
+   without a revision: the 45 line references in Stop Flag, Input
+   Redirect, Palette Paging, and Persistent Palette, and the four
+   transcript references. The gate in step 5 cannot pass until they are
+   pinned, and CI would fail on them. They are pinned in this phase
+   (LEXTER-DRAFT-compass-migration-D4), and the transcript becomes a
+   `cites:` entry in the two Logs that use it
+   (LEXTER-DRAFT-compass-migration-D7).
+
+   Table: The revisions the Phase 2 references are pinned to.
+
+   | Log | References | Pinned to |
+   |---|---|---|
+   | `Log.StopFlag.md` | 11 line references, and the Origin reference | `4e800cb` (the loops), `50aeebc` (`src/origin.lisp`), Origin's `6708956` |
+   | `Log.InputRedirect.md` | 19 line references, paths completed; 3 transcript references | `b4d874d` |
+   | `Log.PalettePaging.md` | 7 line references; 1 transcript reference | `04d69c2` |
+   | `Log.PersistentPalette.md` | 7 line references | `5860229` |
+
+   `Log.GUILifecycle.md` names the package-qualified symbol
+   `lexter/origin` `define-terminal` in the `package:symbol` form, which
+   the check reads as an unpinned code reference. It becomes
+   `src/origin.lisp:define-terminal@4313881`, keeping the package name
+   in the text.
+4. **`AGENTS.md`** and the CI workflow drop `--skip-unmarked`, and the
    index is regenerated.
-4. **Gate:** `compass check` without `--skip-unmarked` reports no errors.
+5. **Gate:** `compass check --federation`, without `--skip-unmarked`,
+   reports no errors.
 
 ## Phase 3 — Body conformance
 
@@ -384,7 +410,9 @@ Every Log receives the same treatment:
 
 - decision records (LEXTER-DRAFT-compass-migration-D3), mirrored into
   `decisions:`;
-- pinned code references (LEXTER-DRAFT-compass-migration-D4);
+- pinned code references for the references Phase 2 did not pin, such
+  as files and symbols named without a location
+  (LEXTER-DRAFT-compass-migration-D4);
 - the §14 spine: Problem, Design Decisions, Implementation, Verification,
   Files, Outstanding Work, with the optional sections the Log template
   admits kept in place. A missing spine section is added with a migration
@@ -400,14 +428,14 @@ Table: Changes specific to each Log, besides the common treatment.
 | Log | Specific changes |
 |---|---|
 | `Log.EncodingRanges.md` | Part 1 becomes the body and Part 2 an Update (LEXTER-DRAFT-compass-migration-D5); the candidate fixes become `LEXTER-DRAFT-encoding-ranges-O1` (LEXTER-DRAFT-compass-migration-D6); the `(pending)` Files rows move to Outstanding Work |
-| `Log.InputRedirect.md` | Implementation and Verification sections added; 19 line references pinned, with paths completed; transcript citation (LEXTER-DRAFT-compass-migration-D7) |
+| `Log.InputRedirect.md` | Implementation and Verification sections added (its line references and transcript citation were done in Phase 2) |
 | `Log.MouseReporting.md` | Bold-lead decisions become records, and the "Deferred" paragraph moves to Outstanding Work; Future work becomes Outstanding Work; the Files list becomes a table |
 | `Log.MultiBuffer.md` | The addendum becomes an Update (LEXTER-DRAFT-compass-migration-D5) |
 | `Log.OffscreenFBO.md` | Motivation becomes Problem; the Phase 2 section becomes Outstanding Work |
-| `Log.PalettePaging.md` | Files table built from `04d69c2`; 7 line references pinned; transcript citation |
-| `Log.PersistentPalette.md` | The H1 appendix becomes an Update; Files table built for the main work; 7 line references pinned |
+| `Log.PalettePaging.md` | Files table built from `04d69c2` (its line references and transcript citation were done in Phase 2) |
+| `Log.PersistentPalette.md` | The H1 appendix becomes an Update; Files table built for the main work (its line references were pinned in Phase 2) |
 | `Log.ScreenshotTestRig.md` | Bold-lead decisions become records; the Files list becomes a table; Outstanding Work gathered from the deferred items |
-| `Log.StopFlag.md` | 12 line references pinned, and the Origin reference federated |
+| `Log.StopFlag.md` | The common treatment only (its line references and the Origin reference were pinned in Phase 2) |
 | `Log.GUILifecycle.md`, `Log.EnhancedDualWidth.md` | The common treatment only; for Enhanced Dual Width, the precursor fixes' commits identified |
 
 The work is committed in batches. Each batch is checked before the next.
@@ -490,7 +518,8 @@ Table: Prior work in the federation and what this plan draws from each.
 1. Phase 0: this plan is written, checked, and reviewed.
 2. Phase 1: `.mailmap`, the ledger, CI, code owners, the refreshed agent
    guide, and the index.
-3. Phase 2: front-matter on the eleven Logs.
+3. Phase 2: front-matter on the eleven Logs, and the line references
+   and transcript references pinned.
 4. Phase 3, by batch: integration and lifecycle; palette and rendering;
    fonts and encoding; VT and testing.
 5. Phase 4: `Log.CompassMigration.md`, recording the work.

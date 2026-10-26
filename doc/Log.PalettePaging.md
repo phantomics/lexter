@@ -1,3 +1,22 @@
+---
+id:            LEXTER-DRAFT-palette-paging
+title:         "GPU Palette Paging: Development Log"
+genre:         Log
+scope:         component
+project:       Lexter
+component:     renderer
+language:      en
+status:        Draft
+provenance:
+  assistant:   opencode
+relates-to:
+  - LEXTER-DRAFT-persistent-palette
+cites:
+  - title:    "Session transcript ses_2263-Lexter6"
+    locator:  "session-ses_2263-Lexter6.md, line 783"
+    external: true
+---
+
 # GPU Palette Paging: Development Log
 
 This document chronicles the extension of Lexter's palette system from a
@@ -31,7 +50,7 @@ here -- the generations differ because the *palettes* differ, not because
 either one changed.
 
 The question that motivated this work (recorded in
-`session-ses_2263-Lexter6.md:783`) was precisely this: rather than
+*Session transcript ses_2263-Lexter6*, line 783) was precisely this: rather than
 re-sending palette data whenever the active palette changes, could we
 hold several palettes resident in the UBO simultaneously -- appended one
 after another -- and select among them by changing the *offset* at which
@@ -159,7 +178,7 @@ unchanged; only the indexing arithmetic moved into the shader.
 
 ### Renderer (`src/renderer.lisp`)
 
-Two constants frame the scheme (`src/renderer.lisp:15`):
+Two constants frame the scheme (`src/renderer.lisp#L15-L16@04d69c2`):
 
 ```lisp
 (defconstant +max-palette-slots+ 4)
@@ -167,12 +186,12 @@ Two constants frame the scheme (`src/renderer.lisp:15`):
 ```
 
 `%make-palette-ubo` now allocates `+max-palette-slots+ * +palette-slot-size+`
-= 16 KB as `:dynamic-draw` (`src/renderer.lisp:153`).
+= 16 KB as `:dynamic-draw` (`src/renderer.lisp:%make-palette-ubo@04d69c2`).
 
 `set-palette` gained an optional `slot` argument and writes that slot's
 region only, via `buffer-sub-data` at offset `slot * +palette-slot-size+`
-(`src/renderer.lisp:170`). `upload-palette` gained the same argument and
-gates on the per-slot generation array (`src/renderer.lisp:181`):
+(`src/renderer.lisp:set-palette@04d69c2`). `upload-palette` gained the same argument and
+gates on the per-slot generation array (`src/renderer.lisp:upload-palette@04d69c2`):
 
 ```lisp
 (let ((gens (render-state-palette-gens rs)))
@@ -182,7 +201,7 @@ gates on the per-slot generation array (`src/renderer.lisp:181`):
     t))
 ```
 
-`set-active-palette-slot` (`src/renderer.lisp:195`) selects the rendering
+`set-active-palette-slot` (`src/renderer.lisp:set-active-palette-slot@04d69c2`) selects the rendering
 slot by writing `u_palette_slot` in both shader programs, guarded by the
 render state's `current-palette-slot` so a redundant switch is a no-op:
 
@@ -197,7 +216,7 @@ array (`palette-gens`), the active slot (`current-palette-slot`), and the
 cached `u_palette_slot` uniform locations for each shader
 (`simple-palette-slot-loc`, `layered-palette-slot-loc`). The locations
 are looked up once at renderer creation and both shaders are primed to
-slot 0 (`src/renderer.lisp:290`), so a default single-palette setup
+slot 0 (`src/renderer.lisp#L290@04d69c2`), so a default single-palette setup
 renders correctly with no further slot calls.
 
 ### Pane protocol (`src/panes/protocol.lisp`, `src/panes/vt-pane.lisp`)
@@ -212,7 +231,7 @@ slot.
 ### Compositor (`src/panes/compositor.lisp`)
 
 After flushing the workspace, the compositor syncs the focused pane's
-palette to its slot and activates it (`src/panes/compositor.lisp:201`):
+palette to its slot and activates it (`src/panes/compositor.lisp#L201@04d69c2`):
 
 ```lisp
 (multiple-value-bind (palette gen slot) (pane-palette pane)

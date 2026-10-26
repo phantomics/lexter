@@ -1,3 +1,18 @@
+---
+id:            LEXTER-DRAFT-persistent-palette
+title:         "Persistent Palette Model: Development Log"
+genre:         Log
+scope:         component
+project:       Lexter
+component:     renderer
+language:      en
+status:        Draft
+provenance:
+  assistant:   opencode
+relates-to:
+  - LEXTER-DRAFT-multi-buffer
+---
+
 # Persistent Palette Model: Development Log
 
 This document chronicles the introduction of a persistent, mutable
@@ -142,7 +157,7 @@ state of the time, and cheap.
 
 ### Model: screen state and mutation API (`src/model.lisp`)
 
-Two slots were added to the `screen` struct (`src/model.lisp:258`):
+Two slots were added to the `screen` struct (`src/model.lisp#L258-L260@5860229`):
 
 ```lisp
 (palette nil :type (or null (simple-array single-float (1024))))
@@ -153,7 +168,7 @@ The palette is 1024 single-floats -- 256 entries x RGBA. The generation
 starts at 1 (see "The generation handshake" below). `make-screen`
 initializes the palette via `make-default-palette`.
 
-`make-default-palette` (`src/model.lisp:109`) was promoted from the
+`make-default-palette` (`src/model.lisp:make-default-palette@5860229`) was promoted from the
 demo's `make-xterm-palette` into the model proper. It builds the
 standard xterm 256-color layout: entries 0-15 the ANSI set, 16-231 the
 6x6x6 color cube, 232-255 the 24-step greyscale ramp, each normalized to
@@ -162,13 +177,13 @@ standard xterm 256-color layout: entries 0-15 the ANSI set, 16-231 the
 The mutation API, each call incrementing the generation:
 
 - `set-palette-entry (screen idx r g b &optional a)` -- set one entry
-  from float RGBA, bump generation (`src/model.lisp:151`)
+  from float RGBA, bump generation (`src/model.lisp:set-palette-entry@5860229`)
 - `set-palette-entry-rgb8 (screen idx r g b)` -- convenience for 0-255
-  byte values (`src/model.lisp:162`)
+  byte values (`src/model.lisp:set-palette-entry-rgb8@5860229`)
 - `get-palette-entry (screen idx)` -- read an entry as four values
-  (`src/model.lisp:167`)
+  (`src/model.lisp:get-palette-entry@5860229`)
 - `reset-palette (screen)` -- `replace` the palette with a fresh default
-  and bump generation (`src/model.lisp:176`)
+  and bump generation (`src/model.lisp:reset-palette@5860229`)
 
 These are the seams the future OSC handlers will call: `OSC 4` maps to
 `set-palette-entry-rgb8`, `OSC 104` to `reset-palette`.
@@ -184,7 +199,7 @@ generation-gated wrapper:
 - `upload-palette (rs palette-floats generation ...)` -- compares
   `generation` against the render state's recorded value, uploads via
   `set-palette` only on a mismatch, records the new generation, and
-  returns T if an upload occurred (`src/renderer.lisp:181`).
+  returns T if an upload occurred (`src/renderer.lisp:upload-palette@5860229`).
 
 This is exactly parallel to the swatch-table path's `swatch-gen` /
 `upload-swatch-table` pair.

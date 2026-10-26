@@ -1,3 +1,18 @@
+---
+id:            LEXTER-DRAFT-offscreen-fbo
+title:         "Offscreen Render Target (FBO): Development Log"
+genre:         Log
+scope:         component
+project:       Lexter
+component:     renderer
+language:      en
+status:        Draft
+provenance:
+  assistant:   opencode
+relates-to:
+  - LEXTER-DRAFT-gui-lifecycle
+---
+
 # Offscreen Render Target (FBO): Development Log
 
 This document chronicles the addition of an opt-in offscreen render target to

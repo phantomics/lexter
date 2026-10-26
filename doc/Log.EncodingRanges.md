@@ -1,3 +1,18 @@
+---
+id:            LEXTER-DRAFT-encoding-ranges
+title:         "Encoding Ranges: Development Log"
+genre:         Log
+scope:         component
+project:       Lexter
+component:     vt
+language:      en
+status:        Draft
+provenance:
+  assistant:   opencode
+relates-to:
+  - LEXTER-DRAFT-enhanced-dual-width
+---
+
 # Encoding Ranges: Development Log
 
 This document chronicles two related problems uncovered while bringing up GNU

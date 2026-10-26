@@ -1,3 +1,16 @@
+---
+id:            LEXTER-DRAFT-stop-flag
+title:         "Stop Flag: Development Log"
+genre:         Log
+scope:         component
+project:       Lexter
+component:     origin
+language:      en
+status:        Draft
+provenance:
+  assistant:   opencode
+---
+
 # Stop Flag: Development Log
 
 This document chronicles the design and implementation of Lexter's
@@ -15,8 +28,8 @@ loop in the codebase.
 
 Every interactive entry point in Lexter is built around a single
 blocking render loop. `run-terminal-loop` drives a Unix PTY terminal
-(`src/unix-term.lisp:236`), `run-pane-loop` drives the pane compositor
-(`src/panes/compositor.lisp:159`), and the demo entry points
+(`src/unix-term.lisp:run-terminal-loop@4e800cb`), `run-pane-loop` drives the pane compositor
+(`src/panes/compositor.lisp:run-pane-loop@4e800cb`), and the demo entry points
 (`run-demo`, `run-cjk-demo` in `src/demo.lisp`) run their own variants.
 Each is a tight loop that polls GLFW events, processes I/O, renders a
 frame, swaps buffers, and sleeps a millisecond. The loop owns the GLFW
@@ -33,7 +46,7 @@ The trouble started when Lexter terminals were registered as
 Origin-managed processes. Origin runs each managed process in its own
 SBCL thread and supervises it -- starting, stopping, restarting, and
 restart-throttling it according to policy. The crux is Origin's stop
-protocol (`~/src/lisp/origin/src/managed-process.lisp:233`):
+protocol (`ORIGIN:src/managed-process.lisp:stop-process@6708956`):
 
 1. Call the process's `stop-function` to request a graceful shutdown.
 2. Wait up to `timeout` seconds (default 5) for the thread to exit on
@@ -166,7 +179,7 @@ already says "stop." How is it rearmed?
 
 **Decision:** The Origin entry point re-arms the flag to T *before*
 invoking the loop, every time it is called
-(`src/origin.lisp:24-29`):
+(`src/origin.lisp#L24-L29@50aeebc`):
 
 ```lisp
 :entry-point (lambda (&rest entry-args)
@@ -176,7 +189,7 @@ invoking the loop, every time it is called
 :stop-function (lambda () (setf (car stop-flag) nil))
 ```
 
-The single cons created by `define-terminal` (`src/origin.lisp:21`)
+The single cons created by `define-terminal` (`src/origin.lisp#L21@50aeebc`)
 is captured three times: it is spliced into `entry-args` so the loop
 receives it, captured by the entry-point closure so each start can
 re-arm it to T, and captured by the stop-function closure so a stop
@@ -199,7 +212,7 @@ down into the loop function as a keyword argument.
 
 ### Terminal loop
 
-`run-terminal-loop` (`src/unix-term.lisp:236`) adds the flag to its
+`run-terminal-loop` (`src/unix-term.lisp:run-terminal-loop@4e800cb`) adds the flag to its
 `:while` guard alongside the pre-existing `running` flag and the GLFW
 close check:
 
@@ -213,12 +226,12 @@ close check:
 The flag is checked once per iteration, at the top, before any GLFW or
 GL work for that frame. When it trips, the loop falls out and control
 returns to `run-terminal`, whose `unwind-protect`
-(`src/unix-term.lisp:418`) runs the safe teardown -- `pty-close` and
+(`src/unix-term.lisp#L418@4e800cb`) runs the safe teardown -- `pty-close` and
 `destroy-renderer` -- on the loop's own thread.
 
 ### Pane compositor loop
 
-`run-pane-loop` (`src/panes/compositor.lisp:159`) uses the same guard
+`run-pane-loop` (`src/panes/compositor.lisp:run-pane-loop@4e800cb`) uses the same guard
 shape:
 
 ```lisp
@@ -228,14 +241,14 @@ shape:
       :do ...)
 ```
 
-and its `unwind-protect` (`src/panes/compositor.lisp:331`) destroys
+and its `unwind-protect` (`src/panes/compositor.lisp#L331@4e800cb`) destroys
 every workspace and the renderer on exit. `run-paned-terminal` accepts
 and forwards the flag identically to `run-terminal`.
 
 ### Demo loops
 
 The demo loops in `src/demo.lisp` use the inverted `:until` phrasing
-(`src/demo.lisp:178` and `src/demo.lisp:249`):
+(`src/demo.lisp#L178@4e800cb` and `src/demo.lisp#L249@4e800cb`):
 
 ```lisp
 (loop :until (or (glfw:window-should-close-p)
@@ -251,7 +264,7 @@ supervision contract as the real terminals.
 
 ### Origin integration
 
-`define-terminal` (`src/origin.lisp:3`) is the only place that
+`define-terminal` (`src/origin.lisp:define-terminal@50aeebc`) is the only place that
 constructs a flag and wires it to a supervisor. It allocates one cons
 (`(list t)`), strips Origin-specific keywords from the argument list,
 and registers an Origin process whose entry point re-arms the flag and

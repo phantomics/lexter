@@ -11,6 +11,17 @@ Table: Documents in the LEXTER namespace.
 | ID | Title | Genre | Scope | Status | Component |
 |---|---|---|---|---|---|
 | [LEXTER-DRAFT-compass-migration](Plan.CompassMigration.md) | Compass Migration: Development Plan | Plan | project | Draft | — |
+| [LEXTER-DRAFT-encoding-ranges](Log.EncodingRanges.md) | Encoding Ranges: Development Log | Log | component | Draft | vt |
+| [LEXTER-DRAFT-enhanced-dual-width](Log.EnhancedDualWidth.md) | Enhanced Dual-Width Font Support: Development Log | Log | component | Draft | fonts |
+| [LEXTER-DRAFT-gui-lifecycle](Log.GUILifecycle.md) | GUI Lifecycle (Iteration API): Development Log | Log | component | Draft | gui |
+| [LEXTER-DRAFT-input-redirect](Log.InputRedirect.md) | Input Redirect and Chrome Mixins: Development Log | Log | component | Draft | panes |
+| [LEXTER-DRAFT-mouse-reporting](Log.MouseReporting.md) | Mouse Reporting: Development Log | Log | component | Draft | vt |
+| [LEXTER-DRAFT-multi-buffer](Log.MultiBuffer.md) | Alternate Screen Buffer: Development Log | Log | component | Draft | vt |
+| [LEXTER-DRAFT-offscreen-fbo](Log.OffscreenFBO.md) | Offscreen Render Target (FBO): Development Log | Log | component | Draft | renderer |
+| [LEXTER-DRAFT-palette-paging](Log.PalettePaging.md) | GPU Palette Paging: Development Log | Log | component | Draft | renderer |
+| [LEXTER-DRAFT-persistent-palette](Log.PersistentPalette.md) | Persistent Palette Model: Development Log | Log | component | Draft | renderer |
+| [LEXTER-DRAFT-screenshot-test-rig](Log.ScreenshotTestRig.md) | Screenshot Test Rig: Development Log | Log | component | Draft | test |
+| [LEXTER-DRAFT-stop-flag](Log.StopFlag.md) | Stop Flag: Development Log | Log | component | Draft | origin |
 
 Table: Decision, open-question, and memo records in the LEXTER namespace.
 

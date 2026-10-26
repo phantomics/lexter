@@ -1,3 +1,18 @@
+---
+id:            LEXTER-DRAFT-gui-lifecycle
+title:         "GUI Lifecycle (Iteration API): Development Log"
+genre:         Log
+scope:         component
+project:       Lexter
+component:     gui
+language:      en
+status:        Draft
+provenance:
+  assistant:   opencode
+relates-to:
+  - LEXTER-DRAFT-stop-flag
+---
+
 # GUI Lifecycle (Iteration API): Development Log
 
 This document chronicles the refactor of Lexter's two GUI entry points --
@@ -326,7 +341,9 @@ compile/load/protocol wiring is what was verified here.
   main-thread loop in Origin that owns `glfw:initialize`/`terminate`, hosts one
   or more Lexter objects via `gui-initialize` / `gui-tick` / `gui-destroy`, and
   reports their status. This refactor makes Lexter ready for it; the thread-
-  based `lexter/origin:define-terminal` (Approach A) remains the current path.
+  based `define-terminal` in `lexter/origin`
+  (`src/origin.lisp:define-terminal@4313881`; Approach A) remains the current
+  path.
 - **Multi-window callback registry.** Callbacks are still set per window and
   capture their object directly, which is correct for one window. True
   simultaneous multi-window input needs a `(pointer-address window) -> object`

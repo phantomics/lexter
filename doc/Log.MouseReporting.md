@@ -1,3 +1,19 @@
+---
+id:            LEXTER-DRAFT-mouse-reporting
+title:         "Mouse Reporting: Development Log"
+genre:         Log
+scope:         component
+project:       Lexter
+component:     vt
+language:      en
+status:        Draft
+provenance:
+  assistant:   opencode
+relates-to:
+  - LEXTER-DRAFT-input-redirect
+  - LEXTER-DRAFT-multi-buffer
+---
+
 # Mouse Reporting: Development Log
 
 This document chronicles the design and implementation of mouse input in

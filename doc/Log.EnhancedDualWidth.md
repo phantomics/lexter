@@ -1,3 +1,16 @@
+---
+id:            LEXTER-DRAFT-enhanced-dual-width
+title:         "Enhanced Dual-Width Font Support: Development Log"
+genre:         Log
+scope:         component
+project:       Lexter
+component:     fonts
+language:      en
+status:        Draft
+provenance:
+  assistant:   opencode
+---
+
 # Enhanced Dual-Width Font Support: Development Log
 
 This document chronicles the work that let Lexter render genuinely dual-width

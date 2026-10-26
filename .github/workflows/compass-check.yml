@@ -10,10 +10,6 @@
 # (LEXTER-DRAFT-compass-migration-D9); updating the toolchain is a change to
 # that line. Compass has published no tag yet, so it names the commit of
 # version 0.2.0 until the first tag exists.
-#
-# The check skips documents without front-matter (--skip-unmarked) while the
-# migration is under way; Phase 2 of LEXTER-DRAFT-compass-migration removes
-# the flag once every document has front-matter.
 
 name: compass-check
 
@@ -71,7 +67,7 @@ jobs:
             base=""
           fi
           .compass/bin/compass version
-          .compass/bin/compass check --skip-unmarked ${base:+--base "$base"}
+          .compass/bin/compass check ${base:+--base "$base"}
 
       - name: Check the index
         run: .compass/bin/compass index --check

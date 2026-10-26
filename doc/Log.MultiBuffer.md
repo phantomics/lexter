@@ -1,3 +1,16 @@
+---
+id:            LEXTER-DRAFT-multi-buffer
+title:         "Alternate Screen Buffer: Development Log"
+genre:         Log
+scope:         component
+project:       Lexter
+component:     vt
+language:      en
+status:        Draft
+provenance:
+  assistant:   opencode
+---
+
 # Alternate Screen Buffer: Development Log
 
 This document chronicles the implementation of the VT alternate screen buffer

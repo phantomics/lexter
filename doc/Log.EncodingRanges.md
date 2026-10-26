@@ -13,6 +13,10 @@ relates-to:
   - LEXTER-DRAFT-enhanced-dual-width
 open-questions:
   - LEXTER-DRAFT-encoding-ranges-O1
+cites:
+  - title:    "cl-vt, commit be7c607"
+    locator:  "github.com/phantomics/cl-vt, commit be7c607, parser.lisp: make-vt-parser and the :utf8 mode"
+    external: true
 ---
 
 # Encoding Ranges: Development Log
@@ -114,8 +118,9 @@ fix, and cl-vt, for a possible UTF-8 mode, each with the approach "under
 discussion". Commit `fbf8817` also changed `src/vt-handler.lisp`, where
 `make-vt-handler` (`src/vt-handler.lisp:make-vt-handler@fbf8817`) passes
 `:user-data handler` and `:utf8 t` to `cl-vt:make-vt-parser`. This Log
-does not describe that change, and the migration does not interpret it
-(LEXTER-DRAFT-compass-migration-D10).
+does not describe that change. It is the fix that resolves
+LEXTER-DRAFT-encoding-ranges-O1, as recorded in that question's
+resolution.
 
 
 ## Outstanding Work
@@ -223,10 +228,20 @@ window title) is still handled byte-wise (mojibake), as it is today.
 The architectural choice between these is the subject of ongoing discussion (see
 the project notes following this log).
 
+**Resolution:** 2026-10-25 — accepted, recorded at the steward's direction:
+candidate 2. cl-vt gained a UTF-8 mode in *cl-vt, commit be7c607*:
+`make-vt-parser` takes `:utf8`, and when it is true the parser treats bytes
+0x80-0x9F as printable rather than as C1 controls, printing them in the
+ground state. Lexter enables it in the same work, commit `fbf8817`, where
+`make-vt-handler` (`src/vt-handler.lisp:make-vt-handler@fbf8817`) passes
+`:utf8 t`.
+
 ### Outstanding Work
 
 *Migration note (2026-10-25):* the first two items were the Files rows
-marked "(pending)"; the rest were the Log's "Outstanding work".
+marked "(pending)"; the rest were the Log's "Outstanding work". The first
+three are answered by the resolution of LEXTER-DRAFT-encoding-ranges-O1;
+the resolution does not address the last two.
 
 - **`src/vt-handler.lisp`.** UTF-8/C1 fix -- approach under discussion.
 - **cl-vt.** Possible UTF-8 mode -- approach under discussion.

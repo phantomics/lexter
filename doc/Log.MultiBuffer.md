@@ -9,6 +9,14 @@ language:      en
 status:        Draft
 provenance:
   assistant:   opencode
+decisions:
+  - LEXTER-DRAFT-multi-buffer-D1
+  - LEXTER-DRAFT-multi-buffer-D2
+  - LEXTER-DRAFT-multi-buffer-D3
+  - LEXTER-DRAFT-multi-buffer-D4
+  - LEXTER-DRAFT-multi-buffer-D5
+  - LEXTER-DRAFT-multi-buffer-D6
+  - LEXTER-DRAFT-multi-buffer-D7
 ---
 
 # Alternate Screen Buffer: Development Log
@@ -21,7 +29,11 @@ as spurious "history" above the shell prompt. After this work, those programs
 draw on a separate alternate buffer that is discarded on exit, restoring the
 pre-program screen intact -- the behavior every real terminal exhibits.
 
-**Date:** 2026-06-06
+**Date:** 2026-06-09
+
+*Migration note (2026-10-25):* the original Log was dated 2026-06-06. The
+date is corrected to that of commit `b693eac`, which holds the work
+(LEXTER-DRAFT-compass-migration-D8).
 
 
 ## Problem
@@ -31,7 +43,8 @@ as history above the new command line, whereas every other terminal cleanly
 restores the pre-vim view. The cause was that the **alternate screen buffer was
 stubbed out**.
 
-`src/vt-handler.lisp` recognized mode 1049 but did nothing structural:
+`src/vt-handler.lisp` (`src/vt-handler.lisp@8179eb4`) recognized mode 1049
+but did nothing structural:
 
 - DECSET 1049 set `in-alt-screen` to T and did `(setf (vt-handler-alt-screen
   handler) screen)` -- storing a reference to the *same* current screen -- with
@@ -58,6 +71,8 @@ carries no scrollback; it is discarded/abandoned on exit.
 
 The four modes differ only in *when* clearing and cursor-save happen:
 
+Table: What each alternate-screen mode does on set and on reset.
+
 | Mode | On set (DECSET) | On reset (DECRST) |
 |------|-----------------|-------------------|
 | 47   | switch to alt (no clear)            | switch to primary (no clear) |
@@ -65,13 +80,7 @@ The four modes differ only in *when* clearing and cursor-save happen:
 | 1048 | save cursor (no switch)             | restore cursor (no switch) |
 | 1049 | save cursor, switch to a cleared alt | switch to primary, restore cursor |
 
-This is the approach taken here. The alternative considered -- snapshotting the
-primary screen's contents on entry and restoring them on exit, keeping a single
-buffer -- was rejected: it is not what terminals do and is fragile, because it
-requires perfectly deep-copying every field of the screen (cells, layered cells,
-attributes, cursor, scroll region, palette + generation, ...), and any field
-missed leaks across the boundary. The two-buffer approach makes the primary
-inviolate by construction.
+This is the approach taken here (LEXTER-DRAFT-multi-buffer-D6).
 
 
 ## The architectural crux
@@ -90,41 +99,113 @@ the handler the single source of truth and have the terminal/pane poll
 
 ## Design Decisions
 
-### 1. Handler owns the buffers; renderer follows it
+*Migration note (2026-10-25):* the choice of the two-buffer approach was
+stated in the background section "How real terminals do this", with the
+alternative it rejected. It is recorded here as
+LEXTER-DRAFT-multi-buffer-D6 and placed first, because the other five
+decisions refine it; LEXTER-DRAFT-multi-buffer-D1 through
+LEXTER-DRAFT-multi-buffer-D5 keep the Log's original numbering.
 
-The VT handler holds all buffer state and exposes the active one via
-`vt-handler-screen`. The terminal and pane read that accessor on every flush
-(and for palette upload, dirty checks, and scroll state), so a swap is picked up
-automatically. The terminal/pane's own `screen` slot is retained only as the
-initial primary handle.
+### LEXTER-DRAFT-multi-buffer-D6 — Two-buffer pointer swap, not snapshot-and-restore
 
-### 2. One persistent alternate buffer, created lazily
+**Status:** Proposed
 
-The alternate buffer is allocated on first use and **reused** across
-enter/exit cycles, not recreated each time. This is what lets mode 47's
-"switch without clearing" semantics work -- the alt buffer's contents persist
-between uses. Clearing is applied explicitly where the mode demands it (1049 on
-entry, 1047 on exit).
+**Context:** Full-screen programs need a screen of their own, and the
+primary screen must look as it did when they exit. Real terminals keep
+two distinct buffers and swap which one is active (see How real
+terminals do this).
 
-### 3. Dedicated cursor-save slots for 1048/1049
+**Decision:** The two-buffer pointer swap real terminals use. This is
+the approach taken here; it makes the primary inviolate by
+construction.
 
-1048/1049 cursor save/restore uses its own handler slots
-(`alt-saved-col/row/fg/bg/attrs`), kept **separate** from the DECSC (`ESC 7` /
-`ESC 8`) save slots, so the two save/restore mechanisms can never interfere.
+**Alternatives:**
+- Snapshotting the primary screen's contents on entry and restoring them
+  on exit, keeping a single buffer. Rejected: it is not what terminals do
+  and is fragile, because it requires perfectly deep-copying every field
+  of the screen (cells, layered cells, attributes, cursor, scroll region,
+  palette + generation, ...), and any field missed leaks across the
+  boundary.
 
-### 4. Resize resizes *both* buffers
+### LEXTER-DRAFT-multi-buffer-D1 — Handler owns the buffers; renderer follows it
 
-A window resize while a program is on the alternate screen must also resize the
-*inactive* primary buffer, so that returning from the alternate screen after a
-resize shows a correctly-sized primary. `vt-handler-resize-all` resizes the
-primary and (if present) the alternate together.
+**Status:** Proposed
 
-### 5. Alternate buffer carries no scrollback
+**Context:** The active screen is referenced from both the VT handler and
+the renderer, and for a pointer swap to be visible the renderer must
+follow the handler's active screen (see The architectural crux).
 
-The alternate screen is created with scrollback disabled, matching real
-terminals. A natural consequence: while a program is on the alternate screen,
-`scroll-state` reports no scrollback, so no scroll bar is shown in vim/less/etc.
+**Decision:** The VT handler holds all buffer state and exposes the
+active one via `vt-handler-screen`. The terminal and pane read that
+accessor on every flush (and for palette upload, dirty checks, and scroll
+state), so a swap is picked up automatically. The terminal/pane's own
+`screen` slot is retained only as the initial primary handle.
 
+**Alternatives:**
+- Callbacks or back-references from the handler to the terminal and
+  pane. Rejected in favor of polling the handler at render time, which
+  needs neither (see The architectural crux).
+
+### LEXTER-DRAFT-multi-buffer-D2 — One persistent alternate buffer, created lazily
+
+**Status:** Proposed
+
+**Context:** Mode 47 switches to the alternate screen without clearing
+it, so the alternate buffer's contents must persist between uses.
+
+**Decision:** The alternate buffer is allocated on first use and
+**reused** across enter/exit cycles, not recreated each time. Clearing
+is applied explicitly where the mode demands it (1049 on entry, 1047 on
+exit).
+
+**Alternatives:**
+- Recreating the alternate buffer on each entry. Rejected: mode 47's
+  "switch without clearing" semantics need its contents to persist.
+
+### LEXTER-DRAFT-multi-buffer-D3 — Dedicated cursor-save slots for 1048/1049
+
+**Status:** Proposed
+
+**Context:** Modes 1048 and 1049 save and restore the cursor, as DECSC
+(`ESC 7` / `ESC 8`) does.
+
+**Decision:** 1048/1049 cursor save/restore uses its own handler slots
+(`alt-saved-col/row/fg/bg/attrs`), kept **separate** from the DECSC save
+slots.
+
+**Alternatives:**
+- Sharing the DECSC save slots. Rejected: separate slots mean the two
+  save/restore mechanisms can never interfere.
+
+### LEXTER-DRAFT-multi-buffer-D4 — Resize resizes *both* buffers
+
+**Status:** Proposed
+
+**Context:** A window resize while a program is on the alternate screen
+must also resize the *inactive* primary buffer, so that returning from
+the alternate screen after a resize shows a correctly-sized primary.
+
+**Decision:** `vt-handler-resize-all` resizes the primary and (if
+present) the alternate together.
+
+**Alternatives:**
+- None recorded.
+
+### LEXTER-DRAFT-multi-buffer-D5 — Alternate buffer carries no scrollback
+
+**Status:** Proposed
+
+**Context:** Real terminals give the alternate screen no scrollback.
+
+**Decision:** The alternate screen is created with scrollback disabled,
+matching real terminals.
+
+**Alternatives:**
+- None recorded.
+
+A natural consequence: while a program is on the alternate screen,
+`scroll-state` reports no scrollback, so no scroll bar is shown in
+vim/less/etc.
 
 ## Implementation
 
@@ -133,27 +214,32 @@ terminals. A natural consequence: while a program is on the alternate screen,
 - **Struct slots:** `screen` is now documented as the *active* buffer;
   `primary-screen` holds the normal buffer while the alternate is active;
   `alt-screen` is the persistent alternate buffer; plus dedicated
-  `alt-saved-col/row/fg/bg/attrs` for 1048/1049. `make-vt-handler` initializes
+  `alt-saved-col/row/fg/bg/attrs` for 1048/1049. `make-vt-handler`
+  (`src/vt-handler.lisp:make-vt-handler@b693eac`) initializes
   `primary-screen` to the supplied screen.
 - **Helpers:** `%save-alt-cursor` / `%restore-alt-cursor` (1048/1049 cursor
-  state); `%ensure-alt-screen` (lazy creation matching primary dims and blank
+  state); `%ensure-alt-screen` (`src/vt-handler.lisp:%ensure-alt-screen@b693eac`; lazy creation matching primary dims and blank
   glyph, scrollback disabled); `%clear-screen-buffer` (`erase-in-display 2` +
-  home); `%enter-alt-screen` / `%exit-alt-screen` (guarded swaps with optional
-  clear); `vt-handler-resize-all` (resize every owned buffer).
+  home); `%enter-alt-screen` / `%exit-alt-screen`
+  (`src/vt-handler.lisp:%enter-alt-screen@b693eac`,
+  `src/vt-handler.lisp:%exit-alt-screen@b693eac`; guarded swaps with optional
+  clear); `vt-handler-resize-all`
+  (`src/vt-handler.lisp:vt-handler-resize-all@b693eac`; resize every owned buffer).
 - **DECSET/DECRST:** rewrote modes 47 / 1047 / 1048 / 1049 per the table above;
   unknown modes still reach the callback.
 
 ### `src/unix-term.lisp`
 
-- `gui-tick` renders the active screen via
+- `gui-tick` (`src/unix-term.lisp:gui-tick@b693eac`) renders the active screen via
   `(vt-handler-screen (unix-terminal-vt-handler term))` for the dirty check,
   `flush-to-display`, blank glyph, and palette upload.
-- `handle-resize` calls `vt-handler-resize-all` (both buffers) and takes the
+- `handle-resize` (`src/unix-term.lisp:handle-resize@b693eac`) calls `vt-handler-resize-all` (both buffers) and takes the
   blank glyph from the active screen.
 
 ### `src/panes/vt-pane.lisp` (covers `uterm-pane`, which inherits these)
 
-- Added `vt-pane-active-screen` (the handler's active screen, falling back to
+- Added `vt-pane-active-screen`
+  (`src/panes/vt-pane.lisp:vt-pane-active-screen@b693eac`; the handler's active screen, falling back to
   the slot before the handler exists).
 - `pane-flush`, `pane-palette`, `scroll-state`, and `pane-dirty-p` use it.
 - `pane-resize` resizes both buffers via `vt-handler-resize-all`.
@@ -187,6 +273,8 @@ window.
 
 ## Files
 
+Table: Files changed in commit `b693eac`.
+
 | File | Action | Description |
 |------|--------|-------------|
 | `src/vt-handler.lisp` | Modified | Alt-buffer + cursor-save slots; helpers; rewrote 47/1047/1048/1049; `vt-handler-resize-all` |
@@ -217,12 +305,13 @@ window.
   alternate screen.
 
 
----
+## Update 2026-06-09 — Stale Grid After Buffer Swap
 
-
-## Addendum: Stale Grid After Buffer Swap
-
-**Date:** 2026-06-06
+*Migration note (2026-10-25):* this section was "Addendum: Stale Grid
+After Buffer Swap", dated 2026-06-06. It becomes a dated Update
+(LEXTER-DRAFT-compass-migration-D5), dated by commit `4864f01`, which
+holds the work (LEXTER-DRAFT-compass-migration-D8). Its "Design
+Decision" becomes LEXTER-DRAFT-multi-buffer-D7.
 
 ### Context
 
@@ -237,7 +326,8 @@ intact); the defect was purely in what reached the screen.
 
 ### Problem
 
-`flush-to-display` is an **incremental** flush: it copies only the screen rows
+`flush-to-display` (`src/model.lisp:flush-to-display@b693eac`) is an
+**incremental** flush: it copies only the screen rows
 whose `row-dirty` bit is set, force-marks just the cursor row each frame, and
 clears all dirty bits afterward. The **display grid is a single buffer shared**
 by the primary and alternate screens.
@@ -255,25 +345,36 @@ were repainted and the rest of the grid kept the application's characters. The
 bug affected both standalone `unix-term` and the pane compositor, since both
 render the active screen through the same incremental flush.
 
-### Design Decision
+### LEXTER-DRAFT-multi-buffer-D7 — Force a full repaint at the swap, mode-agnostically
 
-**Force a full repaint at the swap, mode-agnostically.** The swap is the single
-point where the shared grid stops matching the active buffer, so it is the
-correct place to invalidate. After each swap the now-active screen is marked
+**Status:** Proposed
+
+**Context:** The display grid is shared by both buffers and flushed
+incrementally, so after a swap the newly-active screen's clean rows are
+never re-copied into it (see Problem).
+
+**Decision:** **Force a full repaint at the swap, mode-agnostically.**
+The swap is the single point where the shared grid stops matching the
+active buffer, so it is the correct place to invalidate. After each swap the now-active screen is marked
 entirely dirty, so the next `flush-to-display` re-copies all of its rows into
 the grid (and `any-row-dirty-p` also becomes true, triggering `needs-render`).
 
-This was chosen over alternatives such as giving each buffer its own display
-grid (heavier; the grid is a GPU-facing resource) or having the renderer detect
-a screen-identity change between frames (spreads the concern into the render
-loop). Marking dirty at the swap keeps the fix in one place and covers both
+**Alternatives:**
+- Giving each buffer its own display grid. Rejected: heavier; the grid
+  is a GPU-facing resource.
+- Having the renderer detect a screen-identity change between frames.
+  Rejected: it spreads the concern into the render loop.
+
+Marking dirty at the swap keeps the fix in one place and covers both
 frontends, since both route through the VT handler.
 
 ### Implementation
 
-- **`src/model.lisp`** -- added `mark-screen-dirty`, which fills the screen's
+- **`src/model.lisp`** -- added `mark-screen-dirty`
+  (`src/model.lisp:mark-screen-dirty@4864f01`), which fills the screen's
   `row-dirty` vector with 1s, and exported it from `lexter/model`.
-- **`src/vt-handler.lisp`** -- `%enter-alt-screen` and `%exit-alt-screen` now
+- **`src/vt-handler.lisp`** (`src/vt-handler.lisp@4864f01`) --
+  `%enter-alt-screen` and `%exit-alt-screen` now
   call `mark-screen-dirty` on the now-active screen after the swap. This also
   fixes **mode 47 re-entry** (no-clear, reused alt) and **all exits** uniformly;
   1049 entry already dirtied via its clear, and 1048 (no swap) correctly needs
@@ -291,6 +392,8 @@ characters, including the previously-working bottom-line case -- is the user's
 to make, as it requires a GLFW window.
 
 ### Files
+
+Table: Files changed in commit `4864f01`.
 
 | File | Action | Description |
 |------|--------|-------------|

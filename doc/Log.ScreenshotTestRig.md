@@ -11,6 +11,15 @@ provenance:
   assistant:   opencode
 relates-to:
   - LEXTER-DRAFT-offscreen-fbo
+decisions:
+  - LEXTER-DRAFT-screenshot-test-rig-D1
+  - LEXTER-DRAFT-screenshot-test-rig-D2
+  - LEXTER-DRAFT-screenshot-test-rig-D3
+  - LEXTER-DRAFT-screenshot-test-rig-D4
+  - LEXTER-DRAFT-screenshot-test-rig-D5
+  - LEXTER-DRAFT-screenshot-test-rig-D6
+  - LEXTER-DRAFT-screenshot-test-rig-D7
+  - LEXTER-DRAFT-screenshot-test-rig-D8
 ---
 
 # Screenshot Test Rig: Development Log
@@ -70,49 +79,129 @@ restore determinism on heterogeneous CI GPUs if ever needed.)
 
 Settled before implementation:
 
-**Record the raw input, not the cell matrix.** A `recording` tap on the
-single byte choke point (`process-output`) accumulates every host-to
--terminal byte. The tap is pure: it never alters parsing behavior whether
-on or off.
+### LEXTER-DRAFT-screenshot-test-rig-D1 — Record the raw input, not the cell matrix
 
-**Start/stop recording.** Authoring sets up the terminal first (resize,
-configure), then records only the interesting span. Recording is
-controlled explicitly rather than capturing everything from init.
+**Status:** Proposed
 
-**Exact-pixel checksums.** The assertion is the exact pixel content of the
-screen, captured via the offscreen FBO. Any pixel difference flips the
-checksum -- which is the desired behavior for regression detection.
-Intentional rendering changes (font swap, shader fix) regenerate the
-checksums.
+**Context:** A test must capture everything that determines the rendered
+screen. The cell matrix is lossy, while the raw byte stream is the
+complete, replayable description of a terminal's state (see Problem).
 
-**Config set once, many dumps.** The terminal configuration (font, cols,
-rows, cell dimensions, pixel scale) is durable session-level data,
-established once and printed for reuse. It is *not* stored per fixture.
-Each dump produces only two things: the recorded byte stream and the
-checksum.
+**Decision:** A `recording` tap on the single byte choke point
+(`process-output`) accumulates every host-to-terminal byte. The tap is
+pure: it never alters parsing behavior whether on or off.
 
-**Separate blobs from references.** The byte stream is written as a binary
-blob (`.ptyb`); it is the durable, version-portable artifact. The expected
-checksum and the config are *not* stored in a sidecar file -- they live as
-literals in the test source (the `with-terminal-test-config` macro head and
-the `test-pixels` forms). When rendering intentionally changes, re-author
-and paste the new checksums.
+**Alternatives:**
+- Cell-matrix snapshots, as kitty, tmux, alacritty, and vte test.
+  Rejected: the matrix cannot represent all the factors worth testing,
+  and it tests only the renderer's read of an already-built grid, not
+  the VT parser and handler that built it (see Problem).
 
-**Input recording deferred.** Recording captures PTY *output*
-(host->terminal); keyboard *input* (terminal->host) is out of scope for
-now. The screen state is fully determined by the output stream, so this is
-sufficient for rendering tests.
+### LEXTER-DRAFT-screenshot-test-rig-D2 — Start/stop recording
 
-**Single-terminal recording for now.** Recording targets one terminal.
-The longer-term vision is window-level recording yielding one blob per
-pane, replayed into a headless multipane compositor; the single-terminal
+**Status:** Proposed
+
+**Context:** Authoring sets up the terminal first (resize, configure),
+then records only the interesting span.
+
+**Decision:** Recording is controlled explicitly rather than capturing
+everything from init.
+
+**Alternatives:**
+- Capturing everything from init. Rejected: authoring records only the
+  interesting span.
+
+### LEXTER-DRAFT-screenshot-test-rig-D3 — Exact-pixel checksums
+
+**Status:** Proposed
+
+**Context:** Lexter's output is a deterministic function of font file,
+palette, screen model, and renderer, which makes exact-pixel checksum
+comparison sound (see Problem).
+
+**Decision:** The assertion is the exact pixel content of the screen,
+captured via the offscreen FBO. Any pixel difference flips the checksum
+-- which is the desired behavior for regression detection. Intentional
+rendering changes (font swap, shader fix) regenerate the checksums.
+
+**Alternatives:**
+- Tolerance comparison (SSIM, per-pixel thresholds, blurring), as
+  vector-font terminals use where they compare images at all. Not needed:
+  Lexter's rendering has no antialiasing, hinting, or subpixel rounding
+  (see Problem).
+
+### LEXTER-DRAFT-screenshot-test-rig-D4 — Config set once, many dumps
+
+**Status:** Proposed
+
+**Context:** The terminal configuration (font, cols, rows, cell
+dimensions, pixel scale) is durable session-level data.
+
+**Decision:** The configuration is established once and printed for
+reuse. It is *not* stored per fixture. Each dump produces only two
+things: the recorded byte stream and the checksum.
+
+**Alternatives:**
+- Storing the configuration with each fixture. Rejected: it is
+  session-level data, established once.
+
+### LEXTER-DRAFT-screenshot-test-rig-D5 — Separate blobs from references
+
+**Status:** Proposed
+
+**Context:** A fixture has a byte stream, an expected checksum, and a
+configuration, and they must be stored somewhere.
+
+**Decision:** The byte stream is written as a binary blob (`.ptyb`); it
+is the durable, version-portable artifact. The expected checksum and the
+config live as literals in the test source (the
+`with-terminal-test-config` macro head and the `test-pixels` forms). When
+rendering intentionally changes, re-author and paste the new checksums.
+
+**Alternatives:**
+- Storing the checksum and config in a sidecar file. Rejected: they live
+  in the test source instead.
+
+### LEXTER-DRAFT-screenshot-test-rig-D6 — Input recording deferred
+
+**Status:** Proposed
+
+**Context:** A terminal carries two streams: PTY *output*
+(host->terminal) and keyboard *input* (terminal->host).
+
+**Decision:** Recording captures PTY output; keyboard input is out of
+scope for now. The screen state is fully determined by the output
+stream, so this is sufficient for rendering tests.
+
+**Alternatives:**
+- None recorded.
+
+### LEXTER-DRAFT-screenshot-test-rig-D7 — Single-terminal recording for now
+
+**Status:** Proposed
+
+**Context:** The longer-term vision is window-level recording yielding
+one blob per pane, replayed into a headless multipane compositor.
+
+**Decision:** Recording targets one terminal; the single-terminal
 primitives here are the building blocks for that.
 
-**No coupled authoring constructor.** Authoring runs on a standard live
-terminal with `terminal-start-recording` called on it -- no special
-`make-recording-terminal`, which would tightly couple authoring to the
-recording machinery. The printed config is purely for pasting into the
-test macro.
+**Alternatives:**
+- None recorded.
+
+### LEXTER-DRAFT-screenshot-test-rig-D8 — No coupled authoring constructor
+
+**Status:** Proposed
+
+**Context:** Authoring needs a terminal whose output is being recorded.
+
+**Decision:** Authoring runs on a standard live terminal with
+`terminal-start-recording` called on it. The printed config is purely
+for pasting into the test macro.
+
+**Alternatives:**
+- A special `make-recording-terminal`. Rejected: it would tightly couple
+  authoring to the recording machinery.
 
 
 ## Implementation
@@ -121,7 +210,8 @@ test macro.
 
 A `recording` slot was added to the `vt-handler` struct: `nil` when off,
 otherwise an adjustable `(unsigned-byte 8)` vector with a fill pointer.
-`process-output` appends each processed byte range to the buffer *before*
+`process-output` (`src/vt-handler.lisp:process-output@1f07ee8`) appends each
+processed byte range to the buffer *before*
 parsing:
 
 ```lisp
@@ -132,7 +222,8 @@ parsing:
 (cl-vt:vt-parse (vt-handler-parser handler) data start end)
 ```
 
-Control functions: `start-recording` (allocate a fresh buffer),
+Control functions: `start-recording`
+(`src/vt-handler.lisp:start-recording@1f07ee8`; allocate a fresh buffer),
 `stop-recording` (return the captured bytes as a fresh simple vector, clear
 the slot), `recording-active-p`.
 
@@ -148,47 +239,57 @@ This reuses the entire real render path -- crucially the existing
 `terminal-capture` (offscreen FBO + forced full flush + `capture-pixels`)
 -- so replay tests exactly what the live terminal renders.
 
-`terminal-reset` rebuilds a blank screen, display grid, and VT handler on
+`terminal-reset` (`src/unix-term.lisp:terminal-reset@1f07ee8`) rebuilds a blank
+screen, display grid, and VT handler on
 an existing terminal, reusing its window/atlas/renderer. This lets one
 headless terminal serve many fixtures without rebuilding the (expensive)
-GL atlas. `terminal-config-plist` returns the durable config plist.
-`terminal-start-recording` / `terminal-stop-recording` delegate to the
-handler.
+GL atlas. `terminal-config-plist`
+(`src/unix-term.lisp:terminal-config-plist@1f07ee8`) returns the durable config
+plist.
+`terminal-start-recording` / `terminal-stop-recording`
+(`src/unix-term.lisp:terminal-start-recording@1f07ee8`) delegate to the handler.
 
 ### Test rig module (`src/test-rig.lisp`, system `lexter/test`)
 
-**Checksum.** `fnv1a-64` computes a 64-bit FNV-1a hash over the flat bytes
+**Checksum.** `fnv1a-64` (`src/test-rig.lisp:fnv1a-64@1f07ee8`) computes a 64-bit FNV-1a hash over the flat bytes
 of the `(H W 3)` capture (via a displaced array). FNV-1a was chosen over
 `sxhash` for cross-implementation stability and over crypto hashes for
 speed.
 
 **Blob format.** A minimal frame guards against silent corruption:
 
-```
+```text
 bytes 0-3  magic   "PTYB" (#x50 #x54 #x59 #x42)
 byte  4    version (1)
 bytes 5-8  payload length, big-endian u32
 bytes 9..  payload (the raw recorded byte stream)
 ```
 
-`read-blob` validates magic, version, and length, erroring on any
+Description: The layout of a blob, by byte offset: bytes 0 to 3 hold the
+magic "PTYB" (`#x50 #x54 #x59 #x42`); byte 4 holds the version, 1; bytes
+5 to 8 hold the payload's length as a big-endian 32-bit unsigned
+integer; and the payload, the raw recorded byte stream, begins at
+byte 9.
+
+`read-blob` (`src/test-rig.lisp:read-blob@1f07ee8`) validates magic, version, and length, erroring on any
 mismatch. The blob is written through a pluggable handler:
 `default-blob-writer` writes `<name>.ptyb`; a custom handler with the same
 `(bytes &key name checksum)` signature can route the blob elsewhere.
 
-**Authoring.** `dump-terminal` stops the recording, captures pixels,
+**Authoring.** `dump-terminal` (`src/test-rig.lisp:dump-terminal@1f07ee8`) stops the recording, captures pixels,
 computes the checksum, writes the blob, optionally invokes a `pixel-fn`
 (for writing a reference PNG), and prints `<blob>  #x<checksum>` -- a
 paste-ready `test-pixels` line. `pixel-fn` receives the capture plus
 `:width :height :channels :checksum :name :config` keywords and is
 declared with `&allow-other-keys` so future arguments stay compatible.
 
-**Testing.** `with-terminal-test-config` owns the GLFW lifecycle, builds
+**Testing.** `with-terminal-test-config`
+(`src/test-rig.lisp:with-terminal-test-config@1f07ee8`) owns the GLFW lifecycle, builds
 one headless (`:no-pty`, hidden) terminal from the config, and binds
 `*test-terminal*` for its dynamic extent. If the config declares
 `:cell-width`/`:cell-height` they are verified against the loaded font so a
-font swap cannot silently shift the geometry. `test-pixels` resets the
-terminal, replays a blob, captures, and asserts the checksum -- silent on
+font swap cannot silently shift the geometry. `test-pixels` (`src/test-rig.lisp:test-pixels@1f07ee8`)
+resets the terminal, replays a blob, captures, and asserts the checksum -- silent on
 success, erroring on mismatch (with an optional `on-mismatch` pixel handler
 sharing `pixel-fn`'s signature, e.g. to dump an `actual-*.png`).
 
@@ -200,8 +301,10 @@ sharing `pixel-fn`'s signature, e.g. to dump an `actual-*.png`).
   (test-pixels "./1051.ptyb" #x1122334455667788))
 ```
 
+### Workflow
 
-## Workflow
+*Migration note (2026-10-25):* this was a section of its own, after
+Implementation; it is placed in Implementation as a subsection.
 
 Authoring (interactive, one-time):
 
@@ -228,11 +331,36 @@ headlessly here (no display), matching the project's standing constraint.
 
 ## Files
 
-- `src/vt-handler.lisp` -- `recording` slot, `process-output` tap,
-  `start-recording` / `stop-recording` / `recording-active-p`.
-- `src/packages-unix.lisp` -- exports for the recording and replay API.
-- `src/unix-term.lisp` -- `no-pty` slot + guards, `terminal-start-recording`
-  / `terminal-stop-recording`, `terminal-reset`, `terminal-config-plist`.
-- `src/test-rig.lisp` -- checksum, blob API, `dump-terminal`,
-  `with-terminal-test-config`, `test-pixels`, `replay-blob`.
-- `lexter.asd` -- new `lexter/test` system.
+*Migration note (2026-10-25):* the Files section was a bulleted list; it
+is rewritten as a table, with the same files and descriptions. Commit
+`1f07ee8` also changed `src/origin-impulse.lisp` and
+`tests/origin-impulse-tests.lisp`, which this table does not list; that
+work, the `:lexter-host` handoff, is recorded in Origin's Log
+[ORIGIN-0012](../../../lisp/origin/doc/Log.ImpulseIII.md).
+
+Table: Files added or changed in commit `1f07ee8`.
+
+| File | Action | Description |
+|------|--------|-------------|
+| `src/vt-handler.lisp` | Modified | `recording` slot, `process-output` tap, `start-recording` / `stop-recording` / `recording-active-p` |
+| `src/packages-unix.lisp` | Modified | Exports for the recording and replay API |
+| `src/unix-term.lisp` | Modified | `no-pty` slot + guards, `terminal-start-recording` / `terminal-stop-recording`, `terminal-reset`, `terminal-config-plist` |
+| `src/test-rig.lisp` | **New** | Checksum, blob API, `dump-terminal`, `with-terminal-test-config`, `test-pixels`, `replay-blob` |
+| `lexter.asd` | Modified | New `lexter/test` system |
+
+
+## Outstanding Work
+
+*Migration note (2026-10-25):* this Log had no Outstanding Work section.
+Its items are gathered, in the Log's own words, from the work it defers.
+
+- **Input recording.** Keyboard *input* (terminal->host) is out of scope
+  for now (LEXTER-DRAFT-screenshot-test-rig-D6).
+- **Window-level recording.** The longer-term vision is window-level
+  recording yielding one blob per pane, replayed into a headless
+  multipane compositor (LEXTER-DRAFT-screenshot-test-rig-D7).
+- **Determinism on heterogeneous CI GPUs.** The only residual
+  cross-machine risk is float rounding at quad edges in the vertex
+  shader; a software rasterizer -- `LIBGL_ALWAYS_SOFTWARE=1` -- would
+  restore determinism on heterogeneous CI GPUs if ever needed (see
+  Problem).

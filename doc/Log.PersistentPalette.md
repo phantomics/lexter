@@ -11,6 +11,11 @@ provenance:
   assistant:   opencode
 relates-to:
   - LEXTER-DRAFT-multi-buffer
+decisions:
+  - LEXTER-DRAFT-persistent-palette-D1
+  - LEXTER-DRAFT-persistent-palette-D2
+  - LEXTER-DRAFT-persistent-palette-D3
+  - LEXTER-DRAFT-persistent-palette-D4
 ---
 
 # Persistent Palette Model: Development Log
@@ -31,9 +36,13 @@ applications requesting custom colors can eventually be honored.
 Lexter renders cells through a two-level color indirection that was
 already in place from the swatch work:
 
-```
+```text
 cell -> swatch index -> palette index -> RGB color (in the UBO)
 ```
+
+Description: A chain of four links: a cell names a swatch index, the
+swatch index names a palette index, and the palette index names an RGB
+color held in the UBO.
 
 A cell names a swatch; a swatch names up to four palette indices (bg,
 fg, overlay, secondary); a palette index names an RGB triple stored in a
@@ -43,7 +52,8 @@ recolors every cell that transitively references it, with no per-cell
 work.
 
 The palette itself, however, was not live state. It was built once by a
-`make-xterm-palette` function that lived in `demo.lisp`, uploaded to the
+`make-xterm-palette` function that lived in `demo.lisp`
+(`src/demo.lisp:make-xterm-palette@18ebc40`), uploaded to the
 UBO a single time via `set-palette`, and never touched again. The float
 array was a local variable in each entry point's main loop. There was
 no object that owned the palette, no way for terminal logic to mutate
@@ -69,13 +79,22 @@ ownership and change tracking, not new rendering machinery.
 
 ## Design Decisions
 
-### 1. The palette lives on the screen model
+### LEXTER-DRAFT-persistent-palette-D1 — The palette lives on the screen model
 
-**Question:** Where should the persistent palette state live -- on the
+**Status:** Proposed
+
+**Context:** Where should the persistent palette state live -- on the
 screen model, on the workspace/compositor, or on the renderer?
 
 **Decision:** On the screen model, alongside the swatch table it already
 owns.
+
+**Alternatives:**
+- **The renderer.** Rejected: it is a plain rendering struct with no
+  business logic.
+- **The workspace.** Rejected: it is further from where changes arrive
+  and would force shared-palette semantics onto panes that want their
+  own.
 
 The deciding factor is where palette changes *originate*. OSC sequences
 arrive through the VT handler, which already has the screen in hand. The
@@ -87,19 +106,19 @@ independent palette for free: a 3270 pane and a Unix shell in the same
 workspace can carry different color schemes without contending for a
 shared global.
 
-The renderer was rejected as a home because it is a plain rendering
-struct with no business logic; the workspace was rejected because it is
-further from where changes arrive and would force shared-palette
-semantics onto panes that want their own.
+### LEXTER-DRAFT-persistent-palette-D2 — Change tracking via a generation counter
 
-### 2. Change tracking via a generation counter
+**Status:** Proposed
 
-**Question:** How does the renderer know when to re-upload the palette?
+**Context:** How does the renderer know when to re-upload the palette?
 
 **Decision:** A generation counter on the screen, mirroring the existing
 swatch-table generation pattern. Every mutation bumps
 `palette-generation`; the renderer remembers the last generation it
 uploaded and re-uploads only on a mismatch.
+
+**Alternatives:**
+- None recorded.
 
 This is deliberately the *same* idiom already used for swatches
 (`swatch-table-generation` vs. the grid's `swatch-generation`), so the
@@ -109,38 +128,50 @@ counter also gives a clean, race-free "has this changed?" predicate and
 keeps the GPU upload off the hot path for the common case where the
 palette is static frame to frame.
 
-### 3. Scope: persistent state and generation now, OSC parsing later
+### LEXTER-DRAFT-persistent-palette-D3 — Scope: persistent state and generation now, OSC parsing later
 
-**Question:** Should this change also parse the OSC sequences that drive
+**Status:** Proposed
+
+**Context:** Should this change also parse the OSC sequences that drive
 palette changes?
 
 **Decision:** No. This iteration implements the persistent state and the
 generation-tracked sync, plus a programmatic mutation API, and
 explicitly defers VT-handler OSC parsing.
 
-Separating the two is sound layering. The palette model and its sync are
-a self-contained unit that can be built and verified on their own. The
-mutation functions (`set-palette-entry`, `reset-palette`, and friends)
-are precisely the hooks a future OSC handler will call -- so deferring
-the parser costs nothing and lets the color model land first.
+**Alternatives:**
+- Parse the OSC sequences in the same change. Rejected: separating the
+  two is sound layering, and deferring the parser costs nothing.
 
-### 4. Palette syncs screen -> renderer directly, not through the grid
+The palette model and its sync are a self-contained unit that can be
+built and verified on their own. The mutation functions
+(`set-palette-entry`, `reset-palette`, and friends) are precisely the
+hooks a future OSC handler will call -- so deferring the parser lets the
+color model land first.
 
-**Question:** Should `flush-to-display` carry the palette to the GPU, the
+### LEXTER-DRAFT-persistent-palette-D4 — Palette syncs screen -> renderer directly, not through the grid
+
+**Status:** Proposed
+
+**Context:** Should `flush-to-display` carry the palette to the GPU, the
 way it carries swatches?
 
 **Decision:** No. The palette bypasses the display grid and goes
 straight from the screen to the renderer at render time, in the caller's
 loop, after flush and before `render-frame`.
 
+**Alternatives:**
+- Carry the palette through the display grid, as swatches are. Rejected:
+  the palette is not per-cell state, so routing it through the grid
+  would be artificial.
+
 This respects the existing module boundaries. `flush-to-display` does
 model -> grid and lives in the model package, which has no dependency on
 the renderer. Swatches flow through the grid because the grid is a GPU
 mirror of per-cell state; the palette is not per-cell -- it is a single
-shared resource -- so routing it through the grid would be artificial.
-Instead each entry point (compositor, Unix terminal, demo) calls
-`upload-palette` with the active screen's palette and generation between
-flushing and rendering:
+shared resource. Instead each entry point (compositor, Unix terminal,
+demo) calls `upload-palette` with the active screen's palette and
+generation between flushing and rendering:
 
 ```lisp
 (flush-to-display screen grid ...)
@@ -151,7 +182,6 @@ flushing and rendering:
 With one renderer and possibly several panes, the caller uploads the
 *active* pane's palette each frame -- correct for the single-palette GPU
 state of the time, and cheap.
-
 
 ## Implementation
 
@@ -206,7 +236,8 @@ This is exactly parallel to the swatch-table path's `swatch-gen` /
 
 ### Callers (`src/demo.lisp`, `src/unix-term.lisp`)
 
-The entry points stopped constructing their own palettes and instead use
+The entry points (`src/demo.lisp@0cdd2af`, `src/unix-term.lisp@0cdd2af`)
+stopped constructing their own palettes and instead use
 the screen's persistent palette, calling `upload-palette` at render time
 with the screen's generation. The old per-loop local palette array is
 gone.
@@ -250,6 +281,27 @@ handshake reproduce the prior output. Programmatic mutation via
 referencing cells without any swatch or cell rebuild.
 
 
+## Files
+
+*Migration note (2026-10-25):* this Log had no Files table for its main
+work. The table is built from commit `0cdd2af`, and its descriptions are
+drawn from the sections above and the commit's diff.
+
+Table: Files changed in commit `0cdd2af`.
+
+| File | Action | Description |
+|------|--------|-------------|
+| `src/model.lisp` | Modified | `palette` and `palette-generation` slots on `screen`; `make-default-palette`; the palette mutation API |
+| `src/renderer.lisp` | Modified | `palette-gen` in the render state; generation-gated `upload-palette` over `set-palette` |
+| `src/demo.lisp` | Modified | Uses the screen's palette and `upload-palette` instead of its own `make-xterm-palette` |
+| `src/unix-term.lisp` | Modified | Uses the screen's palette and `upload-palette` at render time |
+| `src/panes/protocol.lisp` | Modified | `pane-palette` generic, returning `(values palette-array generation)`; NIL by default |
+| `src/panes/vt-pane.lisp` | Modified | `pane-palette` method returning the screen's palette and generation |
+| `src/panes/compositor.lisp` | Modified | Uploads the focused pane's palette after flushing the workspace |
+| `src/packages.lisp` | Modified | Exports `upload-palette` and the screen palette API |
+| `src/panes/packages.lisp` | Modified | Exports `pane-palette` |
+
+
 ## Outstanding Work
 
 - **VT handler OSC parsing.** The deferred half of the feature: wire
@@ -270,19 +322,22 @@ referencing cells without any swatch or cell rebuild.
   precisely is a small design task to settle when the OSC handlers land.
 
 
----
 
+## Update 2026-06-20 — OSC Palette Control
 
-# Appendix: OSC Palette Control (closing the deferred OSC item)
+*Migration note (2026-10-25):* this section was an appendix headed
+"Appendix: OSC Palette Control (closing the deferred OSC item)" and dated
+2026-06-06. It becomes a dated Update (LEXTER-DRAFT-compass-migration-D5),
+dated by commit `5885398`, which holds the work
+(LEXTER-DRAFT-compass-migration-D8). Its "Remaining nuance" section
+becomes its Outstanding Work.
 
-**Date:** 2026-06-06
-
-This appendix documents the follow-up that wired the OSC palette-control
+This update documents the follow-up that wired the OSC palette-control
 sequences to the persistent-palette API. It does not revise the material
 above; it records the work that resolved the "VT handler OSC parsing"
 item listed in *Outstanding Work*.
 
-## Trigger
+### Trigger
 
 The terminal roguelike *zangband* rendered with completely wrong colors:
 what should be white showed as ANSI dark red, gray as dark green, and a
@@ -290,9 +345,9 @@ pink/violet color as bright green. The mapping was systematic -- each of
 the game's colors appeared as the *default xterm color for that color's
 index*.
 
-## Diagnosis
+### Diagnosis
 
-The PTY child runs with `TERM=xterm-256color` (set in `pty.lisp`), whose
+The PTY child runs with `TERM=xterm-256color` (set in `pty.lisp`; `src/pty.lisp@5885398`), whose
 terminfo advertises `ccc`/`initc` (can-change-color). Programs that
 install a custom palette -- as the Angband family does via curses
 `init_color` -- therefore cause ncurses to emit the `initc` capability,
@@ -311,15 +366,16 @@ This was precisely the gap the original log deferred: the screen-owned
 palette and its mutators (`set-palette-entry-rgb8`, `reset-palette`,
 `make-default-palette`) existed; they were simply never connected to OSC.
 
-## Implementation
+### Implementation
 
-All in `src/vt-handler.lisp`:
+All in `src/vt-handler.lisp` (`src/vt-handler.lisp@5885398`):
 
-- **Color-spec parser** `%parse-osc-color`, accepting the X color formats
+- **Color-spec parser** `%parse-osc-color`
+  (`src/vt-handler.lisp:%parse-osc-color@5885398`), accepting the X color formats
   ncurses/xterm emit: `rgb:R/G/B` with **1-4 hex digits per channel**
   (scaled to 8-bit; xterm's `initc` uses 2-digit, others 4-digit), and
   `#RGB` / `#RRGGBB` / `#RRRRGGGGBBBB`. A query (`?`) returns NIL.
-- `handle-osc` was restructured to parse the leading `Ps` number even when
+- `handle-osc` (`src/vt-handler.lisp:handle-osc@5885398`) was restructured to parse the leading `Ps` number even when
   there is no `;` (so a bare `OSC 104` -- reset-all -- is recognized),
   then dispatch:
   - **OSC 4** -> `set-palette-entry-rgb8` for each `index;spec` pair.
@@ -331,18 +387,19 @@ All in `src/vt-handler.lisp`:
   - **OSC 12** (cursor color) -> parsed but unsupported; the cursor is
     drawn by reverse-video, so there is no cursor-color slot to set.
 
-### Shared across both screen buffers
+#### Shared across both screen buffers
 
 Each screen owns its own palette (the design above), and a full-screen
 program like zangband sets OSC 4 *after* switching to the alternate
 screen. To make the behavior order-independent and to match real
 terminals' single shared palette, every OSC palette change is applied to
-**all** of the handler's buffers (`%handler-screens` returns the distinct
+**all** of the handler's buffers (`%handler-screens`,
+`src/vt-handler.lisp:%handler-screens@5885398`, returns the distinct
 active / primary / alternate screens). `set-palette-entry*` /
 `reset-palette` already bump `palette-generation`, so the renderer
 re-uploads the affected buffer's UBO on the next frame automatically.
 
-## Verification
+### Verification
 
 Headless self-checks: `%parse-osc-color` returns `(255 128 0)` for
 `rgb:ff/80/00`, `rgb:ffff/8000/0000`, and `#ff8000`, and NIL for `?`.
@@ -352,7 +409,15 @@ index on both the alternate and primary buffers; `OSC 104;n` resets index
 `OSC 10` retargets palette index 7. Live confirmation in zangband (correct
 colors, restored on exit) is the user's.
 
-## Remaining nuance
+### Files
+
+Table: Files changed in commit `5885398`.
+
+| File | Action | Description |
+|------|--------|-------------|
+| `src/vt-handler.lisp` | Modified | OSC color-spec parser; split/helpers; `handle-osc` rewritten to dispatch OSC 4/104/10/11/12 to the per-screen palette mutators across all buffers |
+
+### Outstanding Work
 
 The OSC 10/11 default-fg/bg mapping onto palette indices 7/0 is an
 approximation: an app that changes the default foreground *and* uses the
@@ -361,9 +426,3 @@ would give the screen separate default-fg/bg colors consulted by SGR
 39/49; that remains a small future refinement. OSC color *queries* (apps
 asking the terminal to report a color) are ignored, as Lexter has no OSC
 reply channel wired up.
-
-## Files
-
-| File | Action | Description |
-|------|--------|-------------|
-| `src/vt-handler.lisp` | Modified | OSC color-spec parser; split/helpers; `handle-osc` rewritten to dispatch OSC 4/104/10/11/12 to the per-screen palette mutators across all buffers |

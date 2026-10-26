@@ -11,6 +11,13 @@ provenance:
   assistant:   opencode
 relates-to:
   - LEXTER-DRAFT-gui-lifecycle
+decisions:
+  - LEXTER-DRAFT-offscreen-fbo-D1
+  - LEXTER-DRAFT-offscreen-fbo-D2
+  - LEXTER-DRAFT-offscreen-fbo-D3
+  - LEXTER-DRAFT-offscreen-fbo-D4
+  - LEXTER-DRAFT-offscreen-fbo-D5
+  - LEXTER-DRAFT-offscreen-fbo-D6
 ---
 
 # Offscreen Render Target (FBO): Development Log
@@ -22,12 +29,19 @@ foundation plus screenshot capture, primarily to support automated, pixel-level
 testing. Phase 2 (not yet built) will layer a pluggable post-processing effect
 chain (blur, bloom, CRT warp, ...) on the same foundation.
 
-**Date:** 2026-06-06
+**Date:** 2026-06-18
 
-**Status:** Phase 1 complete. Phase 2 (post-processing effects) outstanding.
+Phase 1 is complete. Phase 2 (post-processing effects) is outstanding.
+
+*Migration note (2026-10-25):* the original Log was dated 2026-06-06. The
+date is corrected to that of commit `1a59f24`, which holds the work
+(LEXTER-DRAFT-compass-migration-D8). The sentence above was an in-body
+`**Status:**` line; the label is removed so that it does not compete with
+the front-matter `status`. The section that follows was headed
+Motivation.
 
 
-## Motivation
+## Problem
 
 Two interrelated goals prompted this work:
 
@@ -46,11 +60,12 @@ straight to the window. So the design built that shared foundation once.
 
 ## Starting point
 
-`render-frame` drew the simple and layered passes directly to the default
+`render-frame` (`src/renderer.lisp:render-frame@c8acd7c`) drew the simple and
+layered passes directly to the default
 framebuffer, and the `gui-tick` loops called `glfw:swap-buffers` immediately
 after. There was no FBO anywhere; the renderer used no depth buffer (it is a 2D
 cell grid with alpha-blended layers), so a colour-only target suffices. A
-precursor experiment (`screenshot.lisp`, inherited from the predecessor
+precursor experiment (`screenshot.lisp@c8acd7c`, inherited from the predecessor
 `pcf-gl` project) had already shown the read-back mechanism:
 `gl:read-pixels … :rgb :unsigned-byte`, flipped vertically because GL's origin
 is bottom-left.
@@ -60,46 +75,95 @@ is bottom-left.
 
 These were settled with the user before implementation.
 
-### 1. Opt-in, not always-on
+### LEXTER-DRAFT-offscreen-fbo-D1 — Opt-in, not always-on
 
-When no effect is enabled and no capture is requested, `render-frame` draws to
-the window exactly as before -- the common hot path is byte-for-byte unchanged.
-The FBO path engages only when `enable-offscreen` has been called (today: when
-a capture is taken; later: when an effect is active). This avoids imposing an
-extra full-screen blit on every ordinary frame.
+**Status:** Proposed
 
-### 2. Window-resolution FBO; pixel-scale unchanged
+**Context:** Rendering through an FBO costs an extra full-screen blit per
+frame, and the FBO is needed only when a capture is taken or an effect is
+active.
 
-`pixel-scale` is currently baked into the vertex shader, so the scene is already
-rendered at window resolution. The FBO is sized to the window, and no scaling
-behaviour changed. (A "more correct" CRT pass would render at *logical*
-resolution and apply scaling + curvature in the present pass, but that is a
-`pixel-scale` rework deferred to Phase 2.)
+**Decision:** When no effect is enabled and no capture is requested,
+`render-frame` draws to the window exactly as before -- the common hot
+path is byte-for-byte unchanged. The FBO path engages only when
+`enable-offscreen` has been called (today: when a capture is taken;
+later: when an effect is active).
 
-### 3. RGBA8 colour format
+**Alternatives:**
+- An always-on FBO. Rejected: it would impose an extra full-screen blit
+  on every ordinary frame.
 
-Sufficient for screenshots and for blur/CRT/basic bloom. HDR bloom would want
-RGBA16F; that upgrade is left for Phase 2 if needed.
+### LEXTER-DRAFT-offscreen-fbo-D2 — Window-resolution FBO; pixel-scale unchanged
 
-### 4. FBO is the screenshot source
+**Status:** Proposed
 
-Reading from the default framebuffer is subject to the window pixel-ownership
-test (occluded/offscreen windows yield undefined pixels). Reading from the FBO
-is deterministic and independent of window visibility -- exactly what tests
-need.
+**Context:** `pixel-scale` is currently baked into the vertex shader, so
+the scene is already rendered at window resolution.
 
-### 5. Capture forces a render
+**Decision:** The FBO is sized to the window, and no scaling behaviour
+changed.
 
-`terminal-capture` / `compositor-capture` flush and render unconditionally
-(ignoring dirty-tracking), so a capture is deterministic regardless of what the
-last `gui-tick` happened to do.
+**Alternatives:**
+- Render at *logical* resolution and apply scaling + curvature in the
+  present pass, a "more correct" CRT pass. Deferred to Phase 2: it is a
+  `pixel-scale` rework.
 
-### 6. Hidden-window flag for tests
+### LEXTER-DRAFT-offscreen-fbo-D3 — RGBA8 colour format
 
-`gui-initialize` now honours a `:visible` config flag threaded through the
-constructors and entry points. Tests create the terminal with `:visible nil`,
-get a GL context with no on-screen window, render to the FBO, and capture.
+**Status:** Proposed
 
+**Context:** The colour target must serve screenshots and the planned
+blur, CRT, and bloom effects.
+
+**Decision:** RGBA8, which is sufficient for screenshots and for
+blur/CRT/basic bloom.
+
+**Alternatives:**
+- RGBA16F, which HDR bloom would want. Left for Phase 2 if needed.
+
+### LEXTER-DRAFT-offscreen-fbo-D4 — FBO is the screenshot source
+
+**Status:** Proposed
+
+**Context:** Reading from the default framebuffer is subject to the
+window pixel-ownership test (occluded/offscreen windows yield undefined
+pixels).
+
+**Decision:** Captures read from the FBO, which is deterministic and
+independent of window visibility -- exactly what tests need.
+
+**Alternatives:**
+- Reading from the default framebuffer. Rejected: its pixels are
+  undefined when the window is occluded or offscreen.
+
+### LEXTER-DRAFT-offscreen-fbo-D5 — Capture forces a render
+
+**Status:** Proposed
+
+**Context:** Rendering is dirty-tracked, so the frame in the FBO depends
+on what the last `gui-tick` happened to do.
+
+**Decision:** `terminal-capture` / `compositor-capture` flush and render
+unconditionally (ignoring dirty-tracking), so a capture is deterministic
+regardless of what the last `gui-tick` happened to do.
+
+**Alternatives:**
+- None recorded.
+
+### LEXTER-DRAFT-offscreen-fbo-D6 — Hidden-window flag for tests
+
+**Status:** Proposed
+
+**Context:** Tests need a GL context in which to render and capture, but
+not an on-screen window.
+
+**Decision:** `gui-initialize` now honours a `:visible` config flag
+threaded through the constructors and entry points. Tests create the
+terminal with `:visible nil`, get a GL context with no on-screen window,
+render to the FBO, and capture.
+
+**Alternatives:**
+- None recorded.
 
 ## Implementation
 
@@ -107,7 +171,8 @@ get a GL context with no on-screen window, render to the FBO, and capture.
 
 - **`render-state` fields:** `offscreen-enabled`, `offscreen-fbo`,
   `offscreen-tex`, `offscreen-w`, `offscreen-h`.
-- **`%ensure-offscreen (rs w h)`** -- lazily creates / resizes the RGBA8 colour
+- **`%ensure-offscreen (rs w h)`**
+  (`src/renderer.lisp:%ensure-offscreen@1a59f24`) -- lazily creates / resizes the RGBA8 colour
   texture (nearest, clamp) and the FBO, attaches the texture to
   `:color-attachment0`, and verifies completeness. No depth attachment (the
   renderer needs none).
@@ -117,12 +182,14 @@ get a GL context with no on-screen window, render to the FBO, and capture.
 - **`render-frame`** -- now binds the offscreen FBO (and sets the viewport to
   its size) when enabled, else binds framebuffer 0. The rest of the function is
   untouched.
-- **`present-offscreen (rs)`** -- blits the offscreen colour buffer 1:1 to the
+- **`present-offscreen (rs)`** (`src/renderer.lisp:present-offscreen@1a59f24`)
+  -- blits the offscreen colour buffer 1:1 to the
   default framebuffer so the window shows the frame. No-op when disabled.
   (Phase 2 replaces this blit with the effect chain.) Uses
   `%gl:blit-framebuffer` -- cl-opengl exposes blit only in the low-level `%gl`
   package, not `gl`.
-- **`capture-pixels (rs)`** -- binds the FBO as the read framebuffer, sets
+- **`capture-pixels (rs)`** (`src/renderer.lisp:capture-pixels@1a59f24`) --
+  binds the FBO as the read framebuffer, sets
   `(gl:pixel-store :pack-alignment 1)`, reads `:rgb :unsigned-byte`, and
   repacks the flat bottom-up buffer into a top-down `(H W 3)` array.
 - **`update-viewport`** resizes the offscreen target alongside the window;
@@ -135,7 +202,9 @@ get a GL context with no on-screen window, render to the FBO, and capture.
   `glfw:create-window` as `:visible`.
 - `present-offscreen` is called in each `gui-tick`, right after `render-frame`
   and before `swap-buffers` (a no-op unless offscreen is enabled).
-- **`terminal-capture (term)`** and **`compositor-capture (comp)`** -- make the
+- **`terminal-capture (term)`** (`src/unix-term.lisp:terminal-capture@1a59f24`)
+  and **`compositor-capture (comp)`**
+  (`src/panes/compositor.lisp:compositor-capture@1a59f24`) -- make the
   GL context current, enable offscreen, force a full flush + render, and return
   the captured `(H W 3)` array. `terminal-capture` marks the active screen
   dirty before flushing (the unix terminal flushes incrementally);
@@ -149,8 +218,7 @@ get a GL context with no on-screen window, render to the FBO, and capture.
 `unix-terminal-renderer`. `lexter/panes`: `compositor-capture`,
 `compositor-renderer`.
 
-
-## A recurring gotcha: pixel store alignment
+### A recurring gotcha: pixel store alignment
 
 This is the third time a GL row-alignment default has bitten this codebase, so
 it is worth recording as a pattern. GL defaults `GL_UNPACK_ALIGNMENT` and
@@ -187,6 +255,8 @@ shape is:
 
 ## Files
 
+Table: Files changed in commit `1a59f24`.
+
 | File | Action | Description |
 |------|--------|-------------|
 | `src/renderer.lisp` | Modified | Offscreen FBO fields, `%ensure-offscreen`, enable/disable/resize, `render-frame` targeting, `present-offscreen`, `capture-pixels`, viewport resize + teardown |
@@ -197,7 +267,10 @@ shape is:
 | `src/panes/packages.lisp` | Modified | Export `compositor-capture`, `compositor-renderer` |
 
 
-## Phase 2: outstanding work (post-processing effect chain)
+## Outstanding Work
+
+*Migration note (2026-10-25):* this section was headed "Phase 2:
+outstanding work (post-processing effect chain)".
 
 The FBO foundation is deliberately shaped so the following can be added without
 disturbing it:

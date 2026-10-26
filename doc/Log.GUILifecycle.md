@@ -18,6 +18,7 @@ decisions:
   - LEXTER-DRAFT-gui-lifecycle-D4
   - LEXTER-DRAFT-gui-lifecycle-D5
   - LEXTER-DRAFT-gui-lifecycle-D6
+  - LEXTER-DRAFT-gui-lifecycle-D7
 ---
 
 # GUI Lifecycle (Iteration API): Development Log
@@ -80,32 +81,45 @@ single-threaded pipeline exactly as it is, but move the *loop* out of Lexter
 and expose each frame as a callable step.
 
 
-## Design: Approach B
-
-Three integration strategies were weighed (recorded in the OriginII design
-conversation):
-
-- **A -- background thread on Linux.** Run each Lexter loop in an Origin-managed
-  thread. Least change, but relies on GLFW-from-a-background-thread behavior
-  that the library does not guarantee and that fails on macOS.
-- **B -- main thread for GUI, background for everything else.** Refactor the
-  loop into a steppable protocol; a main-thread dispatcher services all GLFW
-  windows. More work upfront, scales cleanly to multiple windows, portable.
-- **C -- split backend from renderer across threads.** Most aligned with crash
-  isolation, but a large internal-threading refactor of Lexter.
-
-**Approach B was chosen.** Its central insight is that this is *not* an
-internal-threading change. The `terminal-tick` function does everything the old
-loop body did -- read PTY, parse VT, update the model, render, swap -- in the
-same thread, the same call stack. The only thing it stops doing is calling
-`glfw:poll-events`, which is hoisted to the dispatcher so one call services
-every window. Lexter remains single-threaded; only the `loop` form moves out.
-What changes is **object lifetime management**: the locals that lived inside
-the entry function become slots on a persistent object that survives across
-ticks.
-
-
 ## Design Decisions
+
+*Migration note (2026-10-25):* the choice of integration strategy was a
+section of its own, "Design: Approach B", before the other decisions. It
+is recorded here as LEXTER-DRAFT-gui-lifecycle-D7 and placed first,
+because the other six decisions refine it.
+
+### LEXTER-DRAFT-gui-lifecycle-D7 — Approach B: main thread for GUI, background for everything else
+
+**Status:** Proposed
+
+**Context:** Lexter must be hosted by the Origin process manager, whose
+model places a supervisor and all non-GUI processes on background
+threads, while GLFW requires window creation and `glfw:poll-events` to
+run on the main thread (see Problem). Three integration strategies were
+weighed (recorded in the OriginII design conversation).
+
+**Decision:** Approach B -- main thread for GUI, background for
+everything else. Refactor the loop into a steppable protocol; a
+main-thread dispatcher services all GLFW windows. More work upfront,
+scales cleanly to multiple windows, portable.
+
+**Alternatives:**
+- **A -- background thread on Linux.** Run each Lexter loop in an
+  Origin-managed thread. Least change, but relies on
+  GLFW-from-a-background-thread behavior that the library does not
+  guarantee and that fails on macOS.
+- **C -- split backend from renderer across threads.** Most aligned with
+  crash isolation, but a large internal-threading refactor of Lexter.
+
+Approach B's central insight is that this is *not* an internal-threading
+change. The `terminal-tick` function does everything the old loop body
+did -- read PTY, parse VT, update the model, render, swap -- in the same
+thread, the same call stack. The only thing it stops doing is calling
+`glfw:poll-events`, which is hoisted to the dispatcher so one call
+services every window. Lexter remains single-threaded; only the `loop`
+form moves out. What changes is **object lifetime management**: the
+locals that lived inside the entry function become slots on a persistent
+object that survives across ticks.
 
 ### LEXTER-DRAFT-gui-lifecycle-D1 — A window-level protocol in core Lexter (`lexter/gui`)
 
@@ -401,7 +415,8 @@ the 3270 cursor.
 
 ## Outstanding Work
 
-- **Origin main-thread GUI dispatcher.** The consumer side of Approach B: a
+- **Origin main-thread GUI dispatcher.** The consumer side of Approach B
+  (LEXTER-DRAFT-gui-lifecycle-D7): a
   main-thread loop in Origin that owns `glfw:initialize`/`terminate`, hosts one
   or more Lexter objects via `gui-initialize` / `gui-tick` / `gui-destroy`, and
   reports their status. This refactor makes Lexter ready for it; the thread-

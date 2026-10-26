@@ -15,13 +15,18 @@ cites:
   - title:    "Session transcript ses_2263-Lexter6"
     locator:  "session-ses_2263-Lexter6.md, line 783"
     external: true
+decisions:
+  - LEXTER-DRAFT-palette-paging-D1
+  - LEXTER-DRAFT-palette-paging-D2
+  - LEXTER-DRAFT-palette-paging-D3
+  - LEXTER-DRAFT-palette-paging-D4
 ---
 
 # GPU Palette Paging: Development Log
 
 This document chronicles the extension of Lexter's palette system from a
 single GPU-resident palette to several. The persistent palette model
-gave each screen its own 256-color palette synced to a single-palette
+([LEXTER-DRAFT-persistent-palette](Log.PersistentPalette.md)) gave each screen its own 256-color palette synced to a single-palette
 UBO. Palette paging widens that UBO to hold several palettes at once and
 adds a slot-selection uniform, so switching which palette a pane renders
 with costs one integer uniform write and zero data transfer.
@@ -60,23 +65,23 @@ pointer move on the GPU, not a memory transfer.
 
 ## Design Decisions
 
-### 1. Larger UBO plus a slot uniform (Option A)
+### LEXTER-DRAFT-palette-paging-D1 — Larger UBO plus a slot uniform (Option A)
 
-**Question:** How should multiple palettes be made simultaneously
+**Status:** Proposed
+
+**Context:** How should multiple palettes be made simultaneously
 resident and selectable?
 
 **Decision:** Keep the existing UBO but make it hold several palettes
 contiguously, and add a `u_palette_slot` integer uniform that the shader
 uses to offset its color lookup. This was "Option A" from the design
-discussion, chosen over two texture-based alternatives.
+discussion, chosen over two texture-based alternatives: store N palettes
+back to back in the UBO (N x 256 x `vec4`); the shader indexes
+`colors[slot * 256 + color_index]`. Switching is one `glUniform1i`.
+Upload happens only when a slot's palette is first registered or
+changes.
 
-The contenders were:
-
-- **Option A -- larger UBO + offset uniform.** Store N palettes back to
-  back in the UBO (N x 256 x `vec4`); the shader indexes
-  `colors[slot * 256 + color_index]`. Switching is one `glUniform1i`.
-  Upload happens only when a slot's palette is first registered or
-  changes.
+**Alternatives:**
 - **Option B -- 1D `RGBA8` texture with paging.** Store all palettes in a
   single 1D texture (256 x N texels) and `texelFetch` with a base
   offset. This is 1 KB per palette instead of 4 KB (16 palettes in
@@ -101,24 +106,32 @@ denser and the GPU normalizes it for free. But floats map cleanly to
 irrelevant, so the float UBO was retained. The density argument is the
 one that would tip a future move to Option B.
 
-### 2. Four slots, sized to the guaranteed UBO floor
+### LEXTER-DRAFT-palette-paging-D2 — Four slots, sized to the guaranteed UBO floor
 
-**Question:** How many palette slots?
+**Status:** Proposed
+
+**Context:** How many palette slots? The OpenGL 3.3 spec guarantees
+`GL_MAX_UNIFORM_BLOCK_SIZE` of at least 16 KB; typical desktop hardware
+allows 64 KB.
 
 **Decision:** Four (`+max-palette-slots+` = 4), giving a 16 KB UBO at
 4 KB per slot.
 
-The number is pinned to portability, not ambition. The OpenGL 3.3 spec
-guarantees `GL_MAX_UNIFORM_BLOCK_SIZE` of at least 16 KB. At 4 KB per
-float palette, four slots is exactly what every conformant
-implementation must support. Typical desktop hardware allows 64 KB (16
-slots), but four is the safe floor that needs no capability query and no
-fallback path -- and four distinct palettes is already more than a
-terminal is likely to show at once.
+**Alternatives:**
+- Sixteen slots, as the 64 KB of typical desktop hardware allows.
+  Rejected: four is the safe floor that needs no capability query and no
+  fallback path.
 
-### 3. Per-slot generation tracking
+The number is pinned to portability, not ambition. At 4 KB per float
+palette, four slots is exactly what every conformant implementation must
+support -- and four distinct palettes is already more than a terminal is
+likely to show at once.
 
-**Question:** How does the renderer decide when a given slot needs
+### LEXTER-DRAFT-palette-paging-D3 — Per-slot generation tracking
+
+**Status:** Proposed
+
+**Context:** How does the renderer decide when a given slot needs
 re-uploading?
 
 **Decision:** One generation counter per slot, not one global counter.
@@ -127,15 +140,20 @@ The render state holds an array of `+max-palette-slots+` generations;
 recorded generation *for that slot* and uploads only that slot's 4 KB on
 a mismatch.
 
-This preserves the generation-gated upload property independently for
-each resident palette. Mutating the palette in slot 2 re-uploads slot 2
-and leaves slots 0, 1, and 3 untouched. A partial `buffer-sub-data` write
-at the slot's byte offset means the other resident palettes are never
-disturbed.
+**Alternatives:**
+- One global generation counter. Rejected: a counter per slot preserves
+  the generation-gated upload property independently for each resident
+  palette.
 
-### 4. Slot threaded through the pane protocol
+Mutating the palette in slot 2 re-uploads slot 2 and leaves slots 0, 1,
+and 3 untouched. A partial `buffer-sub-data` write at the slot's byte
+offset means the other resident palettes are never disturbed.
 
-**Question:** Where does a pane's slot assignment live, and how does it
+### LEXTER-DRAFT-palette-paging-D4 — Slot threaded through the pane protocol
+
+**Status:** Proposed
+
+**Context:** Where does a pane's slot assignment live, and how does it
 reach the renderer?
 
 **Decision:** `pane-palette` returns the slot as a third value alongside
@@ -143,12 +161,14 @@ the palette array and its generation; a pane carries its slot in a slot
 (`palette-slot`, default NIL meaning "use slot 0"). The compositor reads
 all three and drives the upload and the uniform.
 
+**Alternatives:**
+- None recorded.
+
 The protocol was already shaped for this in the persistent-palette work
 -- `pane-palette` returned `(values palette generation)`. Adding the slot
 as a third value is a backward-compatible extension: panes that don't set
 a slot return NIL, the compositor coerces NIL to 0, and the
 single-palette behavior is preserved exactly.
-
 
 ## Implementation
 
@@ -221,9 +241,11 @@ renders correctly with no further slot calls.
 
 ### Pane protocol (`src/panes/protocol.lisp`, `src/panes/vt-pane.lisp`)
 
-`pane-palette`'s contract was extended to return
+`pane-palette`'s contract (`src/panes/protocol.lisp:pane-palette@04d69c2`)
+was extended to return
 `(values palette-array generation slot)`, with the default method
-returning NIL. `vt-pane` gained a `palette-slot` slot with a
+returning NIL. `vt-pane` (`src/panes/vt-pane.lisp:vt-pane@04d69c2`) gained
+a `palette-slot` slot with a
 `:palette-slot` initarg (default NIL) and its `pane-palette` method
 returns the screen's palette, the screen's generation, and the pane's
 slot.
@@ -271,6 +293,25 @@ constructed with `:palette-slot 1` and a distinct palette uploads that
 palette to slot 1 once; thereafter focusing it sets `u_palette_slot` to 1
 with no further transfer, and the standard palette in slot 0 remains
 resident and correct for the other panes.
+
+
+## Files
+
+*Migration note (2026-10-25):* this Log had no Files table. The table is
+built from commit `04d69c2`, and its descriptions are drawn from the
+sections above and the commit's diff.
+
+Table: Files changed in commit `04d69c2`.
+
+| File | Action | Description |
+|------|--------|-------------|
+| `src/shaders.lisp` | Modified | Palette block widened to 1024 `vec4`s; `u_palette_slot` uniform offsets the color fetch in the simple and layered shaders |
+| `src/renderer.lisp` | Modified | `+max-palette-slots+` and `+palette-slot-size+`; 16 KB palette UBO; slot argument to `set-palette` and `upload-palette`; per-slot generations; `set-active-palette-slot`; slot uniform locations cached and primed to 0 |
+| `src/panes/protocol.lisp` | Modified | `pane-palette` returns the slot as a third value |
+| `src/panes/vt-pane.lisp` | Modified | `palette-slot` slot and `:palette-slot` initarg; `pane-palette` returns the pane's slot |
+| `src/panes/compositor.lisp` | Modified | Uploads the focused pane's palette to its slot and activates the slot |
+| `src/packages.lisp` | Modified | Exports `set-active-palette-slot` and `+max-palette-slots+` |
+| `src/panes/packages.lisp` | Modified | Exports `vt-pane-palette-slot` |
 
 
 ## Outstanding Work

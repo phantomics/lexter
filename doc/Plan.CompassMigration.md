@@ -10,7 +10,7 @@ provenance:
   assistant:   opencode
 relates-to:
   - CLASSIC-0032
-  - ORIGIN-DRAFT-compass-migration
+  - ORIGIN-0001
 decisions:
   - LEXTER-DRAFT-compass-migration-D1
   - LEXTER-DRAFT-compass-migration-D2
@@ -40,7 +40,7 @@ identified, and linked, not what they say about the code. It follows the
 migrations of Classic
 ([CLASSIC-0032](../../../lisp/classic/doc/Plan.CompassMigration.md)) and
 Origin
-([ORIGIN-DRAFT-compass-migration](../../../lisp/origin/doc/Plan.CompassMigration.md)),
+([ORIGIN-0001](../../../lisp/origin/doc/Plan.CompassMigration.md)),
 adapted to Lexter's corpus.
 
 ## Problem
@@ -184,8 +184,10 @@ definition (`src/unix-term.lisp:run-terminal-loop@4e800cb`), and a
 repository root. The Origin reference becomes a federated one
 (`ORIGIN:src/managed-process.lisp:stop-process@6708956`). A reference
 that describes the code as it stood before the work, as in a Problem
-section, pins to the work commit's parent. Files and symbols named in
-prose are pinned; headings and Files-table paths are not, and keep the
+section, pins to the work commit's parent. Files named in prose are
+pinned, and so are the principal functions and classes the work defines
+where the prose describes them; headings and Files-table paths are not
+pinned, and keep the
 names the files had at the pinned commit, with the table's caption naming
 its commits.
 
@@ -232,7 +234,7 @@ done; it becomes the Log's Outstanding Work.
 
 **Alternatives:**
 - Keep `## Part N`/`## Phase N` headings with the spine repeated at H3, as
-  Origin did (ORIGIN-DRAFT-compass-migration-D4). Rejected: Lexter's four
+  Origin did (ORIGIN-D4). Rejected: Lexter's four
   forms would still need normalising, and Offscreen FBO's Phase 2 is a
   list of future work, not a phase.
 
@@ -421,12 +423,18 @@ Every Log receives the same treatment:
   Files, Outstanding Work, with the optional sections the Log template
   admits kept in place. A missing spine section is added with a migration
   note and no new claims. A section that walks through how the pieces
-  work together (such as "How the two stop paths now compose") moves
-  into Implementation as a subsection;
+  work together (such as "How the two stop paths now compose"), or a
+  lesson drawn from the implementation (such as "A recurring gotcha:
+  pixel store alignment"), moves into Implementation as a subsection. A
+  decision written as a section of its own (such as "Design: Approach
+  B") becomes a record. An in-body `**Status:**` line loses its label,
+  so that it does not compete with the front-matter `status`, and keeps
+  its text;
 - a `Table:` caption before every table, and a `Description:` paragraph
   after every ASCII diagram (§12). Where a Files table's commits changed
   files the table does not list, a migration note names them; no rows
-  are added;
+  are added. A Log with no Files table gets one built from its work
+  commit, with a migration note;
 - dates (LEXTER-DRAFT-compass-migration-D8).
 
 The Logs also need these specific changes:
@@ -439,12 +447,13 @@ Table: Changes specific to each Log, besides the common treatment.
 | `Log.InputRedirect.md` | Implementation and Verification sections added (its line references and transcript citation were done in Phase 2) |
 | `Log.MouseReporting.md` | Bold-lead decisions become records, and the "Deferred" paragraph moves to Outstanding Work; Future work becomes Outstanding Work; the Files list becomes a table |
 | `Log.MultiBuffer.md` | The addendum becomes an Update (LEXTER-DRAFT-compass-migration-D5) |
-| `Log.OffscreenFBO.md` | Motivation becomes Problem; the Phase 2 section becomes Outstanding Work |
+| `Log.OffscreenFBO.md` | Motivation becomes Problem; the Phase 2 section becomes Outstanding Work; the in-body `**Status:**` label is removed |
 | `Log.PalettePaging.md` | Files table built from `04d69c2` (its line references and transcript citation were done in Phase 2) |
-| `Log.PersistentPalette.md` | The H1 appendix becomes an Update; Files table built for the main work (its line references were pinned in Phase 2) |
+| `Log.PersistentPalette.md` | The H1 appendix becomes an Update, and its "Remaining nuance" the Update's Outstanding Work; Files table built for the main work (its line references were pinned in Phase 2) |
 | `Log.ScreenshotTestRig.md` | Bold-lead decisions become records; the Files list becomes a table; Outstanding Work gathered from the deferred items |
 | `Log.StopFlag.md` | The common treatment only (its line references and the Origin reference were pinned in Phase 2) |
-| `Log.GUILifecycle.md`, `Log.EnhancedDualWidth.md` | The common treatment only; for Enhanced Dual Width, the precursor fixes' commits identified |
+| `Log.GUILifecycle.md` | The "Design: Approach B" section becomes `LEXTER-DRAFT-gui-lifecycle-D7`, placed first among the records |
+| `Log.EnhancedDualWidth.md` | The common treatment only; the precursor fixes' commits identified |
 
 The work is committed in batches. Each batch is checked before the next.
 
@@ -519,7 +528,7 @@ Table: Prior work in the federation and what this plan draws from each.
 | [COMPASS-0001](../../../lisp/compass/Compass.md) | The standard being conformed to (version 0.4.0) |
 | [COMPASS-0004](../../../lisp/compass/doc/Plan.Toolchain.md) | What the toolchain checks, and the ledger discipline |
 | Classic's migration ([CLASSIC-0032](../../../lisp/classic/doc/Plan.CompassMigration.md), [CLASSIC-0036](../../../lisp/classic/doc/Log.CompassMigration.md)) | Dated Update sections (CLASSIC-D100), the gate discipline, and checking with two toolchain builds (CLASSIC-D111) |
-| Origin's migration ([ORIGIN-DRAFT-compass-migration](../../../lisp/origin/doc/Plan.CompassMigration.md), [ORIGIN-DRAFT-compass-migration-log](../../../lisp/origin/doc/Log.CompassMigration.md)) | The phase structure, the decision-record and pinning conventions, the batch gates, and the CI and CODEOWNERS files |
+| Origin's migration ([ORIGIN-0001](../../../lisp/origin/doc/Plan.CompassMigration.md), [ORIGIN-0017](../../../lisp/origin/doc/Log.CompassMigration.md)) | The phase structure, the decision-record and pinning conventions, the batch gates, and the CI and CODEOWNERS files |
 
 ## Roadmap
 

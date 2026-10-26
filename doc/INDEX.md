@@ -20,6 +20,7 @@ Table: Documents in the LEXTER namespace.
 | [LEXTER-DRAFT-multi-buffer](Log.MultiBuffer.md) | Alternate Screen Buffer: Development Log | Log | component | Draft | vt |
 | [LEXTER-DRAFT-offscreen-fbo](Log.OffscreenFBO.md) | Offscreen Render Target (FBO): Development Log | Log | component | Draft | renderer |
 | [LEXTER-DRAFT-palette-paging](Log.PalettePaging.md) | GPU Palette Paging: Development Log | Log | component | Draft | renderer |
+| [LEXTER-DRAFT-pane-profiles](Plan.PaneProfiles.md) | Pane Profiles and Scrollback Viewing: Development Plan | Plan | component | Draft | panes |
 | [LEXTER-DRAFT-persistent-palette](Log.PersistentPalette.md) | Persistent Palette Model: Development Log | Log | component | Draft | renderer |
 | [LEXTER-DRAFT-screenshot-test-rig](Log.ScreenshotTestRig.md) | Screenshot Test Rig: Development Log | Log | component | Draft | test |
 | [LEXTER-DRAFT-stop-flag](Log.StopFlag.md) | Stop Flag: Development Log | Log | component | Draft | origin |
@@ -83,6 +84,15 @@ Table: Decision, open-question, and memo records in the LEXTER namespace.
 | [LEXTER-DRAFT-palette-paging-D2](Log.PalettePaging.md#lexter-draft-palette-paging-d2--four-slots-sized-to-the-guaranteed-ubo-floor) | Decision | Four slots, sized to the guaranteed UBO floor | Proposed | LEXTER-DRAFT-palette-paging |
 | [LEXTER-DRAFT-palette-paging-D3](Log.PalettePaging.md#lexter-draft-palette-paging-d3--per-slot-generation-tracking) | Decision | Per-slot generation tracking | Proposed | LEXTER-DRAFT-palette-paging |
 | [LEXTER-DRAFT-palette-paging-D4](Log.PalettePaging.md#lexter-draft-palette-paging-d4--slot-threaded-through-the-pane-protocol) | Decision | Slot threaded through the pane protocol | Proposed | LEXTER-DRAFT-palette-paging |
+| [LEXTER-DRAFT-pane-profiles-D1](Plan.PaneProfiles.md#lexter-draft-pane-profiles-d1--settings-live-in-pane-profile-objects) | Decision | Settings live in pane-profile objects | Proposed | LEXTER-DRAFT-pane-profiles |
+| [LEXTER-DRAFT-pane-profiles-D2](Plan.PaneProfiles.md#lexter-draft-pane-profiles-d2--resolution-walks-parent-links-then-containment) | Decision | Resolution walks parent links, then containment | Proposed | LEXTER-DRAFT-pane-profiles |
+| [LEXTER-DRAFT-pane-profiles-D3](Plan.PaneProfiles.md#lexter-draft-pane-profiles-d3--each-object-owns-a-private-profile-writers-write-it) | Decision | Each object owns a private profile; writers write it | Proposed | LEXTER-DRAFT-pane-profiles |
+| [LEXTER-DRAFT-pane-profiles-D4](Plan.PaneProfiles.md#lexter-draft-pane-profiles-d4--one-generic-reader-per-setting-defined-by-one-macro) | Decision | One generic reader per setting, defined by one macro | Proposed | LEXTER-DRAFT-pane-profiles |
+| [LEXTER-DRAFT-pane-profiles-D5](Plan.PaneProfiles.md#lexter-draft-pane-profiles-d5--the-history-is-drawn-by-flush-to-display) | Decision | The history is drawn by flush-to-display | Proposed | LEXTER-DRAFT-pane-profiles |
+| [LEXTER-DRAFT-pane-profiles-D6](Plan.PaneProfiles.md#lexter-draft-pane-profiles-d6--typing-returns-the-view-to-live-output-does-not) | Decision | Typing returns the view to live; output does not | Proposed | LEXTER-DRAFT-pane-profiles |
+| [LEXTER-DRAFT-pane-profiles-D7](Plan.PaneProfiles.md#lexter-draft-pane-profiles-d7--the-wheel-factor-applies-to-local-scrolling-only) | Decision | The wheel factor applies to local scrolling only | Proposed | LEXTER-DRAFT-pane-profiles |
+| [LEXTER-DRAFT-pane-profiles-D8](Plan.PaneProfiles.md#lexter-draft-pane-profiles-d8--unseen-output-is-pane-state-polled-by-the-decorator) | Decision | Unseen output is pane state, polled by the decorator | Proposed | LEXTER-DRAFT-pane-profiles |
+| [LEXTER-DRAFT-pane-profiles-D9](Plan.PaneProfiles.md#lexter-draft-pane-profiles-d9--terminal-events-reach-the-apl-layer-through-a-generic-function) | Decision | Terminal events reach the APL layer through a generic function | Proposed | LEXTER-DRAFT-pane-profiles |
 | [LEXTER-DRAFT-persistent-palette-D1](Log.PersistentPalette.md#lexter-draft-persistent-palette-d1--the-palette-lives-on-the-screen-model) | Decision | The palette lives on the screen model | Proposed | LEXTER-DRAFT-persistent-palette |
 | [LEXTER-DRAFT-persistent-palette-D2](Log.PersistentPalette.md#lexter-draft-persistent-palette-d2--change-tracking-via-a-generation-counter) | Decision | Change tracking via a generation counter | Proposed | LEXTER-DRAFT-persistent-palette |
 | [LEXTER-DRAFT-persistent-palette-D3](Log.PersistentPalette.md#lexter-draft-persistent-palette-d3--scope-persistent-state-and-generation-now-osc-parsing-later) | Decision | Scope: persistent state and generation now, OSC parsing later | Proposed | LEXTER-DRAFT-persistent-palette |
@@ -103,3 +113,7 @@ Table: Decision, open-question, and memo records in the LEXTER namespace.
 | [LEXTER-DRAFT-compass-migration-O1](Plan.CompassMigration.md#lexter-draft-compass-migration-o1--which-documents-are-numbered-first) | Open question | Which documents are numbered first | — | LEXTER-DRAFT-compass-migration |
 | [LEXTER-DRAFT-compass-migration-O2](Plan.CompassMigration.md#lexter-draft-compass-migration-o2--a-compiled-readme) | Open question | A compiled README | — | LEXTER-DRAFT-compass-migration |
 | [LEXTER-DRAFT-encoding-ranges-O1](Log.EncodingRanges.md#lexter-draft-encoding-ranges-o1--where-utf-8-is-decoded-relative-to-cl-vt) | Open question | Where UTF-8 is decoded relative to cl-vt | — | LEXTER-DRAFT-encoding-ranges |
+| [LEXTER-DRAFT-pane-profiles-O1](Plan.PaneProfiles.md#lexter-draft-pane-profiles-o1--should-unseen-output-be-a-flag-or-a-line-count) | Open question | Should unseen output be a flag or a line count? | — | LEXTER-DRAFT-pane-profiles |
+| [LEXTER-DRAFT-pane-profiles-O2](Plan.PaneProfiles.md#lexter-draft-pane-profiles-o2--how-does-a-workspace-find-its-compositor) | Open question | How does a workspace find its compositor? | — | LEXTER-DRAFT-pane-profiles |
+| [LEXTER-DRAFT-pane-profiles-O3](Plan.PaneProfiles.md#lexter-draft-pane-profiles-o3--which-other-settings-move-into-profiles) | Open question | Which other settings move into profiles? | — | LEXTER-DRAFT-pane-profiles |
+| [LEXTER-DRAFT-pane-profiles-O4](Plan.PaneProfiles.md#lexter-draft-pane-profiles-o4--where-do-the-tests-live) | Open question | Where do the tests live? | — | LEXTER-DRAFT-pane-profiles |

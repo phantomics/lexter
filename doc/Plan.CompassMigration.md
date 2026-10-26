@@ -182,15 +182,19 @@ A line reference becomes a symbol reference where the line opens a
 definition (`src/unix-term.lisp:run-terminal-loop@4e800cb`), and a
 `#L<start>-L<end>` range where it does not. Paths are completed to the
 repository root. The Origin reference becomes a federated one
-(`ORIGIN:src/managed-process.lisp:stop-process@6708956`). Files-table
-paths keep the names the files had at the pinned commit.
+(`ORIGIN:src/managed-process.lisp:stop-process@6708956`). A reference
+that describes the code as it stood before the work, as in a Problem
+section, pins to the work commit's parent. Files and symbols named in
+prose are pinned; headings and Files-table paths are not, and keep the
+names the files had at the pinned commit, with the table's caption naming
+its commits.
 
 Table: The commits each Log's references are expected to pin to, confirmed per reference in Phase 3.
 
 | Log | Work commits | Log committed in |
 |---|---|---|
 | `Log.StopFlag.md` | `4e800cb`, `50aeebc` | `50aeebc` |
-| `Log.InputRedirect.md` | `15ba060`, `b4d874d` | `5860229` |
+| `Log.InputRedirect.md` | `9e1e6d0`, `15ba060`, `b4d874d` | `5860229` |
 | `Log.PalettePaging.md` | `04d69c2` | `ea169de` |
 | `Log.PersistentPalette.md` | `0cdd2af`; update `5885398` | `5860229`, `5885398` |
 | `Log.GUILifecycle.md` | `4313881` | `4313881` |
@@ -416,9 +420,13 @@ Every Log receives the same treatment:
 - the §14 spine: Problem, Design Decisions, Implementation, Verification,
   Files, Outstanding Work, with the optional sections the Log template
   admits kept in place. A missing spine section is added with a migration
-  note and no new claims;
+  note and no new claims. A section that walks through how the pieces
+  work together (such as "How the two stop paths now compose") moves
+  into Implementation as a subsection;
 - a `Table:` caption before every table, and a `Description:` paragraph
-  after every ASCII diagram (§12);
+  after every ASCII diagram (§12). Where a Files table's commits changed
+  files the table does not list, a migration note names them; no rows
+  are added;
 - dates (LEXTER-DRAFT-compass-migration-D8).
 
 The Logs also need these specific changes:

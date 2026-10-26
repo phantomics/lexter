@@ -9,6 +9,12 @@ language:      en
 status:        Draft
 provenance:
   assistant:   opencode
+decisions:
+  - LEXTER-DRAFT-stop-flag-D1
+  - LEXTER-DRAFT-stop-flag-D2
+  - LEXTER-DRAFT-stop-flag-D3
+  - LEXTER-DRAFT-stop-flag-D4
+  - LEXTER-DRAFT-stop-flag-D5
 ---
 
 # Stop Flag: Development Log
@@ -30,7 +36,8 @@ Every interactive entry point in Lexter is built around a single
 blocking render loop. `run-terminal-loop` drives a Unix PTY terminal
 (`src/unix-term.lisp:run-terminal-loop@4e800cb`), `run-pane-loop` drives the pane compositor
 (`src/panes/compositor.lisp:run-pane-loop@4e800cb`), and the demo entry points
-(`run-demo`, `run-cjk-demo` in `src/demo.lisp`) run their own variants.
+(`src/demo.lisp:run-demo@4e800cb`,
+`src/demo.lisp:run-cjk-demo@4e800cb`) run their own variants.
 Each is a tight loop that polls GLFW events, processes I/O, renders a
 frame, swaps buffers, and sleeps a millisecond. The loop owns the GLFW
 window, the OpenGL context, and -- for the terminal loops -- a forked
@@ -78,14 +85,22 @@ than the normal stop path.
 
 ## Design Decisions
 
-### 1. Cooperative cancellation, not preemptive termination
+### LEXTER-DRAFT-stop-flag-D1 — Cooperative cancellation, not preemptive termination
 
-**Question:** How should an external caller stop a render loop that
+**Status:** Proposed
+
+**Context:** How should an external caller stop a render loop that
 owns a GLFW context?
 
 **Decision:** The loop polls a shared cancellation flag once per
 iteration and exits voluntarily. The external caller never touches the
 loop's thread, its window, or its context; it only sets the flag.
+
+**Alternatives:**
+- Preemptive termination with `sb-thread:terminate-thread`, Origin's
+  last-resort step. Rejected as the normal stop path: it unwinds the
+  thread wherever it happens to be, possibly in the middle of a GLFW or
+  OpenGL call (see Problem).
 
 This is cooperative (poll-based) cancellation. It trades a small amount
 of latency -- the loop honors the request at its next tick, within one
@@ -99,56 +114,64 @@ Origin's `terminate-thread` fallback still exists, but with the flag in
 place it should never fire for a healthy loop. It is now a backstop for
 a wedged loop, not the primary stop mechanism.
 
-### 2. The flag is a mutable cons cell ("box"), passed by reference
+### LEXTER-DRAFT-stop-flag-D2 — The flag is a mutable cons cell ("box"), passed by reference
 
-**Question:** What concrete object represents the flag, given that one
-thread writes it and another reads it?
+**Status:** Proposed
+
+**Context:** What concrete object represents the flag, given that one
+thread writes it and another reads it? Common Lisp has no first-class
+"mutable reference to a boolean."
 
 **Decision:** A one-element list -- a single cons -- whose `car` holds
 the state. The loop reads `(car stop-flag)`; the stopper writes
-`(setf (car stop-flag) ...)`. The same cons is shared by both sides.
+`(setf (car stop-flag) ...)`. The same cons is shared by both sides. A
+cons cell is the minimal idiomatic Lisp "box": a heap-allocated cell
+with a writable place (`car`) that any number of closures can capture
+and share by identity. No new type, no global, naturally
+one-per-terminal.
 
-Common Lisp has no first-class "mutable reference to a boolean." The
-options considered:
-
-- **A special (dynamic) variable.** Dynamic bindings are per-thread;
-  a value bound on the supervisor thread is not visible in the loop
-  thread, and a global `defvar` would be shared mutable state with no
-  natural scoping to a particular terminal instance. Multiple terminals
-  would collide on one global.
+**Alternatives:**
+- **A special (dynamic) variable.** Rejected: dynamic bindings are
+  per-thread; a value bound on the supervisor thread is not visible in
+  the loop thread, and a global `defvar` would be shared mutable state
+  with no natural scoping to a particular terminal instance. Multiple
+  terminals would collide on one global.
 - **A closure over a lexical variable.** Workable, but then the "flag"
   is two functions (a getter and a setter) that have to be passed
   around together, which is heavier than the value it guards.
 - **A struct or CLOS object with a boolean slot.** Correct, but
   introduces a type and a dependency for what is conceptually one bit.
-- **A cons cell.** The minimal idiomatic Lisp "box": a heap-allocated
-  cell with a writable place (`car`) that any number of closures can
-  capture and share by identity. No new type, no global, naturally
-  one-per-terminal.
 
 The cons won on minimalism. It is the smallest thing that is (a)
 shared by identity across the thread boundary and (b) has a writable
 place. Each terminal gets its own cons, so there is no cross-terminal
 interference.
 
-### 3. Polarity: car = T means "run", NIL means "stop"
+### LEXTER-DRAFT-stop-flag-D3 — Polarity: car = T means "run", NIL means "stop"
 
-**Question:** Which value means "keep going" and which means "stop"?
+**Status:** Proposed
+
+**Context:** Which value means "keep going" and which means "stop"?
 
 **Decision:** `(car stop-flag)` is T (truthy) while the loop should
 run and is set to NIL to request a stop. The loop's continuation
 condition is therefore "the flag's car is non-nil."
 
+**Alternatives:**
+- None recorded.
+
 The name "stop flag" with `T`-means-go polarity is mildly
 counterintuitive, but it makes the loop guard read naturally as a
-*continue* predicate (see Decision 4) and lets NIL -- the natural
-Lisp "off"/"done" value -- mean "stop." It also dovetails with making
-the flag optional: an absent flag and a "still running" flag both read
-as "don't stop."
+*continue* predicate (see LEXTER-DRAFT-stop-flag-D4) and lets NIL --
+the natural Lisp "off"/"done" value -- mean "stop." It also dovetails
+with making the flag optional: an absent flag and a "still running"
+flag both read as "don't stop."
 
-### 4. The flag is optional; absence means "run until window close"
+### LEXTER-DRAFT-stop-flag-D4 — The flag is optional; absence means "run until window close"
 
-**Question:** Should every loop require a flag, even when run
+**Status:** Proposed
+
+**Context:** Should every loop require a flag, even when run
 interactively outside any supervisor?
 
 **Decision:** No. The flag is an optional keyword argument defaulting
@@ -163,16 +186,21 @@ to NIL, and the loop guard treats "no flag supplied" identically to
 (and stop-flag (not (car stop-flag)))
 ```
 
+**Alternatives:**
+- A flag required on every loop. Rejected: an optional flag keeps the
+  mechanism strictly additive, so existing direct callers were
+  untouched.
+
 Both encode the same truth table: stop only when a flag is present
 *and* its car is NIL. An interactively launched terminal passes no
 flag and behaves exactly as before -- it exits on window close or quit
 key. Only when a supervisor supplies a flag does the new path engage.
-This keeps the mechanism strictly additive: existing direct callers
-were untouched.
 
-### 5. The flag is re-armed on every (re)start, inside the entry point
+### LEXTER-DRAFT-stop-flag-D5 — The flag is re-armed on every (re)start, inside the entry point
 
-**Question:** Origin reuses the same `managed-process` -- and therefore
+**Status:** Proposed
+
+**Context:** Origin reuses the same `managed-process` -- and therefore
 the same `entry-args`, including the same cons -- across restarts.
 After a stop sets the car to NIL, a restart would find a flag that
 already says "stop." How is it rearmed?
@@ -189,6 +217,9 @@ invoking the loop, every time it is called
 :stop-function (lambda () (setf (car stop-flag) nil))
 ```
 
+**Alternatives:**
+- None recorded.
+
 The single cons created by `define-terminal` (`src/origin.lisp#L21@50aeebc`)
 is captured three times: it is spliced into `entry-args` so the loop
 receives it, captured by the entry-point closure so each start can
@@ -197,7 +228,6 @@ can set it to NIL. Because all three references are the *same* cons,
 the stop-function and the running loop are talking through one shared
 cell, and the entry point guarantees a freshly-armed flag on every
 supervised start and restart.
-
 
 ## Implementation
 
@@ -274,13 +304,12 @@ notices at its next tick and exits cleanly through `unwind-protect`;
 and Origin's `terminate-thread` fallback never fires unless the loop is
 genuinely stuck.
 
-
-## How the two stop paths now compose
+### How the two stop paths now compose
 
 With the flag in place, Origin's three-step stop protocol degrades
 gracefully:
 
-```
+```text
 origin:stop
   |
   v
@@ -300,6 +329,14 @@ thread exits normally, well before timeout
         reaches its guard within `timeout`) --->
         sb-thread:terminate-thread  [last-resort fallback]
 ```
+
+Description: A flow from `origin:stop` down to thread exit. On the
+supervisor thread, the stop-function sets the flag's car to NIL. On the
+loop thread, the loop's next `:while` check fails, the `unwind-protect`
+cleanup runs `pty-close`, `destroy-renderer`, and the GLFW teardown, and
+the thread exits normally before the timeout. A side branch leads to
+`sb-thread:terminate-thread`, the last-resort fallback, taken only if the
+loop is wedged and never reaches its guard within the timeout.
 
 The dangerous path is still present for true hangs, but the flag moves
 the common case onto the safe path where GLFW and the PTY are released
@@ -339,12 +376,18 @@ that pass no flag continue to exit only on window close or quit key.
 
 ## Files
 
+Table: Files added or changed in commits `4e800cb` (the loops) and `50aeebc` (`src/origin.lisp`).
+
 | File | Action | Description |
 |------|--------|-------------|
 | `src/unix-term.lisp` | Modified | `run-terminal-loop` / `run-terminal` accept and check `:stop-flag` in the `:while` guard |
 | `src/panes/compositor.lisp` | Modified | `run-pane-loop` / `run-paned-terminal` accept and check `:stop-flag` |
 | `src/demo.lisp` | Modified | `run-demo` / `run-cjk-demo` accept and check `:stop-flag` (inverted `:until` form) |
 | `src/origin.lisp` | New | `define-terminal` allocates the shared cons, re-arms it in the entry point, and clears it in the stop-function |
+
+*Migration note (2026-10-25):* commit `50aeebc` also added the
+`lexter/origin` package to `src/packages.lisp` and the `lexter/origin`
+system to `lexter.asd`, which this table does not list.
 
 
 ## Outstanding Work

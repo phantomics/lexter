@@ -11,6 +11,13 @@ provenance:
   assistant:   opencode
 relates-to:
   - LEXTER-DRAFT-stop-flag
+decisions:
+  - LEXTER-DRAFT-gui-lifecycle-D1
+  - LEXTER-DRAFT-gui-lifecycle-D2
+  - LEXTER-DRAFT-gui-lifecycle-D3
+  - LEXTER-DRAFT-gui-lifecycle-D4
+  - LEXTER-DRAFT-gui-lifecycle-D5
+  - LEXTER-DRAFT-gui-lifecycle-D6
 ---
 
 # GUI Lifecycle (Iteration API): Development Log
@@ -25,14 +32,19 @@ property of this work is what it does *not* require: no internal threading,
 no separation of backend from renderer, and no change to the standalone entry
 points' public signatures.
 
-**Date:** 2026-06-06
+**Date:** 2026-06-08
+
+*Migration note (2026-10-25):* the original Log was dated 2026-06-06. The
+date is corrected to that of commit `4313881`, which holds the work
+(LEXTER-DRAFT-compass-migration-D8).
 
 
 ## Problem
 
 Every interactive entry point in Lexter was a self-contained blocking
-function. `run-terminal` (`src/unix-term.lisp`) and `run-paned-terminal`
-(`src/panes/compositor.lisp`) each did the same three things in one body:
+function. `run-terminal` (`src/unix-term.lisp:run-terminal@ea169de`) and
+`run-paned-terminal` (`src/panes/compositor.lisp:run-paned-terminal@ea169de`)
+each did the same three things in one body:
 
 1. create a GLFW window and OpenGL context,
 2. build all state -- atlas, screen/workspaces, renderer, PTY -- as **locals**,
@@ -95,9 +107,11 @@ ticks.
 
 ## Design Decisions
 
-### 1. A window-level protocol in core Lexter (`lexter/gui`)
+### LEXTER-DRAFT-gui-lifecycle-D1 — A window-level protocol in core Lexter (`lexter/gui`)
 
-**Question:** Where do the lifecycle generics and the dispatcher live, and what
+**Status:** Proposed
+
+**Context:** Where do the lifecycle generics and the dispatcher live, and what
 do they abstract over?
 
 **Decision:** A new `lexter/gui` package and `src/gui.lisp` file in the **core**
@@ -111,22 +125,26 @@ do they abstract over?
 (gui-alive-p object)     ; live predicate
 ```
 
+**Alternatives:**
+- Defining the generics directly on each struct's package and putting the
+  dispatcher in `lexter/origin`. Rejected: it would have tied the steppable
+  model to Origin. Keeping the protocol Origin-agnostic means Lexter is
+  independently usable and any future host (Origin or otherwise) reuses the
+  same five generics.
+
 Core was the right home because both `lexter/unix` (the terminal) and
 `lexter/panes` (the compositor) depend on it transitively, so both can
 implement the same protocol, and a dispatcher written once treats a
 `unix-terminal` and a `compositor` uniformly. Core already depends on
 `cl-glfw3`, so the dispatcher's `glfw:poll-events` has no new dependency.
 
-The alternative -- defining the generics directly on each struct's package and
-putting the dispatcher in `lexter/origin` -- was rejected because it would have
-tied the steppable model to Origin. Keeping the protocol Origin-agnostic means
-Lexter is independently usable and any future host (Origin or otherwise) reuses
-the same five generics.
+### LEXTER-DRAFT-gui-lifecycle-D2 — The dispatcher owns the loop; the caller owns GLFW init/terminate
 
-### 2. The dispatcher owns the loop; the caller owns GLFW init/terminate
+**Status:** Proposed
 
-**Question:** What runs the loop, and who calls `glfw:initialize` /
-`glfw:terminate`?
+**Context:** What runs the loop, and who calls `glfw:initialize` /
+`glfw:terminate`? GLFW initialization is process-global and must happen
+exactly once, on the main thread, before any window is created.
 
 **Decision:** `run-gui-loop (objects &key stop-flag)` is the dispatcher. It
 holds a **list** of already-initialized objects and, each iteration: calls
@@ -134,21 +152,27 @@ holds a **list** of already-initialized objects and, each iteration: calls
 returns false, and exits when no live objects remain or `(car stop-flag)` is
 nil. It deliberately does **not** call `glfw:initialize` or `glfw:terminate`.
 
-GLFW initialization is process-global and must happen exactly once, on the main
-thread, before any window is created. Putting it in the dispatcher (or worse,
-per object) would be wrong for the multi-window and embedded-host cases.
+**Alternatives:**
+- GLFW initialization in the dispatcher, or (worse) per object. Rejected:
+  it would be wrong for the multi-window and embedded-host cases.
+
 Instead, the *caller* owns it: the standalone wrappers initialize and terminate
 GLFW around the dispatcher today, and an Origin main-thread dispatcher will own
 it at the image level later. The dispatcher is a pure poll-tick-reap loop with
 no global lifecycle responsibility.
 
-### 3. Per-tick context switching is mandatory
+### LEXTER-DRAFT-gui-lifecycle-D3 — Per-tick context switching is mandatory
 
-**Question:** What makes several windows able to share one thread?
+**Status:** Proposed
+
+**Context:** What makes several windows able to share one thread?
 
 **Decision:** Every `gui-tick` calls `glfw:make-context-current` on its own
 window before any GL work, and `gui-initialize` builds its renderer in the
 context that `glfw:create-window` just made current.
+
+**Alternatives:**
+- None recorded.
 
 Each window has its own OpenGL context, and a renderer's GL objects (VAOs,
 textures, the palette UBO, shaders) are valid only in the context that created
@@ -159,9 +183,11 @@ This single line is the linchpin of the whole refactor; omitting it would
 render into the wrong window or corrupt GL state. For symmetry, `gui-destroy`
 also makes the context current before destroying the renderer.
 
-### 4. Config-on-struct, arg-free generics
+### LEXTER-DRAFT-gui-lifecycle-D4 — Config-on-struct, arg-free generics
 
-**Question:** Should `gui-initialize` take configuration arguments, or read them
+**Status:** Proposed
+
+**Context:** Should `gui-initialize` take configuration arguments, or read them
 from the object?
 
 **Decision:** Configuration lives on the struct, set by a constructor, and the
@@ -169,14 +195,20 @@ generics are argument-free. `make-terminal` / `make-paned-compositor` allocate
 the object and store its config (command, font path, dimensions, title, etc.);
 `gui-initialize` reads those slots to build the window and resources.
 
+**Alternatives:**
+- Configuration arguments to `gui-initialize`. Rejected in favor of the
+  minimal, uniform protocol described below.
+
 This keeps the protocol minimal and uniform -- every generic takes just the
 object -- and matches the natural division: the constructor is the
 configuration surface, the lifecycle generics are the mechanism. It also makes
 an object inspectable before it is initialized, which a host scheduler wants.
 
-### 5. Replace `with-init-window`; promote locals to slots
+### LEXTER-DRAFT-gui-lifecycle-D5 — Replace `with-init-window`; promote locals to slots
 
-**Question:** How does window/resource lifetime change?
+**Status:** Proposed
+
+**Context:** How does window/resource lifetime change?
 
 **Decision:** `glfw:with-init-window` (which creates *and* destroys the window
 in dynamic extent, and brackets GLFW init/terminate) is replaced with explicit
@@ -186,13 +218,18 @@ handle, font and cell metrics, pixel dimensions, and the frame-timing
 `last-time` -- become slots on the `unix-terminal` / `compositor` struct so they
 persist across ticks and are reachable at destroy time.
 
+**Alternatives:**
+- None recorded.
+
 The frame-timing promotion is the subtle one: the old loop kept `last-time` as
 a loop local to compute the cursor-blink delta. Across independent tick calls
 there is no loop local, so it becomes a `last-tick-time` slot.
 
-### 6. Idempotent destroy; standalone wrappers preserved
+### LEXTER-DRAFT-gui-lifecycle-D6 — Idempotent destroy; standalone wrappers preserved
 
-**Question:** How do the public entry points keep working, and how is double
+**Status:** Proposed
+
+**Context:** How do the public entry points keep working, and how is double
 teardown avoided?
 
 **Decision:** `run-terminal` and `run-paned-terminal` are reimplemented as thin
@@ -203,12 +240,15 @@ wrappers -- `glfw:initialize`, construct, `gui-initialize`, then
 *and* the wrapper destroys survivors on exit, `gui-destroy` is made idempotent:
 it guards on the window slot and no-ops after the first call.
 
+**Alternatives:**
+- None recorded.
 
 ## Implementation
 
 ### `src/gui.lisp` (new) and `lexter/gui` package
 
-Defines the five generics and `run-gui-loop`. The dispatcher:
+Defines the five generics and `run-gui-loop`
+(`src/gui.lisp:run-gui-loop@4313881`). The dispatcher:
 
 ```lisp
 (defun run-gui-loop (objects &key stop-flag)
@@ -224,49 +264,57 @@ Defines the five generics and `run-gui-loop`. The dispatcher:
 ```
 
 It returns survivors so a caller that stopped via `stop-flag` can tear them
-down. Added to the core `lexter` system in `lexter.asd` after `src/renderer`.
+down. Added to the core `lexter` system in `lexter.asd@4313881` after
+`src/renderer`.
 
 ### `unix-terminal` (`src/unix-term.lisp`)
 
-- **Struct** gained `window`, `font`, `cell-w`, `cell-h`, `win-w`, `win-h`,
+- **Struct** (`src/unix-term.lisp:unix-terminal@4313881`) gained `window`, `font`, `cell-w`, `cell-h`, `win-w`, `win-h`,
   `last-tick-time`, and config slots `command`, `args`, `font-path`, `title`.
-- **`make-terminal`** allocates the struct and stores config.
-- **`gui-initialize`** is the old `run-terminal` body minus `glfw:initialize`
+- **`make-terminal`** (`src/unix-term.lisp:make-terminal@4313881`) allocates
+  the struct and stores config.
+- **`gui-initialize`** (`src/unix-term.lisp:gui-initialize@4313881`) is the
+  old `run-terminal` body minus `glfw:initialize`
   and `with-init-window`: `glfw:create-window` (which makes the context
   current), build atlas + cursor glyphs, screen, display, renderer, palette
   upload, VT handler, `pty-fork`, then register key/char/framebuffer-size
   callbacks on this window and record `last-tick-time`.
-- **`gui-tick`** is the old loop body minus `glfw:poll-events` and the trailing
+- **`gui-tick`** (`src/unix-term.lisp:gui-tick@4313881`) is the old loop body minus `glfw:poll-events` and the trailing
   `sleep`, plus a leading `glfw:make-context-current`; it computes the blink
   delta from `last-tick-time`, processes PTY output, handles a pending resize,
   renders if dirty, swaps the window's buffers, and returns
   `running ∧ window ∧ ¬should-close`.
-- **`gui-destroy`** runs the old cleanup -- `pty-close`, `destroy-renderer`
+- **`gui-destroy`** (`src/unix-term.lisp:gui-destroy@4313881`) runs the old
+  cleanup -- `pty-close`, `destroy-renderer`
   (with the context current) -- plus `glfw:destroy-window`, guarded for
   idempotence.
-- **`run-terminal`** is now the thin wrapper described in Decision 6.
+- **`run-terminal`** (`src/unix-term.lisp:run-terminal@4313881`) is now the
+  thin wrapper described in LEXTER-DRAFT-gui-lifecycle-D6.
 
 ### `compositor` (`src/panes/compositor.lisp`)
 
-The identical treatment: struct gains `window`, `win-w`, `win-h`,
+The identical treatment: struct
+(`src/panes/compositor.lisp:compositor@4313881`) gains `window`, `win-w`, `win-h`,
 `last-tick-time`, and config slots `fonts`, `font-path`, `title`, `prefix-key`.
-`make-paned-compositor` stores config; `gui-initialize` creates the window,
+`make-paned-compositor`
+(`src/panes/compositor.lisp:make-paned-compositor@4313881`) stores config; `gui-initialize` creates the window,
 renderer, palette, callbacks, initializes each pane, and clears the grid;
 `gui-tick` makes the context current, processes I/O for every pane in every
 workspace, and renders the active workspace (including the per-pane palette
 upload and `set-active-palette-slot`); `gui-destroy` destroys workspaces, the
-renderer, and the window. `run-paned-terminal` becomes the thin wrapper.
+renderer, and the window. `run-paned-terminal`
+(`src/panes/compositor.lisp:run-paned-terminal@4313881`) becomes the thin
+wrapper.
 
 ### Packaging
 
-`lexter/gui` is exported from `src/packages.lisp`; `lexter/unix-term` and
+`lexter/gui` is exported from `src/packages.lisp@4313881`; `lexter/unix-term` and
 `lexter/panes` `:use` it and re-export the protocol for convenience, plus the
 new `make-terminal` / `make-paned-compositor` constructors.
 
+### How an external host drives Lexter
 
-## How an external host drives Lexter
-
-```
+```text
 glfw:initialize                         (once, main thread)            [host]
   |
   v
@@ -284,6 +332,15 @@ loop on main thread:                                                   [host]
   v
 glfw:terminate                          (once, at shutdown)            [host]
 ```
+
+Description: A flow of the steps a host performs, all on the main
+thread: call `glfw:initialize` once; construct an object with
+`make-terminal` or `make-paned-compositor`, storing its configuration;
+call `gui-initialize` to create its window, context, and PTY; then loop,
+calling `glfw:poll-events` once for all windows, `gui-tick` on each
+object (which makes its context current and renders one frame), and
+`gui-destroy` on any that have died; and finally call `glfw:terminate`
+once at shutdown.
 
 `run-gui-loop` *is* that loop for the standalone case (one object). An Origin
 main-thread dispatcher is the same loop hosting several objects alongside other
@@ -324,6 +381,8 @@ compile/load/protocol wiring is what was verified here.
 
 ## Files
 
+Table: Files added or changed in commit `4313881`.
+
 | File | Action | Description |
 |------|--------|-------------|
 | `src/gui.lisp` | **New** | `lexter/gui` protocol (`gui-initialize`/`gui-tick`/`gui-destroy`/`gui-window`/`gui-alive-p`) and the `run-gui-loop` dispatcher |
@@ -333,6 +392,11 @@ compile/load/protocol wiring is what was verified here.
 | `src/panes/compositor.lisp` | Modified | Struct slots; `make-paned-compositor`; `gui-*` methods; `run-paned-terminal` reduced to a thin wrapper; `run-pane-loop` removed |
 | `src/packages-unix.lisp` | Modified | `lexter/unix-term` uses `lexter/gui`; exports `make-terminal` and the protocol |
 | `src/panes/packages.lisp` | Modified | `lexter/panes` uses `lexter/gui`; exports `make-paned-compositor` and the protocol |
+
+*Migration note (2026-10-25):* commit `4313881` also added
+`src/packages-origin.lisp` and changed `src/tn3270-pane/tn3270-pane.lisp`,
+which this table does not list; the commit's message also names fixes to
+the 3270 cursor.
 
 
 ## Outstanding Work

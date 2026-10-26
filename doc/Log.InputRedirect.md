@@ -13,6 +13,13 @@ cites:
   - title:    "Session transcript ses_2263-Lexter6"
     locator:  "session-ses_2263-Lexter6.md, lines 862, 965, and 1044"
     external: true
+decisions:
+  - LEXTER-DRAFT-input-redirect-D1
+  - LEXTER-DRAFT-input-redirect-D2
+  - LEXTER-DRAFT-input-redirect-D3
+  - LEXTER-DRAFT-input-redirect-D4
+  - LEXTER-DRAFT-input-redirect-D5
+  - LEXTER-DRAFT-input-redirect-D6
 ---
 
 # Input Redirect and Chrome Mixins: Development Log
@@ -60,11 +67,15 @@ The first design (recorded in *Session transcript ses_2263-Lexter6*, line 862
 onward, "Option A") added modality as a *workspace-level* concept: an
 overlay stack parallel to the pane list.
 
-```
+```text
 workspace
   panes:    [tn3270-pane, status-bar]   ;; base layout
   overlays: [reconnect-dialog]          ;; drawn last, gets all input
 ```
+
+Description: A workspace holding two lists: `panes`, the base layout of a
+TN3270 pane and a status bar; and `overlays`, holding a reconnect dialog
+that is drawn last and receives all input.
 
 The plan called for:
 
@@ -117,9 +128,11 @@ router has to change. The redirect is invisible to all of them.
 
 ## Design Decisions
 
-### 1. Modality is per-pane state, expressed as one slot
+### LEXTER-DRAFT-input-redirect-D1 — Modality is per-pane state, expressed as one slot
 
-**Question:** Where does "this is modal right now" live?
+**Status:** Proposed
+
+**Context:** Where does "this is modal right now" live?
 
 **Decision:** On the base `pane` class, as a single `input-redirect`
 slot (`src/panes/protocol.lisp#L41@b4d874d`) defaulting to NIL. NIL means normal routing;
@@ -133,9 +146,17 @@ modal.
                 :documentation "Function to redirect input to, or NIL ...")
 ```
 
-### 2. Interception lives in method combination, not the router
+**Alternatives:**
+- A workspace-level overlay stack parallel to the pane list (see The
+  Original Plan). Rejected: it is a parallel hierarchy, with a second
+  pane collection and a second focus model, bolted alongside the one
+  that exists (see The Alternative).
 
-**Question:** How does input actually get diverted without touching the
+### LEXTER-DRAFT-input-redirect-D2 — Interception lives in method combination, not the router
+
+**Status:** Proposed
+
+**Context:** How does input actually get diverted without touching the
 compositor's routing code?
 
 **Decision:** `:around` methods on `pane-handle-key` and
@@ -150,35 +171,46 @@ and, if set, call the redirect function *instead of* `call-next-method`:
         (call-next-method))))
 ```
 
+**Alternatives:**
+- A branch in the compositor's router. Rejected: modality is a property
+  of the method dispatch on the pane, not a branch in the router.
+
 This is the crux of why the approach is light. The compositor's
 `handle-compositor-key` / `handle-compositor-char`
 (`src/panes/compositor.lisp:handle-compositor-key@b4d874d`, `src/panes/compositor.lisp:handle-compositor-char@b4d874d`) still do nothing but
 `(pane-handle-key (focused-pane ws) ...)`. They are completely unaware
-that redirection exists. Modality is a property of the method dispatch
-on the pane, not a branch in the router. Add the `:around` methods once
-and every pane, present and future, becomes modal-capable without the
-routing layer knowing.
+that redirection exists. Add the `:around` methods once and every pane,
+present and future, becomes modal-capable without the routing layer
+knowing.
 
-### 3. A single redirect function with a discriminated signature
+### LEXTER-DRAFT-input-redirect-D3 — A single redirect function with a discriminated signature
 
-**Question:** Key events and character events are distinct. Two
+**Status:** Proposed
+
+**Context:** Key events and character events are distinct. Two
 redirect slots, or one?
 
 **Decision:** One slot, one function, discriminated by a leading
 keyword:
 
-```
+```lisp
 (funcall redirect pane :key  key scancode action mods)
 (funcall redirect pane :char codepoint)
 ```
 
+**Alternatives:**
+- Two redirect slots, one for key events and one for character events.
+  Rejected: one function keeps the modal's logic in one place, and
+  matches how the two GLFW callbacks (key and char) are two faces of one
+  input stream.
+
 A dialog handler is a single closure that `case`s on `:key` vs `:char`.
-This keeps the modal's logic in one place and matches how the two
-GLFW callbacks (key and char) are two faces of one input stream.
 
-### 4. Selective passthrough via dynamic suppression
+### LEXTER-DRAFT-input-redirect-D4 — Selective passthrough via dynamic suppression
 
-**Question:** A redirect function sometimes wants to hand an event *back*
+**Status:** Proposed
+
+**Context:** A redirect function sometimes wants to hand an event *back*
 to the pane's normal handler -- e.g. a semi-modal overlay that captures
 its hotkeys but lets ordinary typing reach the terminal underneath. How
 does it forward an event without the `:around` method catching it again
@@ -196,40 +228,68 @@ methods honor that binding by falling through to `call-next-method`:
     (pane-handle-key pane key scancode action mods)))
 ```
 
+**Alternatives:**
+- Clearing and reinstalling the slot around a forwarded event.
+  Rejected: the helpers forward without touching the slot.
+
 This gives a redirect function a clean way to say "I've looked at this
 event; now treat it as if no redirect were installed," without
 clearing and reinstalling the slot. The recursion guard is dynamically
 scoped, so it is automatically unwound after the forwarded call.
 
-### 5. Focus trapping falls out for free
+### LEXTER-DRAFT-input-redirect-D5 — Focus trapping falls out for free
 
-**Question:** The overlay plan needed explicit focus capture and
+**Status:** Proposed
+
+**Context:** The overlay plan needed explicit focus capture and
 restore. What replaces it?
 
 **Decision:** Nothing -- it is not needed. Because the redirect lives on
 the focused pane and intercepts at dispatch time, the pane simply
-cannot act on input normally while a redirect is installed. The dialog
-*is* the focused pane's input. There is no other pane to trap focus away
-from, and clearing the slot restores normal behavior instantly. The
-"save focus / restore focus" bookkeeping of the overlay stack has no
-analogue because there was never a focus transfer.
+cannot act on input normally while a redirect is installed.
 
-### 6. Dialog visuals are a chrome concern, drawn by the decorator
+**Alternatives:**
+- Explicit focus capture and restore, as the overlay plan needed.
+  Rejected: there is never a focus transfer to undo.
 
-**Question:** If the dialog isn't a separate pane, who draws its box?
+The dialog *is* the focused pane's input. There is no other pane to trap
+focus away from, and clearing the slot restores normal behavior
+instantly. The "save focus / restore focus" bookkeeping of the overlay
+stack has no analogue because there was never a focus transfer.
+
+### LEXTER-DRAFT-input-redirect-D6 — Dialog visuals are a chrome concern, drawn by the decorator
+
+**Status:** Proposed
+
+**Context:** If the dialog isn't a separate pane, who draws its box?
 
 **Decision:** The chrome mixin's decorator. The `chrome-pane` mixin
-(`chrome-mixin.lisp`) already reserves regions of a pane and delegates
-their drawing to a single workspace-level `decorator` function. That
-decorator inspects pane state -- explicitly including `input-redirect`
-(noted at `src/panes/chrome-mixin.lisp#L9-L11@b4d874d`) -- to decide what to draw. When a
-redirect is active, the decorator paints the modal dialog's frame and
-prompt over the pane's content. Input behavior (redirect) and dialog
-appearance (chrome decorator) are orthogonal systems that compose:
-one owns the keystrokes, the other owns the pixels.
+(`src/panes/chrome-mixin.lisp@b4d874d`) already reserves regions of a
+pane and delegates their drawing to a single workspace-level `decorator`
+function. That decorator inspects pane state -- explicitly including
+`input-redirect` (noted at `src/panes/chrome-mixin.lisp#L9-L11@b4d874d`)
+-- to decide what to draw. When a redirect is active, the decorator
+paints the modal dialog's frame and prompt over the pane's content.
 
+**Alternatives:**
+- A new `dialog-pane` class with a built-in border, text layout, and
+  input field, as the overlay plan called for. Rejected with the overlay
+  stack (LEXTER-DRAFT-input-redirect-D1).
 
-## The Chrome Mixin
+Input behavior (redirect) and dialog appearance (chrome decorator) are
+orthogonal systems that compose: one owns the keystrokes, the other owns
+the pixels.
+
+## Implementation
+
+*Migration note (2026-10-25):* this Log had no Implementation section. The
+redirect mechanism's code is described with its decision records,
+LEXTER-DRAFT-input-redirect-D1 through LEXTER-DRAFT-input-redirect-D4.
+The chrome mixin's, and the end-to-end walk-through, were sections of
+their own; they are placed in this section, under their original
+headings.
+
+### The Chrome Mixin
 
 The chrome mixin was built in the same effort because dialogs need a
 place to draw and because the compositor wanted scroll bars, headers,
@@ -237,7 +297,7 @@ and footers anyway. Rather than three separate features it is one
 mixin that reserves edges of a pane and routes their drawing through a
 single themeable function.
 
-### Reserved regions and content geometry
+#### Reserved regions and content geometry
 
 `chrome-pane` (`src/panes/chrome-mixin.lisp:chrome-pane@b4d874d`) adds slots for a scroll-bar
 column, header rows, and footer rows. The content-geometry generics
@@ -255,7 +315,7 @@ so the screen never overwrites the reserved edges. This is the
 scroll-bar design discussion (*Session transcript ses_2263-Lexter6*, line 965): an
 80-column pane with a scroll bar runs a 79-column screen.
 
-### Flush delegates chrome to the decorator
+#### Flush delegates chrome to the decorator
 
 A `pane-flush :around` method (`src/panes/chrome-mixin.lisp:pane-flush@b4d874d`) flushes the
 pane's content via `call-next-method`, then calls the workspace
@@ -268,7 +328,7 @@ headers, footers, scroll bars, and (when a redirect is active) modal
 dialogs. This is the single-point-of-control the scroll-bar discussion
 recommended (Option B mixin, with workspace access).
 
-### Workspace back-reference
+#### Workspace back-reference
 
 For a pane to reach its decorator it needs its workspace. The base pane
 carries a `workspace` back-reference (`src/panes/protocol.lisp#L38@b4d874d`), set in the
@@ -278,7 +338,7 @@ directly answers the design question raised in the session
 reach the workspace, so chrome drawing can be informed by
 workspace-level state.
 
-### Scroll-bar geometry and future mouse support
+#### Scroll-bar geometry and future mouse support
 
 `scroll-bar-thumb-geometry` (`src/panes/chrome-mixin.lisp:scroll-bar-thumb-geometry@b4d874d`) computes thumb
 position and height from the pane's `scroll-state`
@@ -289,10 +349,9 @@ yet; it exists so that the mouse-input work to come can make scroll bars
 (and, by the same token, dialog controls) interactive without reworking
 the geometry.
 
+### How a Modal Dialog Works End to End
 
-## How a Modal Dialog Works End to End
-
-```
+```text
 3270 session drops
   |
   v
@@ -321,6 +380,18 @@ user submits -> closure runs the action, then clears input-redirect
 pane returns to normal input and the decorator stops drawing the dialog
 ```
 
+Description: A flow of a modal dialog's life. The 3270 session drops, and
+the pane sets its own `input-redirect` to a dialog closure. When the user
+presses a key, the compositor routes it to the focused pane unchanged;
+the pane's `pane-handle-key :around` method sees the redirect and calls
+the closure instead of the pane's normal handler. The closure updates its
+buffer, and may pass the event through with `pane-forward-*`. On the next
+frame, `pane-flush :around` draws the pane's content, and then the
+decorator, seeing `input-redirect` set, paints the dialog box on top.
+When the user submits, the closure runs the action and clears
+`input-redirect`, and the pane returns to normal input while the
+decorator stops drawing the dialog.
+
 No overlay list, no z-order, no focus stack, no dialog-pane class --
 two slots (`input-redirect` to capture, the decorator's inspection of
 it to draw) and one dynamic variable for passthrough.
@@ -344,7 +415,16 @@ it to draw) and one dynamic variable for passthrough.
   scroll bars and, by extension, for clickable dialog controls.
 
 
+## Verification
+
+*Migration note (2026-10-25):* this Log recorded no verification. The
+section is added to complete the Log's structure (§14); it makes no claim
+about how the work was tested.
+
+
 ## Files
+
+Table: Files added or changed in commits `9e1e6d0` (the workspace back-reference and decorator), `15ba060` (the chrome mixin and input redirect), and `b4d874d` (forwarding redirected input).
 
 | File | Action | Description |
 |------|--------|-------------|
@@ -352,6 +432,11 @@ it to draw) and one dynamic variable for passthrough.
 | `src/panes/chrome-mixin.lisp` | New | `chrome-pane` mixin: reserved scroll-bar/header/footer regions, content geometry generics, `pane-flush :around` decorator delegation, scroll-bar geometry and hit-testing |
 | `src/panes/workspace.lisp` | Modified | Added `decorator` slot; `render-decorations` calls it with `:borders`; `initialize-instance :after` sets pane back-references |
 | `src/panes/packages.lisp` | Modified | Exported redirect and chrome symbols |
+
+*Migration note (2026-10-25):* these commits also changed `lexter.asd`
+and `src/panes/vt-pane.lisp`, and `9e1e6d0` added
+`src/panes/scrollable-mixin.lisp`, which `15ba060` removed; this table
+does not list them.
 
 
 ## Outstanding Work

@@ -1,22 +1,26 @@
 ---
-id:            LEXTER-DRAFT-multi-buffer
+id:            LEXTER-0006
 title:         "Alternate Screen Buffer: Development Log"
 genre:         Log
 scope:         component
 project:       Lexter
 component:     vt
 language:      en
-status:        Draft
+status:        Implemented
+authors:
+  - Andrew Sengul
+approved-by:   Andrew Sengul
+reviewed:      2026-10-26
 provenance:
   assistant:   opencode
 decisions:
-  - LEXTER-DRAFT-multi-buffer-D1
-  - LEXTER-DRAFT-multi-buffer-D2
-  - LEXTER-DRAFT-multi-buffer-D3
-  - LEXTER-DRAFT-multi-buffer-D4
-  - LEXTER-DRAFT-multi-buffer-D5
-  - LEXTER-DRAFT-multi-buffer-D6
-  - LEXTER-DRAFT-multi-buffer-D7
+  - LEXTER-D28
+  - LEXTER-D29
+  - LEXTER-D30
+  - LEXTER-D31
+  - LEXTER-D32
+  - LEXTER-D27
+  - LEXTER-D33
 ---
 
 # Alternate Screen Buffer: Development Log
@@ -80,7 +84,7 @@ Table: What each alternate-screen mode does on set and on reset.
 | 1048 | save cursor (no switch)             | restore cursor (no switch) |
 | 1049 | save cursor, switch to a cleared alt | switch to primary, restore cursor |
 
-This is the approach taken here (LEXTER-DRAFT-multi-buffer-D6).
+This is the approach taken here (LEXTER-D27).
 
 
 ## The architectural crux
@@ -102,13 +106,13 @@ the handler the single source of truth and have the terminal/pane poll
 *Migration note (2026-10-25):* the choice of the two-buffer approach was
 stated in the background section "How real terminals do this", with the
 alternative it rejected. It is recorded here as
-LEXTER-DRAFT-multi-buffer-D6 and placed first, because the other five
-decisions refine it; LEXTER-DRAFT-multi-buffer-D1 through
-LEXTER-DRAFT-multi-buffer-D5 keep the Log's original numbering.
+LEXTER-D27 and placed first, because the other five
+decisions refine it; LEXTER-D28 through
+LEXTER-D32 keep the Log's original numbering.
 
-### LEXTER-DRAFT-multi-buffer-D6 — Two-buffer pointer swap, not snapshot-and-restore
+### LEXTER-D27 — Two-buffer pointer swap, not snapshot-and-restore
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** Full-screen programs need a screen of their own, and the
 primary screen must look as it did when they exit. Real terminals keep
@@ -127,9 +131,9 @@ construction.
   palette + generation, ...), and any field missed leaks across the
   boundary.
 
-### LEXTER-DRAFT-multi-buffer-D1 — Handler owns the buffers; renderer follows it
+### LEXTER-D28 — Handler owns the buffers; renderer follows it
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** The active screen is referenced from both the VT handler and
 the renderer, and for a pointer swap to be visible the renderer must
@@ -146,9 +150,9 @@ state), so a swap is picked up automatically. The terminal/pane's own
   pane. Rejected in favor of polling the handler at render time, which
   needs neither (see The architectural crux).
 
-### LEXTER-DRAFT-multi-buffer-D2 — One persistent alternate buffer, created lazily
+### LEXTER-D29 — One persistent alternate buffer, created lazily
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** Mode 47 switches to the alternate screen without clearing
 it, so the alternate buffer's contents must persist between uses.
@@ -162,9 +166,9 @@ exit).
 - Recreating the alternate buffer on each entry. Rejected: mode 47's
   "switch without clearing" semantics need its contents to persist.
 
-### LEXTER-DRAFT-multi-buffer-D3 — Dedicated cursor-save slots for 1048/1049
+### LEXTER-D30 — Dedicated cursor-save slots for 1048/1049
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** Modes 1048 and 1049 save and restore the cursor, as DECSC
 (`ESC 7` / `ESC 8`) does.
@@ -177,9 +181,9 @@ slots.
 - Sharing the DECSC save slots. Rejected: separate slots mean the two
   save/restore mechanisms can never interfere.
 
-### LEXTER-DRAFT-multi-buffer-D4 — Resize resizes *both* buffers
+### LEXTER-D31 — Resize resizes *both* buffers
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** A window resize while a program is on the alternate screen
 must also resize the *inactive* primary buffer, so that returning from
@@ -191,9 +195,9 @@ present) the alternate together.
 **Alternatives:**
 - None recorded.
 
-### LEXTER-DRAFT-multi-buffer-D5 — Alternate buffer carries no scrollback
+### LEXTER-D32 — Alternate buffer carries no scrollback
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** Real terminals give the alternate screen no scrollback.
 
@@ -311,7 +315,7 @@ Table: Files changed in commit `b693eac`.
 After Buffer Swap", dated 2026-06-06. It becomes a dated Update
 (LEXTER-DRAFT-compass-migration-D5), dated by commit `4864f01`, which
 holds the work (LEXTER-DRAFT-compass-migration-D8). Its "Design
-Decision" becomes LEXTER-DRAFT-multi-buffer-D7.
+Decision" becomes LEXTER-D33.
 
 ### Context
 
@@ -345,9 +349,9 @@ were repainted and the rest of the grid kept the application's characters. The
 bug affected both standalone `unix-term` and the pane compositor, since both
 render the active screen through the same incremental flush.
 
-### LEXTER-DRAFT-multi-buffer-D7 — Force a full repaint at the swap, mode-agnostically
+### LEXTER-D33 — Force a full repaint at the swap, mode-agnostically
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** The display grid is shared by both buffers and flushed
 incrementally, so after a swap the newly-active screen's clean rows are

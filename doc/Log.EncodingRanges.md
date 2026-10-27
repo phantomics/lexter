@@ -1,18 +1,22 @@
 ---
-id:            LEXTER-DRAFT-encoding-ranges
+id:            LEXTER-0009
 title:         "Encoding Ranges: Development Log"
 genre:         Log
 scope:         component
 project:       Lexter
 component:     vt
 language:      en
-status:        Draft
+status:        Implemented
+authors:
+  - Andrew Sengul
+approved-by:   Andrew Sengul
+reviewed:      2026-10-26
 provenance:
   assistant:   opencode
 relates-to:
   - LEXTER-0007
 open-questions:
-  - LEXTER-DRAFT-encoding-ranges-O1
+  - LEXTER-O1
 cites:
   - title:    "cl-vt, commit be7c607"
     locator:  "github.com/phantomics/cl-vt, commit be7c607, parser.lisp: make-vt-parser and the :utf8 mode"
@@ -119,7 +123,7 @@ discussion". Commit `fbf8817` also changed `src/vt-handler.lisp`, where
 `make-vt-handler` (`src/vt-handler.lisp:make-vt-handler@fbf8817`) passes
 `:user-data handler` and `:utf8 t` to `cl-vt:make-vt-parser`. This Log
 does not describe that change. It is the fix that resolves
-LEXTER-DRAFT-encoding-ranges-O1, as recorded in that question's
+LEXTER-O1, as recorded in that question's
 resolution.
 
 
@@ -134,7 +138,7 @@ UTF-8/C1 problem; they are listed with the Update that records it.
 *Migration note (2026-10-25):* this section was "Part 2 -- 3-byte UTF-8
 vs. 8-bit C1 controls (diagnosed)". It records a diagnosis, committed
 with the body in `fbf8817`. Its candidate fixes become the open question
-LEXTER-DRAFT-encoding-ranges-O1 (LEXTER-DRAFT-compass-migration-D6).
+LEXTER-O1 (LEXTER-DRAFT-compass-migration-D6).
 
 ### Symptom
 
@@ -202,7 +206,7 @@ never be interpreted as a control; only an actual code point U+008C should be.
 cl-vt is a pure byte-oriented parser with no UTF-8 awareness and no mode to
 disable C1, so the fix has to change where/how UTF-8 is decoded relative to it.
 
-### LEXTER-DRAFT-encoding-ranges-O1 — Where UTF-8 is decoded relative to cl-vt
+### LEXTER-O1 — Where UTF-8 is decoded relative to cl-vt
 
 *Migration note (2026-10-25):* this was the section "Candidate fixes
 (decision pending)", recorded as an open question; its text is
@@ -240,7 +244,7 @@ ground state. Lexter enables it in the same work, commit `fbf8817`, where
 
 *Migration note (2026-10-25):* the first two items were the Files rows
 marked "(pending)"; the rest were the Log's "Outstanding work". The first
-three are answered by the resolution of LEXTER-DRAFT-encoding-ranges-O1;
+three are answered by the resolution of LEXTER-O1;
 the resolution does not address the last two.
 
 - **`src/vt-handler.lisp`.** UTF-8/C1 fix -- approach under discussion.

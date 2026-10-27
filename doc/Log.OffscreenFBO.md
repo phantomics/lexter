@@ -1,23 +1,27 @@
 ---
-id:            LEXTER-DRAFT-offscreen-fbo
+id:            LEXTER-0008
 title:         "Offscreen Render Target (FBO): Development Log"
 genre:         Log
 scope:         component
 project:       Lexter
 component:     renderer
 language:      en
-status:        Draft
+status:        Implemented
+authors:
+  - Andrew Sengul
+approved-by:   Andrew Sengul
+reviewed:      2026-10-26
 provenance:
   assistant:   opencode
 relates-to:
-  - LEXTER-DRAFT-gui-lifecycle
+  - LEXTER-0005
 decisions:
-  - LEXTER-DRAFT-offscreen-fbo-D1
-  - LEXTER-DRAFT-offscreen-fbo-D2
-  - LEXTER-DRAFT-offscreen-fbo-D3
-  - LEXTER-DRAFT-offscreen-fbo-D4
-  - LEXTER-DRAFT-offscreen-fbo-D5
-  - LEXTER-DRAFT-offscreen-fbo-D6
+  - LEXTER-D39
+  - LEXTER-D40
+  - LEXTER-D41
+  - LEXTER-D42
+  - LEXTER-D43
+  - LEXTER-D44
 ---
 
 # Offscreen Render Target (FBO): Development Log
@@ -75,9 +79,9 @@ is bottom-left.
 
 These were settled with the user before implementation.
 
-### LEXTER-DRAFT-offscreen-fbo-D1 — Opt-in, not always-on
+### LEXTER-D39 — Opt-in, not always-on
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** Rendering through an FBO costs an extra full-screen blit per
 frame, and the FBO is needed only when a capture is taken or an effect is
@@ -93,9 +97,9 @@ later: when an effect is active).
 - An always-on FBO. Rejected: it would impose an extra full-screen blit
   on every ordinary frame.
 
-### LEXTER-DRAFT-offscreen-fbo-D2 — Window-resolution FBO; pixel-scale unchanged
+### LEXTER-D40 — Window-resolution FBO; pixel-scale unchanged
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** `pixel-scale` is currently baked into the vertex shader, so
 the scene is already rendered at window resolution.
@@ -108,9 +112,9 @@ changed.
   present pass, a "more correct" CRT pass. Deferred to Phase 2: it is a
   `pixel-scale` rework.
 
-### LEXTER-DRAFT-offscreen-fbo-D3 — RGBA8 colour format
+### LEXTER-D41 — RGBA8 colour format
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** The colour target must serve screenshots and the planned
 blur, CRT, and bloom effects.
@@ -121,9 +125,9 @@ blur/CRT/basic bloom.
 **Alternatives:**
 - RGBA16F, which HDR bloom would want. Left for Phase 2 if needed.
 
-### LEXTER-DRAFT-offscreen-fbo-D4 — FBO is the screenshot source
+### LEXTER-D42 — FBO is the screenshot source
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** Reading from the default framebuffer is subject to the
 window pixel-ownership test (occluded/offscreen windows yield undefined
@@ -136,9 +140,9 @@ independent of window visibility -- exactly what tests need.
 - Reading from the default framebuffer. Rejected: its pixels are
   undefined when the window is occluded or offscreen.
 
-### LEXTER-DRAFT-offscreen-fbo-D5 — Capture forces a render
+### LEXTER-D43 — Capture forces a render
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** Rendering is dirty-tracked, so the frame in the FBO depends
 on what the last `gui-tick` happened to do.
@@ -150,9 +154,9 @@ regardless of what the last `gui-tick` happened to do.
 **Alternatives:**
 - None recorded.
 
-### LEXTER-DRAFT-offscreen-fbo-D6 — Hidden-window flag for tests
+### LEXTER-D44 — Hidden-window flag for tests
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** Tests need a GL context in which to render and capture, but
 not an on-screen window.

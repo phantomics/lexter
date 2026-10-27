@@ -1,20 +1,24 @@
 ---
-id:            LEXTER-DRAFT-enhanced-dual-width
+id:            LEXTER-0007
 title:         "Enhanced Dual-Width Font Support: Development Log"
 genre:         Log
 scope:         component
 project:       Lexter
 component:     fonts
 language:      en
-status:        Draft
+status:        Implemented
+authors:
+  - Andrew Sengul
+approved-by:   Andrew Sengul
+reviewed:      2026-10-26
 provenance:
   assistant:   opencode
 decisions:
-  - LEXTER-DRAFT-enhanced-dual-width-D1
-  - LEXTER-DRAFT-enhanced-dual-width-D2
-  - LEXTER-DRAFT-enhanced-dual-width-D3
-  - LEXTER-DRAFT-enhanced-dual-width-D4
-  - LEXTER-DRAFT-enhanced-dual-width-D5
+  - LEXTER-D34
+  - LEXTER-D35
+  - LEXTER-D36
+  - LEXTER-D37
+  - LEXTER-D38
 ---
 
 # Enhanced Dual-Width Font Support: Development Log
@@ -98,9 +102,9 @@ hence the `INVALID_VALUE` from `glTexImage2D`.
 
 ## Design Decisions
 
-### LEXTER-DRAFT-enhanced-dual-width-D1 — Separate storage width from cell width
+### LEXTER-D34 — Separate storage width from cell width
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** The PCF loader had been using a single `cell-width` for
 everything, derived from glyph 0's advance. A dual-width font has two
@@ -121,9 +125,9 @@ For monospace fonts the two are equal, so behavior is byte-for-byte
 identical; they diverge only for dual-width fonts. This was the key
 conceptual move that unblocked everything else.
 
-### LEXTER-DRAFT-enhanced-dual-width-D2 — A manual override first, auto-detection second
+### LEXTER-D35 — A manual override first, auto-detection second
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** The rendering path for a separate cell width had to be
 tested before committing to any heuristic for detecting it.
@@ -141,9 +145,9 @@ the override becomes unnecessary.
 
 This kept each step independently testable and low-risk.
 
-### LEXTER-DRAFT-enhanced-dual-width-D3 — Auto-detect cell width from a representative ASCII glyph
+### LEXTER-D36 — Auto-detect cell width from a representative ASCII glyph
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** Without an override, the loader must determine the narrow
 cell width itself. This is how real terminals size a cell: from a
@@ -174,9 +178,9 @@ parsed after the bitmaps) -- a small reorder of independent table seeks.
 The override still wins when supplied, so the order is: explicit override
 -> reference-glyph detection -> storage-width fallback.
 
-### LEXTER-DRAFT-enhanced-dual-width-D4 — Wide-aware bitmap extraction in the PCF loader
+### LEXTER-D37 — Wide-aware bitmap extraction in the PCF loader
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** Detecting the right cell width is not enough: with
 `cell-width=8`, the extractor also has to (a) read each row at the
@@ -198,9 +202,9 @@ The wide-glyph set (still built from `:w > cell-width`) now matches the
 doubled bitmaps, and the existing atlas wide-packing consumes them
 unchanged.
 
-### LEXTER-DRAFT-enhanced-dual-width-D5 — Reshape the atlas to a roughly-square, limit-bounded layout
+### LEXTER-D38 — Reshape the atlas to a roughly-square, limit-bounded layout
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** `build-atlas` hard-capped the atlas at 32 columns, which for
 Unifont forced a texture of 256 x 53,456 px, past any GPU's

@@ -11,16 +11,16 @@ provenance:
   assistant:   opencode
   session:     "Data-structures Spec, Phase 1 (2026-10-26)"
 relates-to:
-  - LEXTER-DRAFT-enhanced-dual-width
+  - LEXTER-0007
   - LEXTER-DRAFT-encoding-ranges
-  - LEXTER-DRAFT-persistent-palette
-  - LEXTER-DRAFT-palette-paging
-  - LEXTER-DRAFT-multi-buffer
+  - LEXTER-0003
+  - LEXTER-0004
+  - LEXTER-0006
   - LEXTER-DRAFT-mouse-reporting
-  - LEXTER-DRAFT-input-redirect
-  - LEXTER-DRAFT-gui-lifecycle
-  - LEXTER-DRAFT-stop-flag
-  - LEXTER-DRAFT-offscreen-fbo
+  - LEXTER-0002
+  - LEXTER-0005
+  - LEXTER-0001
+  - LEXTER-0008
   - LEXTER-DRAFT-screenshot-test-rig
   - LEXTER-DRAFT-data-structures-1e-critique
 cites:
@@ -189,10 +189,10 @@ A PCF loader MUST take the cell height from the font's accelerator tables
 (`fontAscent + fontDescent`) when they are present, and SHOULD fall back to
 glyph 0's metrics only when they are absent.
 
-**Rationale:** LEXTER-DRAFT-enhanced-dual-width-D1 separates storage width from
+**Rationale:** LEXTER-D34 separates storage width from
 cell width, because Unifont stores every glyph in a 16-pixel raster but draws
 ASCII in an 8-pixel cell (*Session transcript ses_1640-Lexter13*, lines
-5109-5116 and 5186). LEXTER-DRAFT-enhanced-dual-width-D2 and -D3 put the
+5109-5116 and 5186). LEXTER-D35 and -D3 put the
 override first and auto-detection second. The accelerator rule fixes cells
 measured from glyph 0's ink extents, which made haxor-narrow-16 come out 9×13
 instead of 9×18 (*Session transcript ses_2263-Lexter8*, lines 1105-1131).
@@ -239,7 +239,7 @@ a glyph index.
 
 **Rationale:** one atlas means one texture binding and one cell size for the
 whole window. The roughly square, size-bounded layout is
-LEXTER-DRAFT-enhanced-dual-width-D5. `position-pixels` replaced a sequential
+LEXTER-D38. `position-pixels` replaced a sequential
 pixel vector when cursor glyphs needed the texture rebuilt after packing
 (*Session transcript ses_2263-Lexter7*, lines 702-779).
 
@@ -259,10 +259,10 @@ Each `screen` owns its palette, with a `palette-generation` counter that starts
 at 1. Every mutation of the palette (`set-palette-entry`,
 `set-palette-entry-rgb8`, `reset-palette`) MUST increase the counter.
 
-**Rationale:** LEXTER-DRAFT-persistent-palette-D1 puts the palette on the
+**Rationale:** LEXTER-D12 puts the palette on the
 screen model because OSC colour sequences arrive through the handler that
 already holds the screen, and so that each pane can have its own palette.
-LEXTER-DRAFT-persistent-palette-D2 chooses the generation counter.
+LEXTER-D13 chooses the generation counter.
 
 ### Swatches
 
@@ -321,9 +321,9 @@ array uploads into a slot unchanged, because std140 gives a `vec4` array a
 16-byte stride, the size of four single-floats. The uniform `u_palette_slot`
 selects the slot used to draw.
 
-**Rationale:** LEXTER-DRAFT-palette-paging-D1 chooses one larger buffer plus a
+**Rationale:** LEXTER-D16 chooses one larger buffer plus a
 slot uniform over a palette texture or a texture array, and
-LEXTER-DRAFT-palette-paging-D2 sizes it at four slots so it fits the 16384-byte
+LEXTER-D17 sizes it at four slots so it fits the 16384-byte
 uniform block that every OpenGL 3.3 implementation guarantees. Panes MAY share
 a slot; two panes that share a slot but need different palettes are a
 configuration error (*Session transcript ses_2263-Lexter6*, lines 6869-6879).
@@ -397,7 +397,7 @@ bottom ≤ `rows − 1`.
 affects a row, MUST set that row's `row-dirty` bit. `flush-to-display` clears
 all bits. After anything replaces the content a grid is showing wholesale, such
 as an alternate-screen swap, the writer MUST call `mark-screen-dirty`
-(LEXTER-DRAFT-multi-buffer-D7).
+(LEXTER-D33).
 
 **Scrollback.** `scrollback-lines` is a ring of `scrollback-max` entries, and
 `scrollback-count` is the total number of lines ever saved. Line *n*, counting
@@ -481,7 +481,7 @@ path from a `screen` to a grid. Given a column and row offset (for a pane, its
 4. clear the screen's `row-dirty` bits.
 
 The flush copies only cells; the palette does not pass through the grid
-(LEXTER-DRAFT-persistent-palette-D4). Because the cursor's swatch is interned
+(LEXTER-D15). Because the cursor's swatch is interned
 into the screen's table, drawing the cursor is a write to the model, and it
 MAY increase the swatch table's generation.
 
@@ -592,7 +592,7 @@ MUST resize both buffers. Any code that renders or reads a VT terminal MUST
 find the screen through `vt-handler-screen`, or through
 `vt-pane-active-screen`, at the time of use, and MUST NOT cache it.
 
-**Rationale:** LEXTER-DRAFT-multi-buffer-D1 (the handler owns the buffers and
+**Rationale:** LEXTER-D28 (the handler owns the buffers and
 the renderer follows it), -D2 (one persistent buffer, created lazily), -D3
 (separate save slots), -D4 (resize both), -D5 (no scrollback on the alternate
 buffer), and -D6 (pointer swap, not snapshot and restore).
@@ -648,7 +648,7 @@ passes an event on by calling a `pane-forward-*` function, which binds
 `*redirect-suppressed*` to true so the event reaches the normal handler
 without re-entering the redirect.
 
-**Rationale:** LEXTER-DRAFT-input-redirect-D1 to -D4: modality is one slot of
+**Rationale:** LEXTER-D6 to -D4: modality is one slot of
 pane state, interception lives in method combination rather than the router,
 one function receives every kind of event, and passthrough uses a dynamic
 binding. LEXTER-DRAFT-mouse-reporting-D7 extends the redirect to the pointer.
@@ -697,7 +697,7 @@ screen, or NIL for a pane without a palette. `scroll-state` MUST return
 `(values total-lines viewport-offset visible-rows)` or NIL, where
 `viewport-offset` 0 means the live screen.
 
-**Rationale:** LEXTER-DRAFT-palette-paging-D4 threads the slot through the
+**Rationale:** LEXTER-D19 threads the slot through the
 pane protocol.
 
 ### Workspaces and the compositor
@@ -721,9 +721,9 @@ A window-owning object (`unix-terminal`, `compositor`) implements
 (`src/gui.lisp:gui-tick@2d4d743`). `gui-tick` MUST make its own GL context
 current before drawing and returns NIL when the object is finished.
 `gui-destroy` MUST be idempotent. `run-gui-loop` owns the event loop; the
-caller initialises and terminates GLFW (LEXTER-DRAFT-gui-lifecycle-D2, -D3,
+caller initialises and terminates GLFW (LEXTER-D22, -D3,
 -D6). The optional **stop flag** is a cons cell whose car is true while the
-loop should run (LEXTER-DRAFT-stop-flag-D2, -D3).
+loop should run (LEXTER-D2, -D3).
 
 
 ## Required Backend State
@@ -803,7 +803,7 @@ that receive a capture are called with keyword arguments (`:width`,
 than the cell matrix, which loses control state; -D3 compares exact pixels,
 sound because the renderer is bitmap and nearest-neighbour; -D5 keeps blobs
 apart from their expected checksums. The capture comes from the offscreen
-framebuffer (LEXTER-DRAFT-offscreen-fbo-D4).
+framebuffer (LEXTER-D42).
 
 
 ## Conformance Walkthrough

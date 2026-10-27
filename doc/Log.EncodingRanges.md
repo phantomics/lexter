@@ -10,7 +10,7 @@ status:        Draft
 provenance:
   assistant:   opencode
 relates-to:
-  - LEXTER-DRAFT-enhanced-dual-width
+  - LEXTER-0007
 open-questions:
   - LEXTER-DRAFT-encoding-ranges-O1
 cites:

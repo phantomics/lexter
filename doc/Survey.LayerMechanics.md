@@ -13,9 +13,9 @@ relates-to:
   - LEXTER-DRAFT-data-structures-1e
   - LEXTER-DRAFT-data-structures-1e-critique
   - LEXTER-DRAFT-pane-profiles
-  - LEXTER-DRAFT-palette-paging
-  - LEXTER-DRAFT-offscreen-fbo
-  - LEXTER-DRAFT-enhanced-dual-width
+  - LEXTER-0004
+  - LEXTER-0008
+  - LEXTER-0007
   - LEXTER-DRAFT-screenshot-test-rig
 cites:
   - title:    "Session transcript ses_febe-LexterCritique"
@@ -664,11 +664,11 @@ Within Lexter:
   across panes and the GPU remains unsurveyed.
 - [LEXTER-DRAFT-pane-profiles](Plan.PaneProfiles.md) leaves scroll bars to
   decorators, which would write masked cells.
-- [LEXTER-DRAFT-palette-paging](Log.PalettePaging.md) introduced the four
+- [LEXTER-0004](Log.PalettePaging.md) introduced the four
   palette slots; a per-cell slot would let every pane use its own.
-- [LEXTER-DRAFT-offscreen-fbo](Log.OffscreenFBO.md) provides the offscreen
+- [LEXTER-0008](Log.OffscreenFBO.md) provides the offscreen
   target that a transparent overlay and the test rig both draw into.
-- [LEXTER-DRAFT-enhanced-dual-width](Log.EnhancedDualWidth.md) defines wide
+- [LEXTER-0007](Log.EnhancedDualWidth.md) defines wide
   glyphs, which the dense record would store as halves.
 - [LEXTER-DRAFT-screenshot-test-rig](Log.ScreenshotTestRig.md) checks
   output by checksum, which masks keep deterministic and time-driven effects

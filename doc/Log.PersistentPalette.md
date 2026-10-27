@@ -14,7 +14,7 @@ reviewed:      2026-10-26
 provenance:
   assistant:   opencode
 relates-to:
-  - LEXTER-DRAFT-multi-buffer
+  - LEXTER-0006
 decisions:
   - LEXTER-D12
   - LEXTER-D13

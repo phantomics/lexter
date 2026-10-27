@@ -112,7 +112,7 @@ and its Log) need identifiers. None has been accepted, and Lexter has
 allocated no numbers.
 
 **Decision:** Each document takes `LEXTER-DRAFT-<slug>`, the slug formed
-from its file name (`Log.StopFlag.md` becomes `LEXTER-DRAFT-stop-flag`).
+from its file name (`Log.StopFlag.md` becomes `LEXTER-0001`).
 Each record takes `LEXTER-DRAFT-<slug>-D<n>` or `-O<n>`, numbered from 1
 within its document. `compass assign` gives canonical numbers when the
 steward accepts each document.
@@ -366,16 +366,16 @@ consistent with Classic and Origin.
    | Document | Identifier | Component |
    |---|---|---|
    | `Log.EncodingRanges.md` | `LEXTER-DRAFT-encoding-ranges` | vt |
-   | `Log.EnhancedDualWidth.md` | `LEXTER-DRAFT-enhanced-dual-width` | fonts |
-   | `Log.GUILifecycle.md` | `LEXTER-DRAFT-gui-lifecycle` | gui |
-   | `Log.InputRedirect.md` | `LEXTER-DRAFT-input-redirect` | panes |
+   | `Log.EnhancedDualWidth.md` | `LEXTER-0007` | fonts |
+   | `Log.GUILifecycle.md` | `LEXTER-0005` | gui |
+   | `Log.InputRedirect.md` | `LEXTER-0002` | panes |
    | `Log.MouseReporting.md` | `LEXTER-DRAFT-mouse-reporting` | vt |
-   | `Log.MultiBuffer.md` | `LEXTER-DRAFT-multi-buffer` | vt |
-   | `Log.OffscreenFBO.md` | `LEXTER-DRAFT-offscreen-fbo` | renderer |
-   | `Log.PalettePaging.md` | `LEXTER-DRAFT-palette-paging` | renderer |
-   | `Log.PersistentPalette.md` | `LEXTER-DRAFT-persistent-palette` | renderer |
+   | `Log.MultiBuffer.md` | `LEXTER-0006` | vt |
+   | `Log.OffscreenFBO.md` | `LEXTER-0008` | renderer |
+   | `Log.PalettePaging.md` | `LEXTER-0004` | renderer |
+   | `Log.PersistentPalette.md` | `LEXTER-0003` | renderer |
    | `Log.ScreenshotTestRig.md` | `LEXTER-DRAFT-screenshot-test-rig` | test |
-   | `Log.StopFlag.md` | `LEXTER-DRAFT-stop-flag` | origin |
+   | `Log.StopFlag.md` | `LEXTER-0001` | origin |
 
 2. **`relates-to`** is filled only where one Log builds on or names
    another's work: for example Persistent Palette and Palette Paging, and
@@ -446,13 +446,13 @@ Table: Changes specific to each Log, besides the common treatment.
 | `Log.EncodingRanges.md` | Part 1 becomes the body and Part 2 an Update (LEXTER-DRAFT-compass-migration-D5); the candidate fixes become `LEXTER-DRAFT-encoding-ranges-O1` (LEXTER-DRAFT-compass-migration-D6); the `(pending)` Files rows move to the Update's Outstanding Work; a Design Decisions section is added with a migration note, since Part 1 records no decisions; the steward resolved `LEXTER-DRAFT-encoding-ranges-O1` (cl-vt's UTF-8 mode, enabled in the work commit `fbf8817`), recorded as a `**Resolution:**` with a `cites:` entry for cl-vt, which has no Compass namespace |
 | `Log.InputRedirect.md` | Implementation and Verification sections added (its line references and transcript citation were done in Phase 2) |
 | `Log.MouseReporting.md` | Bold-lead decisions become records, and the "Deferred" paragraph moves to Outstanding Work; Future work becomes Outstanding Work; the Files list becomes a table |
-| `Log.MultiBuffer.md` | The addendum becomes an Update (LEXTER-DRAFT-compass-migration-D5), and its decision `LEXTER-DRAFT-multi-buffer-D7`; the two-buffer choice in "How real terminals do this" becomes `LEXTER-DRAFT-multi-buffer-D6`, placed first among the records |
+| `Log.MultiBuffer.md` | The addendum becomes an Update (LEXTER-DRAFT-compass-migration-D5), and its decision `LEXTER-D33`; the two-buffer choice in "How real terminals do this" becomes `LEXTER-D27`, placed first among the records |
 | `Log.OffscreenFBO.md` | Motivation becomes Problem; the Phase 2 section becomes Outstanding Work; the in-body `**Status:**` label is removed |
 | `Log.PalettePaging.md` | Files table built from `04d69c2` (its line references and transcript citation were done in Phase 2) |
 | `Log.PersistentPalette.md` | The H1 appendix becomes an Update, and its "Remaining nuance" the Update's Outstanding Work; Files table built for the main work (its line references were pinned in Phase 2) |
 | `Log.ScreenshotTestRig.md` | Bold-lead decisions become records; the Files list becomes a table, with a note pointing to ORIGIN-0012 for the commit's Origin handoff files; Outstanding Work gathered from the deferred items; the Workflow section moved under Implementation |
 | `Log.StopFlag.md` | The common treatment only (its line references and the Origin reference were pinned in Phase 2) |
-| `Log.GUILifecycle.md` | The "Design: Approach B" section becomes `LEXTER-DRAFT-gui-lifecycle-D7`, placed first among the records |
+| `Log.GUILifecycle.md` | The "Design: Approach B" section becomes `LEXTER-D20`, placed first among the records |
 | `Log.EnhancedDualWidth.md` | The precursor fixes' commits identified (`48b917f`, `4313881`), and their section moved under Implementation |
 
 The work is committed in batches. Each batch is checked before the next.

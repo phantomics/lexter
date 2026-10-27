@@ -10,7 +10,7 @@ status:        Draft
 provenance:
   assistant:   opencode
 relates-to:
-  - LEXTER-DRAFT-offscreen-fbo
+  - LEXTER-0008
   - LEXTER-DRAFT-data-structures-1e-critique
 decisions:
   - LEXTER-DRAFT-screenshot-test-rig-D1

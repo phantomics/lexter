@@ -12,10 +12,10 @@ provenance:
   session:     "Data-structures critique, Phase 2 (2026-10-26)"
 relates-to:
   - LEXTER-DRAFT-data-structures-1e
-  - LEXTER-DRAFT-enhanced-dual-width
-  - LEXTER-DRAFT-persistent-palette
-  - LEXTER-DRAFT-palette-paging
-  - LEXTER-DRAFT-multi-buffer
+  - LEXTER-0007
+  - LEXTER-0003
+  - LEXTER-0004
+  - LEXTER-0006
   - LEXTER-DRAFT-screenshot-test-rig
 open-questions:
   - LEXTER-DRAFT-data-structures-1e-critique-O1
@@ -162,7 +162,7 @@ Findings are ordered by severity, then by reach.
 
 **Rationale:** The wide-glyph design keeps the full glyph range by carrying the
 wide flag in bit 15 of the instance's swatch field (*Session transcript
-ses_2263-Lexter7*, lines 4122-4125). LEXTER-DRAFT-enhanced-dual-width-D4 makes
+ses_2263-Lexter7*, lines 4122-4125). LEXTER-D37 makes
 the PCF loader extract full-width glyphs, and that Log's Implementation states
 that "the screen/VT pipeline were all already in place from the CJK BDF demo
 and needed no modification".
@@ -199,7 +199,7 @@ character would have caught all three faults.
 
 ### LEXTER-DRAFT-data-structures-1e-critique-O2 — The grid's swatch generation has two meanings, and the GPU swatch table can stay stale for good
 
-**Rationale:** LEXTER-DRAFT-persistent-palette-D2 adopts a generation counter
+**Rationale:** LEXTER-D13 adopts a generation counter
 as "a clean, race-free 'has this changed?' predicate", explicitly "the *same*
 idiom already used for swatches (`swatch-table-generation` vs. the grid's
 `swatch-generation`)".
@@ -240,13 +240,13 @@ colour slots are typed `(unsigned-byte 8)`, and `rgb-to-256` exists to map
 truecolour into that range. The tab-stop vector is sized to the screen at
 construction. Typed struct slots are the project's choice for hot-path state
 (*Session transcript ses_2263-Lexter9*, line 2800), and
-LEXTER-DRAFT-multi-buffer-D4 makes resize cover both screen buffers.
+LEXTER-D31 makes resize cover both screen buffers.
 
 **Objection:** Ordinary host output signals errors inside `process-output`
 (C4, S2, S6, S8). `rgb-to-256` returns 256 for the grey (248, 248, 248), so
 `ESC [ 38;2;248;248;248 m`, a plausible light grey in a truecolour theme, fails
 the slot's type. `ESC [ 38;5;300 m` stores 300 unchecked. The resize that
-LEXTER-DRAFT-multi-buffer-D4 specifies resizes screens but not `tab-stops`, so
+LEXTER-D31 specifies resizes screens but not `tab-stops`, so
 after the window is widened, a tab at a column beyond the old width indexes
 past the vector. Each failure
 aborts the parse in the middle of a buffer, and a pane in the compositor has no
@@ -269,10 +269,10 @@ resize resizes. A fuzz fixture of malformed sequences would guard C4.
 ### LEXTER-DRAFT-data-structures-1e-critique-O4 — Every pane writes its own swatch numbering into one shared swatch store
 
 **Rationale:** One display grid per window keeps a single GPU-facing resource;
-LEXTER-DRAFT-multi-buffer-D7 rejects per-buffer grids as "heavier; the grid is
+LEXTER-D33 rejects per-buffer grids as "heavier; the grid is
 a GPU-facing resource". Swatches belong to each screen, so each pane interns
 its own colours, and the grid's swatch table is a mirror of per-cell state
-(LEXTER-DRAFT-persistent-palette-D4).
+(LEXTER-D15).
 
 **Objection:** A mirror of *which* screen? Every VT screen numbers its swatches
 from 0 in its own table, and every pane's flush copies its table into the same
@@ -300,7 +300,7 @@ second edition should decide who owns the swatch namespace.
 
 ### LEXTER-DRAFT-data-structures-1e-critique-O5 — Generation records are trusted across producers, so replays depend on fixture order
 
-**Rationale:** LEXTER-DRAFT-palette-paging-D3 keeps one recorded generation per
+**Rationale:** LEXTER-D18 keeps one recorded generation per
 palette slot so that each resident palette is uploaded only when it changes.
 `terminal-reset` reuses the window, atlas, and renderer so that one headless
 terminal can serve many fixtures "without rebuilding the (expensive) GL atlas"
@@ -316,7 +316,7 @@ fixture's colours: the checksum depends on which fixtures ran before it,
 against LEXTER-DRAFT-screenshot-test-rig-D3 (C2). Palettes have the same flaw:
 every screen's palette generation starts at 1, so two panes that share a slot, or a pane and a reset terminal,
 can present equal numbers for different palettes (S3). Detecting a change of
-producer in the renderer is the fix that LEXTER-DRAFT-multi-buffer-D7 rejected
+producer in the renderer is the fix that LEXTER-D33 rejected
 for a related problem, which suggests the protocol needs it anyway.
 
 **Evidence:** Reproduced with the stand-in upload rule. Fixture one on a fresh
@@ -477,10 +477,10 @@ atlas.
 
 ### LEXTER-DRAFT-data-structures-1e-critique-O11 — The rule that the active buffer is read through the handler is not carried through
 
-**Rationale:** LEXTER-DRAFT-multi-buffer-D1 has the handler own both buffers
+**Rationale:** LEXTER-D28 has the handler own both buffers
 and requires readers to poll `vt-handler-screen`; the terminal's own `screen`
 slot "is retained only as the initial primary handle".
-LEXTER-DRAFT-multi-buffer-D2 creates the alternate buffer lazily, and the
+LEXTER-D29 creates the alternate buffer lazily, and the
 handler applies OSC colour changes to every buffer it owns.
 
 **Objection:** The Origin integration reads and writes `unix-terminal-screen`:
@@ -572,7 +572,7 @@ only while `workspace-decorations-dirty` is set.
 **Severity:** medium
 
 **Seed:** Treat a workspace switch like the alternate-screen swap of
-LEXTER-DRAFT-multi-buffer-D7: mark every screen and the decorations dirty at
+LEXTER-D33: mark every screen and the decorations dirty at
 the switch.
 
 ### LEXTER-DRAFT-data-structures-1e-critique-O15 — Autowrap ignores the scrolling region
@@ -763,13 +763,13 @@ delete the dirty bits and the docstring's claim.
   positions are kept apart everywhere the VT path touches them; the confusions
   in LEXTER-DRAFT-data-structures-1e-critique-O10 are at the edges.
 - **The palette's placement.** Keeping the palette on the screen and sending
-  it straight to the renderer (LEXTER-DRAFT-persistent-palette-D1, -D4) made
+  it straight to the renderer (LEXTER-D12, -D4) made
   the alternate-screen and OSC work simple; the faults in
   LEXTER-DRAFT-data-structures-1e-critique-O5 are in the generation protocol,
   not the placement.
 - **The alternate-screen pointer swap.** Entering and leaving are guarded and
   idempotent, the save slots are separate, and the swap forces a repaint, as
-  LEXTER-DRAFT-multi-buffer-D3, -D6, and -D7 intend.
+  LEXTER-D30, -D6, and -D7 intend.
 - **The PTYB format.** Framing and validation are complete and simple, and the
   recording tap does not alter parsing.
 - **The input redirect.** Interception by method combination needs no data

@@ -93,7 +93,7 @@ Log refine it.
 **Decision:** Each becomes a decision record, numbered after the Log's existing
 ones so that their numbers still match the original text, and placed first
 among the records with a migration note saying why:
-LEXTER-DRAFT-gui-lifecycle-D7 and LEXTER-DRAFT-multi-buffer-D6. A choice stated
+LEXTER-D20 and LEXTER-D27. A choice stated
 in a sentence within a larger section, such as the Screenshot Test Rig's choice
 of FNV-1a, stays prose.
 
@@ -176,7 +176,7 @@ paths are not pinned.
 
 ### Phase 3, batch 2 — Palette and rendering (`cbddb9c`)
 
-GUI Lifecycle's Approach B became LEXTER-DRAFT-gui-lifecycle-D7
+GUI Lifecycle's Approach B became LEXTER-D20
 (LEXTER-DRAFT-compass-migration-log-D2). Palette Paging (4 records) gained a
 Files table built from `04d69c2`. Persistent Palette (4 records) gained a Files
 table for its main work, and its H1 appendix became `## Update 2026-06-20 — OSC
@@ -197,9 +197,9 @@ C1 controls`, and the candidate fixes became LEXTER-DRAFT-encoding-ranges-O1.
 
 LEXTER-DRAFT-encoding-ranges-O1 was resolved
 (LEXTER-DRAFT-compass-migration-log-D3). Multi Buffer (7 records): the
-two-buffer choice became LEXTER-DRAFT-multi-buffer-D6, and the addendum became
+two-buffer choice became LEXTER-D27, and the addendum became
 `## Update 2026-06-09 — Stale Grid After Buffer Swap` with its decision as
-LEXTER-DRAFT-multi-buffer-D7. Mouse Reporting (7) and Screenshot Test Rig (8)
+LEXTER-D33. Mouse Reporting (7) and Screenshot Test Rig (8)
 had their bold-lead decisions made records and their Files lists made tables;
 the Screenshot Test Rig gained an Outstanding Work section gathered from the
 items it defers.

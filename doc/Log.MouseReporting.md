@@ -10,8 +10,8 @@ status:        Draft
 provenance:
   assistant:   opencode
 relates-to:
-  - LEXTER-DRAFT-input-redirect
-  - LEXTER-DRAFT-multi-buffer
+  - LEXTER-0002
+  - LEXTER-0006
 decisions:
   - LEXTER-DRAFT-mouse-reporting-D1
   - LEXTER-DRAFT-mouse-reporting-D2
@@ -154,7 +154,7 @@ not a sink.
 **Status:** Proposed
 
 **Context:** The existing `input-redirect` modal mechanism
-([LEXTER-DRAFT-input-redirect](Log.InputRedirect.md)) diverted only key
+([LEXTER-0002](Log.InputRedirect.md)) diverted only key
 and character input.
 
 **Decision:** The mechanism is extended to divert `:mouse-button`,

@@ -10,28 +10,72 @@ Table: Documents in the LEXTER namespace.
 
 | ID | Title | Genre | Scope | Status | Component |
 |---|---|---|---|---|---|
+| [LEXTER-0001](Log.StopFlag.md) | Stop Flag: Development Log | Log | component | Implemented | origin |
+| [LEXTER-0002](Log.InputRedirect.md) | Input Redirect and Chrome Mixins: Development Log | Log | component | Implemented | panes |
+| [LEXTER-0003](Log.PersistentPalette.md) | Persistent Palette Model: Development Log | Log | component | Implemented | renderer |
+| [LEXTER-0004](Log.PalettePaging.md) | GPU Palette Paging: Development Log | Log | component | Implemented | renderer |
+| [LEXTER-0005](Log.GUILifecycle.md) | GUI Lifecycle (Iteration API): Development Log | Log | component | Implemented | gui |
+| [LEXTER-0006](Log.MultiBuffer.md) | Alternate Screen Buffer: Development Log | Log | component | Implemented | vt |
+| [LEXTER-0007](Log.EnhancedDualWidth.md) | Enhanced Dual-Width Font Support: Development Log | Log | component | Implemented | fonts |
+| [LEXTER-0008](Log.OffscreenFBO.md) | Offscreen Render Target (FBO): Development Log | Log | component | Implemented | renderer |
 | [LEXTER-DRAFT-compass-migration](Plan.CompassMigration.md) | Compass Migration: Development Plan | Plan | project | Draft | — |
 | [LEXTER-DRAFT-compass-migration-log](Log.CompassMigration.md) | Compass Migration: Development Log | Log | project | Draft | — |
 | [LEXTER-DRAFT-data-structures-1e](Spec.DataStructures1e.md) | Data Structures, First Edition: Specification | Spec | project | Draft | — |
 | [LEXTER-DRAFT-data-structures-1e-critique](Eval.Critique.DataStructures1e.md) | Data Structures, First Edition: Critique | Eval (critique) | project | Draft | — |
 | [LEXTER-DRAFT-encoding-ranges](Log.EncodingRanges.md) | Encoding Ranges: Development Log | Log | component | Draft | vt |
-| [LEXTER-DRAFT-enhanced-dual-width](Log.EnhancedDualWidth.md) | Enhanced Dual-Width Font Support: Development Log | Log | component | Draft | fonts |
-| [LEXTER-DRAFT-gui-lifecycle](Log.GUILifecycle.md) | GUI Lifecycle (Iteration API): Development Log | Log | component | Draft | gui |
-| [LEXTER-DRAFT-input-redirect](Log.InputRedirect.md) | Input Redirect and Chrome Mixins: Development Log | Log | component | Draft | panes |
 | [LEXTER-DRAFT-layer-mechanics](Survey.LayerMechanics.md) | Layer Mechanics: Survey | Survey | component | Draft | renderer |
 | [LEXTER-DRAFT-mouse-reporting](Log.MouseReporting.md) | Mouse Reporting: Development Log | Log | component | Draft | vt |
-| [LEXTER-DRAFT-multi-buffer](Log.MultiBuffer.md) | Alternate Screen Buffer: Development Log | Log | component | Draft | vt |
-| [LEXTER-DRAFT-offscreen-fbo](Log.OffscreenFBO.md) | Offscreen Render Target (FBO): Development Log | Log | component | Draft | renderer |
-| [LEXTER-DRAFT-palette-paging](Log.PalettePaging.md) | GPU Palette Paging: Development Log | Log | component | Draft | renderer |
 | [LEXTER-DRAFT-pane-profiles](Plan.PaneProfiles.md) | Pane Profiles and Scrollback Viewing: Development Plan | Plan | component | Draft | panes |
-| [LEXTER-DRAFT-persistent-palette](Log.PersistentPalette.md) | Persistent Palette Model: Development Log | Log | component | Draft | renderer |
 | [LEXTER-DRAFT-screenshot-test-rig](Log.ScreenshotTestRig.md) | Screenshot Test Rig: Development Log | Log | component | Draft | test |
-| [LEXTER-DRAFT-stop-flag](Log.StopFlag.md) | Stop Flag: Development Log | Log | component | Draft | origin |
 
 Table: Decision, open-question, and memo records in the LEXTER namespace.
 
 | ID | Kind | Title | Status | Host |
 |---|---|---|---|---|
+| [LEXTER-D1](Log.StopFlag.md#lexter-d1--cooperative-cancellation-not-preemptive-termination) | Decision | Cooperative cancellation, not preemptive termination | Implemented | LEXTER-0001 |
+| [LEXTER-D2](Log.StopFlag.md#lexter-d2--the-flag-is-a-mutable-cons-cell-box-passed-by-reference) | Decision | The flag is a mutable cons cell ("box"), passed by reference | Implemented | LEXTER-0001 |
+| [LEXTER-D3](Log.StopFlag.md#lexter-d3--polarity-car--t-means-run-nil-means-stop) | Decision | Polarity: car = T means "run", NIL means "stop" | Implemented | LEXTER-0001 |
+| [LEXTER-D4](Log.StopFlag.md#lexter-d4--the-flag-is-optional-absence-means-run-until-window-close) | Decision | The flag is optional; absence means "run until window close" | Implemented | LEXTER-0001 |
+| [LEXTER-D5](Log.StopFlag.md#lexter-d5--the-flag-is-re-armed-on-every-restart-inside-the-entry-point) | Decision | The flag is re-armed on every (re)start, inside the entry point | Implemented | LEXTER-0001 |
+| [LEXTER-D6](Log.InputRedirect.md#lexter-d6--modality-is-per-pane-state-expressed-as-one-slot) | Decision | Modality is per-pane state, expressed as one slot | Implemented | LEXTER-0002 |
+| [LEXTER-D7](Log.InputRedirect.md#lexter-d7--interception-lives-in-method-combination-not-the-router) | Decision | Interception lives in method combination, not the router | Implemented | LEXTER-0002 |
+| [LEXTER-D8](Log.InputRedirect.md#lexter-d8--a-single-redirect-function-with-a-discriminated-signature) | Decision | A single redirect function with a discriminated signature | Implemented | LEXTER-0002 |
+| [LEXTER-D9](Log.InputRedirect.md#lexter-d9--selective-passthrough-via-dynamic-suppression) | Decision | Selective passthrough via dynamic suppression | Implemented | LEXTER-0002 |
+| [LEXTER-D10](Log.InputRedirect.md#lexter-d10--focus-trapping-falls-out-for-free) | Decision | Focus trapping falls out for free | Implemented | LEXTER-0002 |
+| [LEXTER-D11](Log.InputRedirect.md#lexter-d11--dialog-visuals-are-a-chrome-concern-drawn-by-the-decorator) | Decision | Dialog visuals are a chrome concern, drawn by the decorator | Implemented | LEXTER-0002 |
+| [LEXTER-D12](Log.PersistentPalette.md#lexter-d12--the-palette-lives-on-the-screen-model) | Decision | The palette lives on the screen model | Implemented | LEXTER-0003 |
+| [LEXTER-D13](Log.PersistentPalette.md#lexter-d13--change-tracking-via-a-generation-counter) | Decision | Change tracking via a generation counter | Implemented | LEXTER-0003 |
+| [LEXTER-D14](Log.PersistentPalette.md#lexter-d14--scope-persistent-state-and-generation-now-osc-parsing-later) | Decision | Scope: persistent state and generation now, OSC parsing later | Implemented | LEXTER-0003 |
+| [LEXTER-D15](Log.PersistentPalette.md#lexter-d15--palette-syncs-screen---renderer-directly-not-through-the-grid) | Decision | Palette syncs screen -> renderer directly, not through the grid | Implemented | LEXTER-0003 |
+| [LEXTER-D16](Log.PalettePaging.md#lexter-d16--larger-ubo-plus-a-slot-uniform-option-a) | Decision | Larger UBO plus a slot uniform (Option A) | Implemented | LEXTER-0004 |
+| [LEXTER-D17](Log.PalettePaging.md#lexter-d17--four-slots-sized-to-the-guaranteed-ubo-floor) | Decision | Four slots, sized to the guaranteed UBO floor | Implemented | LEXTER-0004 |
+| [LEXTER-D18](Log.PalettePaging.md#lexter-d18--per-slot-generation-tracking) | Decision | Per-slot generation tracking | Implemented | LEXTER-0004 |
+| [LEXTER-D19](Log.PalettePaging.md#lexter-d19--slot-threaded-through-the-pane-protocol) | Decision | Slot threaded through the pane protocol | Implemented | LEXTER-0004 |
+| [LEXTER-D20](Log.GUILifecycle.md#lexter-d20--approach-b-main-thread-for-gui-background-for-everything-else) | Decision | Approach B: main thread for GUI, background for everything else | Implemented | LEXTER-0005 |
+| [LEXTER-D21](Log.GUILifecycle.md#lexter-d21--a-window-level-protocol-in-core-lexter-lextergui) | Decision | A window-level protocol in core Lexter (lexter/gui) | Implemented | LEXTER-0005 |
+| [LEXTER-D22](Log.GUILifecycle.md#lexter-d22--the-dispatcher-owns-the-loop-the-caller-owns-glfw-initterminate) | Decision | The dispatcher owns the loop; the caller owns GLFW init/terminate | Implemented | LEXTER-0005 |
+| [LEXTER-D23](Log.GUILifecycle.md#lexter-d23--per-tick-context-switching-is-mandatory) | Decision | Per-tick context switching is mandatory | Implemented | LEXTER-0005 |
+| [LEXTER-D24](Log.GUILifecycle.md#lexter-d24--config-on-struct-arg-free-generics) | Decision | Config-on-struct, arg-free generics | Implemented | LEXTER-0005 |
+| [LEXTER-D25](Log.GUILifecycle.md#lexter-d25--replace-with-init-window-promote-locals-to-slots) | Decision | Replace with-init-window; promote locals to slots | Implemented | LEXTER-0005 |
+| [LEXTER-D26](Log.GUILifecycle.md#lexter-d26--idempotent-destroy-standalone-wrappers-preserved) | Decision | Idempotent destroy; standalone wrappers preserved | Implemented | LEXTER-0005 |
+| [LEXTER-D27](Log.MultiBuffer.md#lexter-d27--two-buffer-pointer-swap-not-snapshot-and-restore) | Decision | Two-buffer pointer swap, not snapshot-and-restore | Implemented | LEXTER-0006 |
+| [LEXTER-D28](Log.MultiBuffer.md#lexter-d28--handler-owns-the-buffers-renderer-follows-it) | Decision | Handler owns the buffers; renderer follows it | Implemented | LEXTER-0006 |
+| [LEXTER-D29](Log.MultiBuffer.md#lexter-d29--one-persistent-alternate-buffer-created-lazily) | Decision | One persistent alternate buffer, created lazily | Implemented | LEXTER-0006 |
+| [LEXTER-D30](Log.MultiBuffer.md#lexter-d30--dedicated-cursor-save-slots-for-10481049) | Decision | Dedicated cursor-save slots for 1048/1049 | Implemented | LEXTER-0006 |
+| [LEXTER-D31](Log.MultiBuffer.md#lexter-d31--resize-resizes-both-buffers) | Decision | Resize resizes both buffers | Implemented | LEXTER-0006 |
+| [LEXTER-D32](Log.MultiBuffer.md#lexter-d32--alternate-buffer-carries-no-scrollback) | Decision | Alternate buffer carries no scrollback | Implemented | LEXTER-0006 |
+| [LEXTER-D33](Log.MultiBuffer.md#lexter-d33--force-a-full-repaint-at-the-swap-mode-agnostically) | Decision | Force a full repaint at the swap, mode-agnostically | Implemented | LEXTER-0006 |
+| [LEXTER-D34](Log.EnhancedDualWidth.md#lexter-d34--separate-storage-width-from-cell-width) | Decision | Separate storage width from cell width | Implemented | LEXTER-0007 |
+| [LEXTER-D35](Log.EnhancedDualWidth.md#lexter-d35--a-manual-override-first-auto-detection-second) | Decision | A manual override first, auto-detection second | Implemented | LEXTER-0007 |
+| [LEXTER-D36](Log.EnhancedDualWidth.md#lexter-d36--auto-detect-cell-width-from-a-representative-ascii-glyph) | Decision | Auto-detect cell width from a representative ASCII glyph | Implemented | LEXTER-0007 |
+| [LEXTER-D37](Log.EnhancedDualWidth.md#lexter-d37--wide-aware-bitmap-extraction-in-the-pcf-loader) | Decision | Wide-aware bitmap extraction in the PCF loader | Implemented | LEXTER-0007 |
+| [LEXTER-D38](Log.EnhancedDualWidth.md#lexter-d38--reshape-the-atlas-to-a-roughly-square-limit-bounded-layout) | Decision | Reshape the atlas to a roughly-square, limit-bounded layout | Implemented | LEXTER-0007 |
+| [LEXTER-D39](Log.OffscreenFBO.md#lexter-d39--opt-in-not-always-on) | Decision | Opt-in, not always-on | Implemented | LEXTER-0008 |
+| [LEXTER-D40](Log.OffscreenFBO.md#lexter-d40--window-resolution-fbo-pixel-scale-unchanged) | Decision | Window-resolution FBO; pixel-scale unchanged | Implemented | LEXTER-0008 |
+| [LEXTER-D41](Log.OffscreenFBO.md#lexter-d41--rgba8-colour-format) | Decision | RGBA8 colour format | Implemented | LEXTER-0008 |
+| [LEXTER-D42](Log.OffscreenFBO.md#lexter-d42--fbo-is-the-screenshot-source) | Decision | FBO is the screenshot source | Implemented | LEXTER-0008 |
+| [LEXTER-D43](Log.OffscreenFBO.md#lexter-d43--capture-forces-a-render) | Decision | Capture forces a render | Implemented | LEXTER-0008 |
+| [LEXTER-D44](Log.OffscreenFBO.md#lexter-d44--hidden-window-flag-for-tests) | Decision | Hidden-window flag for tests | Implemented | LEXTER-0008 |
 | [LEXTER-DRAFT-compass-migration-D1](Plan.CompassMigration.md#lexter-draft-compass-migration-d1--every-document-and-record-takes-a-provisional-identifier) | Decision | Every document and record takes a provisional identifier | Proposed | LEXTER-DRAFT-compass-migration |
 | [LEXTER-DRAFT-compass-migration-D2](Plan.CompassMigration.md#lexter-draft-compass-migration-d2--every-migrated-document-is-status-draft) | Decision | Every migrated document is status Draft | Proposed | LEXTER-DRAFT-compass-migration |
 | [LEXTER-DRAFT-compass-migration-D3](Plan.CompassMigration.md#lexter-draft-compass-migration-d3--decision-records-add-no-content) | Decision | Decision records add no content | Proposed | LEXTER-DRAFT-compass-migration |
@@ -45,24 +89,6 @@ Table: Decision, open-question, and memo records in the LEXTER namespace.
 | [LEXTER-DRAFT-compass-migration-log-D1](Log.CompassMigration.md#lexter-draft-compass-migration-log-d1--pinning-is-brought-forward-into-phase-2) | Decision | Pinning is brought forward into Phase 2 | Proposed | LEXTER-DRAFT-compass-migration-log |
 | [LEXTER-DRAFT-compass-migration-log-D2](Log.CompassMigration.md#lexter-draft-compass-migration-log-d2--a-decision-written-as-a-section-becomes-a-record-placed-first) | Decision | A decision written as a section becomes a record, placed first | Proposed | LEXTER-DRAFT-compass-migration-log |
 | [LEXTER-DRAFT-compass-migration-log-D3](Log.CompassMigration.md#lexter-draft-compass-migration-log-d3--a-stewards-answer-to-an-open-question-is-recorded-as-a-resolution) | Decision | A steward's answer to an open question is recorded as a Resolution | Proposed | LEXTER-DRAFT-compass-migration-log |
-| [LEXTER-DRAFT-enhanced-dual-width-D1](Log.EnhancedDualWidth.md#lexter-draft-enhanced-dual-width-d1--separate-storage-width-from-cell-width) | Decision | Separate storage width from cell width | Proposed | LEXTER-DRAFT-enhanced-dual-width |
-| [LEXTER-DRAFT-enhanced-dual-width-D2](Log.EnhancedDualWidth.md#lexter-draft-enhanced-dual-width-d2--a-manual-override-first-auto-detection-second) | Decision | A manual override first, auto-detection second | Proposed | LEXTER-DRAFT-enhanced-dual-width |
-| [LEXTER-DRAFT-enhanced-dual-width-D3](Log.EnhancedDualWidth.md#lexter-draft-enhanced-dual-width-d3--auto-detect-cell-width-from-a-representative-ascii-glyph) | Decision | Auto-detect cell width from a representative ASCII glyph | Proposed | LEXTER-DRAFT-enhanced-dual-width |
-| [LEXTER-DRAFT-enhanced-dual-width-D4](Log.EnhancedDualWidth.md#lexter-draft-enhanced-dual-width-d4--wide-aware-bitmap-extraction-in-the-pcf-loader) | Decision | Wide-aware bitmap extraction in the PCF loader | Proposed | LEXTER-DRAFT-enhanced-dual-width |
-| [LEXTER-DRAFT-enhanced-dual-width-D5](Log.EnhancedDualWidth.md#lexter-draft-enhanced-dual-width-d5--reshape-the-atlas-to-a-roughly-square-limit-bounded-layout) | Decision | Reshape the atlas to a roughly-square, limit-bounded layout | Proposed | LEXTER-DRAFT-enhanced-dual-width |
-| [LEXTER-DRAFT-gui-lifecycle-D1](Log.GUILifecycle.md#lexter-draft-gui-lifecycle-d1--a-window-level-protocol-in-core-lexter-lextergui) | Decision | A window-level protocol in core Lexter (lexter/gui) | Proposed | LEXTER-DRAFT-gui-lifecycle |
-| [LEXTER-DRAFT-gui-lifecycle-D2](Log.GUILifecycle.md#lexter-draft-gui-lifecycle-d2--the-dispatcher-owns-the-loop-the-caller-owns-glfw-initterminate) | Decision | The dispatcher owns the loop; the caller owns GLFW init/terminate | Proposed | LEXTER-DRAFT-gui-lifecycle |
-| [LEXTER-DRAFT-gui-lifecycle-D3](Log.GUILifecycle.md#lexter-draft-gui-lifecycle-d3--per-tick-context-switching-is-mandatory) | Decision | Per-tick context switching is mandatory | Proposed | LEXTER-DRAFT-gui-lifecycle |
-| [LEXTER-DRAFT-gui-lifecycle-D4](Log.GUILifecycle.md#lexter-draft-gui-lifecycle-d4--config-on-struct-arg-free-generics) | Decision | Config-on-struct, arg-free generics | Proposed | LEXTER-DRAFT-gui-lifecycle |
-| [LEXTER-DRAFT-gui-lifecycle-D5](Log.GUILifecycle.md#lexter-draft-gui-lifecycle-d5--replace-with-init-window-promote-locals-to-slots) | Decision | Replace with-init-window; promote locals to slots | Proposed | LEXTER-DRAFT-gui-lifecycle |
-| [LEXTER-DRAFT-gui-lifecycle-D6](Log.GUILifecycle.md#lexter-draft-gui-lifecycle-d6--idempotent-destroy-standalone-wrappers-preserved) | Decision | Idempotent destroy; standalone wrappers preserved | Proposed | LEXTER-DRAFT-gui-lifecycle |
-| [LEXTER-DRAFT-gui-lifecycle-D7](Log.GUILifecycle.md#lexter-draft-gui-lifecycle-d7--approach-b-main-thread-for-gui-background-for-everything-else) | Decision | Approach B: main thread for GUI, background for everything else | Proposed | LEXTER-DRAFT-gui-lifecycle |
-| [LEXTER-DRAFT-input-redirect-D1](Log.InputRedirect.md#lexter-draft-input-redirect-d1--modality-is-per-pane-state-expressed-as-one-slot) | Decision | Modality is per-pane state, expressed as one slot | Proposed | LEXTER-DRAFT-input-redirect |
-| [LEXTER-DRAFT-input-redirect-D2](Log.InputRedirect.md#lexter-draft-input-redirect-d2--interception-lives-in-method-combination-not-the-router) | Decision | Interception lives in method combination, not the router | Proposed | LEXTER-DRAFT-input-redirect |
-| [LEXTER-DRAFT-input-redirect-D3](Log.InputRedirect.md#lexter-draft-input-redirect-d3--a-single-redirect-function-with-a-discriminated-signature) | Decision | A single redirect function with a discriminated signature | Proposed | LEXTER-DRAFT-input-redirect |
-| [LEXTER-DRAFT-input-redirect-D4](Log.InputRedirect.md#lexter-draft-input-redirect-d4--selective-passthrough-via-dynamic-suppression) | Decision | Selective passthrough via dynamic suppression | Proposed | LEXTER-DRAFT-input-redirect |
-| [LEXTER-DRAFT-input-redirect-D5](Log.InputRedirect.md#lexter-draft-input-redirect-d5--focus-trapping-falls-out-for-free) | Decision | Focus trapping falls out for free | Proposed | LEXTER-DRAFT-input-redirect |
-| [LEXTER-DRAFT-input-redirect-D6](Log.InputRedirect.md#lexter-draft-input-redirect-d6--dialog-visuals-are-a-chrome-concern-drawn-by-the-decorator) | Decision | Dialog visuals are a chrome concern, drawn by the decorator | Proposed | LEXTER-DRAFT-input-redirect |
 | [LEXTER-DRAFT-mouse-reporting-D1](Log.MouseReporting.md#lexter-draft-mouse-reporting-d1--coordinates-are-pane-content-relative) | Decision | Coordinates are pane-content-relative | Proposed | LEXTER-DRAFT-mouse-reporting |
 | [LEXTER-DRAFT-mouse-reporting-D2](Log.MouseReporting.md#lexter-draft-mouse-reporting-d2--drag-capture) | Decision | Drag capture | Proposed | LEXTER-DRAFT-mouse-reporting |
 | [LEXTER-DRAFT-mouse-reporting-D3](Log.MouseReporting.md#lexter-draft-mouse-reporting-d3--cell-granularity-motion) | Decision | Cell-granularity motion | Proposed | LEXTER-DRAFT-mouse-reporting |
@@ -70,23 +96,6 @@ Table: Decision, open-question, and memo records in the LEXTER namespace.
 | [LEXTER-DRAFT-mouse-reporting-D5](Log.MouseReporting.md#lexter-draft-mouse-reporting-d5--direct-host-write-back) | Decision | Direct host write-back | Proposed | LEXTER-DRAFT-mouse-reporting |
 | [LEXTER-DRAFT-mouse-reporting-D6](Log.MouseReporting.md#lexter-draft-mouse-reporting-d6--substrate-fall-through) | Decision | Substrate fall-through | Proposed | LEXTER-DRAFT-mouse-reporting |
 | [LEXTER-DRAFT-mouse-reporting-D7](Log.MouseReporting.md#lexter-draft-mouse-reporting-d7--redirect-captures-the-pointer-too) | Decision | Redirect captures the pointer too | Proposed | LEXTER-DRAFT-mouse-reporting |
-| [LEXTER-DRAFT-multi-buffer-D1](Log.MultiBuffer.md#lexter-draft-multi-buffer-d1--handler-owns-the-buffers-renderer-follows-it) | Decision | Handler owns the buffers; renderer follows it | Proposed | LEXTER-DRAFT-multi-buffer |
-| [LEXTER-DRAFT-multi-buffer-D2](Log.MultiBuffer.md#lexter-draft-multi-buffer-d2--one-persistent-alternate-buffer-created-lazily) | Decision | One persistent alternate buffer, created lazily | Proposed | LEXTER-DRAFT-multi-buffer |
-| [LEXTER-DRAFT-multi-buffer-D3](Log.MultiBuffer.md#lexter-draft-multi-buffer-d3--dedicated-cursor-save-slots-for-10481049) | Decision | Dedicated cursor-save slots for 1048/1049 | Proposed | LEXTER-DRAFT-multi-buffer |
-| [LEXTER-DRAFT-multi-buffer-D4](Log.MultiBuffer.md#lexter-draft-multi-buffer-d4--resize-resizes-both-buffers) | Decision | Resize resizes both buffers | Proposed | LEXTER-DRAFT-multi-buffer |
-| [LEXTER-DRAFT-multi-buffer-D5](Log.MultiBuffer.md#lexter-draft-multi-buffer-d5--alternate-buffer-carries-no-scrollback) | Decision | Alternate buffer carries no scrollback | Proposed | LEXTER-DRAFT-multi-buffer |
-| [LEXTER-DRAFT-multi-buffer-D6](Log.MultiBuffer.md#lexter-draft-multi-buffer-d6--two-buffer-pointer-swap-not-snapshot-and-restore) | Decision | Two-buffer pointer swap, not snapshot-and-restore | Proposed | LEXTER-DRAFT-multi-buffer |
-| [LEXTER-DRAFT-multi-buffer-D7](Log.MultiBuffer.md#lexter-draft-multi-buffer-d7--force-a-full-repaint-at-the-swap-mode-agnostically) | Decision | Force a full repaint at the swap, mode-agnostically | Proposed | LEXTER-DRAFT-multi-buffer |
-| [LEXTER-DRAFT-offscreen-fbo-D1](Log.OffscreenFBO.md#lexter-draft-offscreen-fbo-d1--opt-in-not-always-on) | Decision | Opt-in, not always-on | Proposed | LEXTER-DRAFT-offscreen-fbo |
-| [LEXTER-DRAFT-offscreen-fbo-D2](Log.OffscreenFBO.md#lexter-draft-offscreen-fbo-d2--window-resolution-fbo-pixel-scale-unchanged) | Decision | Window-resolution FBO; pixel-scale unchanged | Proposed | LEXTER-DRAFT-offscreen-fbo |
-| [LEXTER-DRAFT-offscreen-fbo-D3](Log.OffscreenFBO.md#lexter-draft-offscreen-fbo-d3--rgba8-colour-format) | Decision | RGBA8 colour format | Proposed | LEXTER-DRAFT-offscreen-fbo |
-| [LEXTER-DRAFT-offscreen-fbo-D4](Log.OffscreenFBO.md#lexter-draft-offscreen-fbo-d4--fbo-is-the-screenshot-source) | Decision | FBO is the screenshot source | Proposed | LEXTER-DRAFT-offscreen-fbo |
-| [LEXTER-DRAFT-offscreen-fbo-D5](Log.OffscreenFBO.md#lexter-draft-offscreen-fbo-d5--capture-forces-a-render) | Decision | Capture forces a render | Proposed | LEXTER-DRAFT-offscreen-fbo |
-| [LEXTER-DRAFT-offscreen-fbo-D6](Log.OffscreenFBO.md#lexter-draft-offscreen-fbo-d6--hidden-window-flag-for-tests) | Decision | Hidden-window flag for tests | Proposed | LEXTER-DRAFT-offscreen-fbo |
-| [LEXTER-DRAFT-palette-paging-D1](Log.PalettePaging.md#lexter-draft-palette-paging-d1--larger-ubo-plus-a-slot-uniform-option-a) | Decision | Larger UBO plus a slot uniform (Option A) | Proposed | LEXTER-DRAFT-palette-paging |
-| [LEXTER-DRAFT-palette-paging-D2](Log.PalettePaging.md#lexter-draft-palette-paging-d2--four-slots-sized-to-the-guaranteed-ubo-floor) | Decision | Four slots, sized to the guaranteed UBO floor | Proposed | LEXTER-DRAFT-palette-paging |
-| [LEXTER-DRAFT-palette-paging-D3](Log.PalettePaging.md#lexter-draft-palette-paging-d3--per-slot-generation-tracking) | Decision | Per-slot generation tracking | Proposed | LEXTER-DRAFT-palette-paging |
-| [LEXTER-DRAFT-palette-paging-D4](Log.PalettePaging.md#lexter-draft-palette-paging-d4--slot-threaded-through-the-pane-protocol) | Decision | Slot threaded through the pane protocol | Proposed | LEXTER-DRAFT-palette-paging |
 | [LEXTER-DRAFT-pane-profiles-D1](Plan.PaneProfiles.md#lexter-draft-pane-profiles-d1--settings-live-in-pane-profile-objects) | Decision | Settings live in pane-profile objects | Proposed | LEXTER-DRAFT-pane-profiles |
 | [LEXTER-DRAFT-pane-profiles-D2](Plan.PaneProfiles.md#lexter-draft-pane-profiles-d2--resolution-walks-parent-links-then-containment) | Decision | Resolution walks parent links, then containment | Proposed | LEXTER-DRAFT-pane-profiles |
 | [LEXTER-DRAFT-pane-profiles-D3](Plan.PaneProfiles.md#lexter-draft-pane-profiles-d3--each-object-owns-a-private-profile-writers-write-it) | Decision | Each object owns a private profile; writers write it | Proposed | LEXTER-DRAFT-pane-profiles |
@@ -96,10 +105,6 @@ Table: Decision, open-question, and memo records in the LEXTER namespace.
 | [LEXTER-DRAFT-pane-profiles-D7](Plan.PaneProfiles.md#lexter-draft-pane-profiles-d7--the-wheel-factor-applies-to-local-scrolling-only) | Decision | The wheel factor applies to local scrolling only | Proposed | LEXTER-DRAFT-pane-profiles |
 | [LEXTER-DRAFT-pane-profiles-D8](Plan.PaneProfiles.md#lexter-draft-pane-profiles-d8--unseen-output-is-pane-state-polled-by-the-decorator) | Decision | Unseen output is pane state, polled by the decorator | Proposed | LEXTER-DRAFT-pane-profiles |
 | [LEXTER-DRAFT-pane-profiles-D9](Plan.PaneProfiles.md#lexter-draft-pane-profiles-d9--terminal-events-reach-the-apl-layer-through-a-generic-function) | Decision | Terminal events reach the APL layer through a generic function | Proposed | LEXTER-DRAFT-pane-profiles |
-| [LEXTER-DRAFT-persistent-palette-D1](Log.PersistentPalette.md#lexter-draft-persistent-palette-d1--the-palette-lives-on-the-screen-model) | Decision | The palette lives on the screen model | Proposed | LEXTER-DRAFT-persistent-palette |
-| [LEXTER-DRAFT-persistent-palette-D2](Log.PersistentPalette.md#lexter-draft-persistent-palette-d2--change-tracking-via-a-generation-counter) | Decision | Change tracking via a generation counter | Proposed | LEXTER-DRAFT-persistent-palette |
-| [LEXTER-DRAFT-persistent-palette-D3](Log.PersistentPalette.md#lexter-draft-persistent-palette-d3--scope-persistent-state-and-generation-now-osc-parsing-later) | Decision | Scope: persistent state and generation now, OSC parsing later | Proposed | LEXTER-DRAFT-persistent-palette |
-| [LEXTER-DRAFT-persistent-palette-D4](Log.PersistentPalette.md#lexter-draft-persistent-palette-d4--palette-syncs-screen---renderer-directly-not-through-the-grid) | Decision | Palette syncs screen -> renderer directly, not through the grid | Proposed | LEXTER-DRAFT-persistent-palette |
 | [LEXTER-DRAFT-screenshot-test-rig-D1](Log.ScreenshotTestRig.md#lexter-draft-screenshot-test-rig-d1--record-the-raw-input-not-the-cell-matrix) | Decision | Record the raw input, not the cell matrix | Proposed | LEXTER-DRAFT-screenshot-test-rig |
 | [LEXTER-DRAFT-screenshot-test-rig-D2](Log.ScreenshotTestRig.md#lexter-draft-screenshot-test-rig-d2--startstop-recording) | Decision | Start/stop recording | Proposed | LEXTER-DRAFT-screenshot-test-rig |
 | [LEXTER-DRAFT-screenshot-test-rig-D3](Log.ScreenshotTestRig.md#lexter-draft-screenshot-test-rig-d3--exact-pixel-checksums) | Decision | Exact-pixel checksums | Proposed | LEXTER-DRAFT-screenshot-test-rig |
@@ -108,11 +113,6 @@ Table: Decision, open-question, and memo records in the LEXTER namespace.
 | [LEXTER-DRAFT-screenshot-test-rig-D6](Log.ScreenshotTestRig.md#lexter-draft-screenshot-test-rig-d6--input-recording-deferred) | Decision | Input recording deferred | Proposed | LEXTER-DRAFT-screenshot-test-rig |
 | [LEXTER-DRAFT-screenshot-test-rig-D7](Log.ScreenshotTestRig.md#lexter-draft-screenshot-test-rig-d7--single-terminal-recording-for-now) | Decision | Single-terminal recording for now | Proposed | LEXTER-DRAFT-screenshot-test-rig |
 | [LEXTER-DRAFT-screenshot-test-rig-D8](Log.ScreenshotTestRig.md#lexter-draft-screenshot-test-rig-d8--no-coupled-authoring-constructor) | Decision | No coupled authoring constructor | Proposed | LEXTER-DRAFT-screenshot-test-rig |
-| [LEXTER-DRAFT-stop-flag-D1](Log.StopFlag.md#lexter-draft-stop-flag-d1--cooperative-cancellation-not-preemptive-termination) | Decision | Cooperative cancellation, not preemptive termination | Proposed | LEXTER-DRAFT-stop-flag |
-| [LEXTER-DRAFT-stop-flag-D2](Log.StopFlag.md#lexter-draft-stop-flag-d2--the-flag-is-a-mutable-cons-cell-box-passed-by-reference) | Decision | The flag is a mutable cons cell ("box"), passed by reference | Proposed | LEXTER-DRAFT-stop-flag |
-| [LEXTER-DRAFT-stop-flag-D3](Log.StopFlag.md#lexter-draft-stop-flag-d3--polarity-car--t-means-run-nil-means-stop) | Decision | Polarity: car = T means "run", NIL means "stop" | Proposed | LEXTER-DRAFT-stop-flag |
-| [LEXTER-DRAFT-stop-flag-D4](Log.StopFlag.md#lexter-draft-stop-flag-d4--the-flag-is-optional-absence-means-run-until-window-close) | Decision | The flag is optional; absence means "run until window close" | Proposed | LEXTER-DRAFT-stop-flag |
-| [LEXTER-DRAFT-stop-flag-D5](Log.StopFlag.md#lexter-draft-stop-flag-d5--the-flag-is-re-armed-on-every-restart-inside-the-entry-point) | Decision | The flag is re-armed on every (re)start, inside the entry point | Proposed | LEXTER-DRAFT-stop-flag |
 | [LEXTER-DRAFT-compass-migration-O1](Plan.CompassMigration.md#lexter-draft-compass-migration-o1--which-documents-are-numbered-first) | Open question | Which documents are numbered first | — | LEXTER-DRAFT-compass-migration |
 | [LEXTER-DRAFT-compass-migration-O2](Plan.CompassMigration.md#lexter-draft-compass-migration-o2--a-compiled-readme) | Open question | A compiled README | — | LEXTER-DRAFT-compass-migration |
 | [LEXTER-DRAFT-data-structures-1e-critique-O1](Eval.Critique.DataStructures1e.md#lexter-draft-data-structures-1e-critique-o1--double-width-characters-never-reach-the-gpu-from-a-screen) | Open question | Double-width characters never reach the GPU from a screen | — | LEXTER-DRAFT-data-structures-1e-critique |

@@ -12,8 +12,8 @@ provenance:
 relates-to:
   - LEXTER-DRAFT-data-structures-1e-critique
   - LEXTER-DRAFT-mouse-reporting
-  - LEXTER-DRAFT-input-redirect
-  - LEXTER-DRAFT-multi-buffer
+  - LEXTER-0002
+  - LEXTER-0006
   - LEXTER-DRAFT-screenshot-test-rig
 cites:
   - title:    "Session transcript ses_febe-LexterCritique"

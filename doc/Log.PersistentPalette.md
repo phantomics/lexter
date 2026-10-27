@@ -1,21 +1,25 @@
 ---
-id:            LEXTER-DRAFT-persistent-palette
+id:            LEXTER-0003
 title:         "Persistent Palette Model: Development Log"
 genre:         Log
 scope:         component
 project:       Lexter
 component:     renderer
 language:      en
-status:        Draft
+status:        Implemented
+authors:
+  - Andrew Sengul
+approved-by:   Andrew Sengul
+reviewed:      2026-10-26
 provenance:
   assistant:   opencode
 relates-to:
   - LEXTER-DRAFT-multi-buffer
 decisions:
-  - LEXTER-DRAFT-persistent-palette-D1
-  - LEXTER-DRAFT-persistent-palette-D2
-  - LEXTER-DRAFT-persistent-palette-D3
-  - LEXTER-DRAFT-persistent-palette-D4
+  - LEXTER-D12
+  - LEXTER-D13
+  - LEXTER-D14
+  - LEXTER-D15
 ---
 
 # Persistent Palette Model: Development Log
@@ -79,9 +83,9 @@ ownership and change tracking, not new rendering machinery.
 
 ## Design Decisions
 
-### LEXTER-DRAFT-persistent-palette-D1 — The palette lives on the screen model
+### LEXTER-D12 — The palette lives on the screen model
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** Where should the persistent palette state live -- on the
 screen model, on the workspace/compositor, or on the renderer?
@@ -106,9 +110,9 @@ independent palette for free: a 3270 pane and a Unix shell in the same
 workspace can carry different color schemes without contending for a
 shared global.
 
-### LEXTER-DRAFT-persistent-palette-D2 — Change tracking via a generation counter
+### LEXTER-D13 — Change tracking via a generation counter
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** How does the renderer know when to re-upload the palette?
 
@@ -128,9 +132,9 @@ counter also gives a clean, race-free "has this changed?" predicate and
 keeps the GPU upload off the hot path for the common case where the
 palette is static frame to frame.
 
-### LEXTER-DRAFT-persistent-palette-D3 — Scope: persistent state and generation now, OSC parsing later
+### LEXTER-D14 — Scope: persistent state and generation now, OSC parsing later
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** Should this change also parse the OSC sequences that drive
 palette changes?
@@ -149,9 +153,9 @@ built and verified on their own. The mutation functions
 hooks a future OSC handler will call -- so deferring the parser lets the
 color model land first.
 
-### LEXTER-DRAFT-persistent-palette-D4 — Palette syncs screen -> renderer directly, not through the grid
+### LEXTER-D15 — Palette syncs screen -> renderer directly, not through the grid
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** Should `flush-to-display` carry the palette to the GPU, the
 way it carries swatches?

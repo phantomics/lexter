@@ -1,32 +1,36 @@
 ---
-id:            LEXTER-DRAFT-palette-paging
+id:            LEXTER-0004
 title:         "GPU Palette Paging: Development Log"
 genre:         Log
 scope:         component
 project:       Lexter
 component:     renderer
 language:      en
-status:        Draft
+status:        Implemented
+authors:
+  - Andrew Sengul
+approved-by:   Andrew Sengul
+reviewed:      2026-10-26
 provenance:
   assistant:   opencode
 relates-to:
-  - LEXTER-DRAFT-persistent-palette
+  - LEXTER-0003
 cites:
   - title:    "Session transcript ses_2263-Lexter6"
     locator:  "session-ses_2263-Lexter6.md, line 783"
     external: true
 decisions:
-  - LEXTER-DRAFT-palette-paging-D1
-  - LEXTER-DRAFT-palette-paging-D2
-  - LEXTER-DRAFT-palette-paging-D3
-  - LEXTER-DRAFT-palette-paging-D4
+  - LEXTER-D16
+  - LEXTER-D17
+  - LEXTER-D18
+  - LEXTER-D19
 ---
 
 # GPU Palette Paging: Development Log
 
 This document chronicles the extension of Lexter's palette system from a
 single GPU-resident palette to several. The persistent palette model
-([LEXTER-DRAFT-persistent-palette](Log.PersistentPalette.md)) gave each screen its own 256-color palette synced to a single-palette
+([LEXTER-0003](Log.PersistentPalette.md)) gave each screen its own 256-color palette synced to a single-palette
 UBO. Palette paging widens that UBO to hold several palettes at once and
 adds a slot-selection uniform, so switching which palette a pane renders
 with costs one integer uniform write and zero data transfer.
@@ -65,9 +69,9 @@ pointer move on the GPU, not a memory transfer.
 
 ## Design Decisions
 
-### LEXTER-DRAFT-palette-paging-D1 — Larger UBO plus a slot uniform (Option A)
+### LEXTER-D16 — Larger UBO plus a slot uniform (Option A)
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** How should multiple palettes be made simultaneously
 resident and selectable?
@@ -106,9 +110,9 @@ denser and the GPU normalizes it for free. But floats map cleanly to
 irrelevant, so the float UBO was retained. The density argument is the
 one that would tip a future move to Option B.
 
-### LEXTER-DRAFT-palette-paging-D2 — Four slots, sized to the guaranteed UBO floor
+### LEXTER-D17 — Four slots, sized to the guaranteed UBO floor
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** How many palette slots? The OpenGL 3.3 spec guarantees
 `GL_MAX_UNIFORM_BLOCK_SIZE` of at least 16 KB; typical desktop hardware
@@ -127,9 +131,9 @@ palette, four slots is exactly what every conformant implementation must
 support -- and four distinct palettes is already more than a terminal is
 likely to show at once.
 
-### LEXTER-DRAFT-palette-paging-D3 — Per-slot generation tracking
+### LEXTER-D18 — Per-slot generation tracking
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** How does the renderer decide when a given slot needs
 re-uploading?
@@ -149,9 +153,9 @@ Mutating the palette in slot 2 re-uploads slot 2 and leaves slots 0, 1,
 and 3 untouched. A partial `buffer-sub-data` write at the slot's byte
 offset means the other resident palettes are never disturbed.
 
-### LEXTER-DRAFT-palette-paging-D4 — Slot threaded through the pane protocol
+### LEXTER-D19 — Slot threaded through the pane protocol
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** Where does a pane's slot assignment live, and how does it
 reach the renderer?

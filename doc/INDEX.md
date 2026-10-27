@@ -12,6 +12,7 @@ Table: Documents in the LEXTER namespace.
 |---|---|---|---|---|---|
 | [LEXTER-DRAFT-compass-migration](Plan.CompassMigration.md) | Compass Migration: Development Plan | Plan | project | Draft | — |
 | [LEXTER-DRAFT-compass-migration-log](Log.CompassMigration.md) | Compass Migration: Development Log | Log | project | Draft | — |
+| [LEXTER-DRAFT-data-structures-1e](Spec.DataStructures1e.md) | Data Structures, First Edition: Specification | Spec | project | Draft | — |
 | [LEXTER-DRAFT-encoding-ranges](Log.EncodingRanges.md) | Encoding Ranges: Development Log | Log | component | Draft | vt |
 | [LEXTER-DRAFT-enhanced-dual-width](Log.EnhancedDualWidth.md) | Enhanced Dual-Width Font Support: Development Log | Log | component | Draft | fonts |
 | [LEXTER-DRAFT-gui-lifecycle](Log.GUILifecycle.md) | GUI Lifecycle (Iteration API): Development Log | Log | component | Draft | gui |

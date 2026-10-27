@@ -1,20 +1,24 @@
 ---
-id:            LEXTER-DRAFT-stop-flag
+id:            LEXTER-0001
 title:         "Stop Flag: Development Log"
 genre:         Log
 scope:         component
 project:       Lexter
 component:     origin
 language:      en
-status:        Draft
+status:        Implemented
+authors:
+  - Andrew Sengul
+approved-by:   Andrew Sengul
+reviewed:      2026-10-26
 provenance:
   assistant:   opencode
 decisions:
-  - LEXTER-DRAFT-stop-flag-D1
-  - LEXTER-DRAFT-stop-flag-D2
-  - LEXTER-DRAFT-stop-flag-D3
-  - LEXTER-DRAFT-stop-flag-D4
-  - LEXTER-DRAFT-stop-flag-D5
+  - LEXTER-D1
+  - LEXTER-D2
+  - LEXTER-D3
+  - LEXTER-D4
+  - LEXTER-D5
 ---
 
 # Stop Flag: Development Log
@@ -85,9 +89,9 @@ than the normal stop path.
 
 ## Design Decisions
 
-### LEXTER-DRAFT-stop-flag-D1 — Cooperative cancellation, not preemptive termination
+### LEXTER-D1 — Cooperative cancellation, not preemptive termination
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** How should an external caller stop a render loop that
 owns a GLFW context?
@@ -114,9 +118,9 @@ Origin's `terminate-thread` fallback still exists, but with the flag in
 place it should never fire for a healthy loop. It is now a backstop for
 a wedged loop, not the primary stop mechanism.
 
-### LEXTER-DRAFT-stop-flag-D2 — The flag is a mutable cons cell ("box"), passed by reference
+### LEXTER-D2 — The flag is a mutable cons cell ("box"), passed by reference
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** What concrete object represents the flag, given that one
 thread writes it and another reads it? Common Lisp has no first-class
@@ -147,9 +151,9 @@ shared by identity across the thread boundary and (b) has a writable
 place. Each terminal gets its own cons, so there is no cross-terminal
 interference.
 
-### LEXTER-DRAFT-stop-flag-D3 — Polarity: car = T means "run", NIL means "stop"
+### LEXTER-D3 — Polarity: car = T means "run", NIL means "stop"
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** Which value means "keep going" and which means "stop"?
 
@@ -162,14 +166,14 @@ condition is therefore "the flag's car is non-nil."
 
 The name "stop flag" with `T`-means-go polarity is mildly
 counterintuitive, but it makes the loop guard read naturally as a
-*continue* predicate (see LEXTER-DRAFT-stop-flag-D4) and lets NIL --
+*continue* predicate (see LEXTER-D4) and lets NIL --
 the natural Lisp "off"/"done" value -- mean "stop." It also dovetails
 with making the flag optional: an absent flag and a "still running"
 flag both read as "don't stop."
 
-### LEXTER-DRAFT-stop-flag-D4 — The flag is optional; absence means "run until window close"
+### LEXTER-D4 — The flag is optional; absence means "run until window close"
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** Should every loop require a flag, even when run
 interactively outside any supervisor?
@@ -196,9 +200,9 @@ Both encode the same truth table: stop only when a flag is present
 flag and behaves exactly as before -- it exits on window close or quit
 key. Only when a supervisor supplies a flag does the new path engage.
 
-### LEXTER-DRAFT-stop-flag-D5 — The flag is re-armed on every (re)start, inside the entry point
+### LEXTER-D5 — The flag is re-armed on every (re)start, inside the entry point
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** Origin reuses the same `managed-process` -- and therefore
 the same `entry-args`, including the same cons -- across restarts.

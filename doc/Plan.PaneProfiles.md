@@ -14,7 +14,7 @@ relates-to:
   - LEXTER-DRAFT-mouse-reporting
   - LEXTER-0002
   - LEXTER-0006
-  - LEXTER-DRAFT-screenshot-test-rig
+  - LEXTER-0010
 cites:
   - title:    "Session transcript ses_febe-LexterCritique"
     locator:  "session-ses_febe-LexterCritique.md, the closing review"

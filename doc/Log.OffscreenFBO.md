@@ -39,7 +39,7 @@ Phase 1 is complete. Phase 2 (post-processing effects) is outstanding.
 
 *Migration note (2026-10-25):* the original Log was dated 2026-06-06. The
 date is corrected to that of commit `1a59f24`, which holds the work
-(LEXTER-DRAFT-compass-migration-D8). The sentence above was an in-body
+(LEXTER-D60). The sentence above was an in-body
 `**Status:**` line; the label is removed so that it does not compete with
 the front-matter `status`. The section that follows was headed
 Motivation.

@@ -36,7 +36,7 @@ the way.
 
 *Migration note (2026-10-25):* the original Log was dated 2026-06-06. The
 date is corrected to that of commits `3201c61` and `2f78659`, which hold
-the work (LEXTER-DRAFT-compass-migration-D8).
+the work (LEXTER-D60).
 
 
 ## Problem

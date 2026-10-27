@@ -331,9 +331,9 @@ Table: Files changed in commit `0cdd2af`.
 
 *Migration note (2026-10-25):* this section was an appendix headed
 "Appendix: OSC Palette Control (closing the deferred OSC item)" and dated
-2026-06-06. It becomes a dated Update (LEXTER-DRAFT-compass-migration-D5),
+2026-06-06. It becomes a dated Update (LEXTER-D57),
 dated by commit `5885398`, which holds the work
-(LEXTER-DRAFT-compass-migration-D8). Its "Remaining nuance" section
+(LEXTER-D60). Its "Remaining nuance" section
 becomes its Outstanding Work.
 
 This update documents the follow-up that wired the OSC palette-control

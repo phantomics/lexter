@@ -37,7 +37,7 @@ pre-program screen intact -- the behavior every real terminal exhibits.
 
 *Migration note (2026-10-25):* the original Log was dated 2026-06-06. The
 date is corrected to that of commit `b693eac`, which holds the work
-(LEXTER-DRAFT-compass-migration-D8).
+(LEXTER-D60).
 
 
 ## Problem
@@ -313,8 +313,8 @@ Table: Files changed in commit `b693eac`.
 
 *Migration note (2026-10-25):* this section was "Addendum: Stale Grid
 After Buffer Swap", dated 2026-06-06. It becomes a dated Update
-(LEXTER-DRAFT-compass-migration-D5), dated by commit `4864f01`, which
-holds the work (LEXTER-DRAFT-compass-migration-D8). Its "Design
+(LEXTER-D57), dated by commit `4864f01`, which
+holds the work (LEXTER-D60). Its "Design
 Decision" becomes LEXTER-D33.
 
 ### Context

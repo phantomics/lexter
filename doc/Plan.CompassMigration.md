@@ -475,7 +475,7 @@ errors; the index is current; the batch is reviewed with `compass-review`.
 
 ## Phase 4 — The migration Log
 
-`doc/Log.CompassMigration.md` (`LEXTER-DRAFT-compass-migration-log`)
+`doc/Log.CompassMigration.md` (`LEXTER-0012`)
 records each phase and batch with its commit, and the counts of records,
 pinned references, and captions. The index is regenerated, and
 `compass check --federation` is run a final time.

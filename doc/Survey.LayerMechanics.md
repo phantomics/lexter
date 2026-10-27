@@ -16,7 +16,7 @@ relates-to:
   - LEXTER-0004
   - LEXTER-0008
   - LEXTER-0007
-  - LEXTER-DRAFT-screenshot-test-rig
+  - LEXTER-0010
 cites:
   - title:    "Session transcript ses_febe-LexterCritique"
     locator:  "session-ses_febe-LexterCritique.md, the closing review"
@@ -497,7 +497,7 @@ set, could tag that word as carrying something else. Candidates:
 
 This is a tagged union in the wire format, and each effect adds a branch to
 the shader. Effects driven by time also threaten the screenshot test rig
-([LEXTER-DRAFT-screenshot-test-rig](Log.ScreenshotTestRig.md)), whose
+([LEXTER-0010](Log.ScreenshotTestRig.md)), whose
 checksums need identical pixels on every run, unless time reaches the shader
 as a uniform the rig can fix.
 
@@ -670,7 +670,7 @@ Within Lexter:
   target that a transparent overlay and the test rig both draw into.
 - [LEXTER-0007](Log.EnhancedDualWidth.md) defines wide
   glyphs, which the dense record would store as halves.
-- [LEXTER-DRAFT-screenshot-test-rig](Log.ScreenshotTestRig.md) checks
+- [LEXTER-0010](Log.ScreenshotTestRig.md) checks
   output by checksum, which masks keep deterministic and time-driven effects
   could break.
 

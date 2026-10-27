@@ -16,7 +16,7 @@ relates-to:
   - LEXTER-0003
   - LEXTER-0004
   - LEXTER-0006
-  - LEXTER-DRAFT-screenshot-test-rig
+  - LEXTER-0010
 open-questions:
   - LEXTER-DRAFT-data-structures-1e-critique-O1
   - LEXTER-DRAFT-data-structures-1e-critique-O2
@@ -304,8 +304,8 @@ second edition should decide who owns the swatch namespace.
 palette slot so that each resident palette is uploaded only when it changes.
 `terminal-reset` reuses the window, atlas, and renderer so that one headless
 terminal can serve many fixtures "without rebuilding the (expensive) GL atlas"
-([LEXTER-DRAFT-screenshot-test-rig](Log.ScreenshotTestRig.md)), and
-LEXTER-DRAFT-screenshot-test-rig-D3 rests on the output being "a deterministic
+([LEXTER-0010](Log.ScreenshotTestRig.md)), and
+LEXTER-D47 rests on the output being "a deterministic
 function of font file, palette, screen model, and renderer".
 
 **Objection:** A recorded generation says nothing about *whose* generation it
@@ -313,7 +313,7 @@ was. Under S4, `terminal-reset` gives the reused renderer a fresh grid whose
 counter climbs through the same small numbers as the last one, so the second
 fixture's swatch table is never uploaded and it is drawn with the first
 fixture's colours: the checksum depends on which fixtures ran before it,
-against LEXTER-DRAFT-screenshot-test-rig-D3 (C2). Palettes have the same flaw:
+against LEXTER-D47 (C2). Palettes have the same flaw:
 every screen's palette generation starts at 1, so two panes that share a slot, or a pane and a reset terminal,
 can present equal numbers for different palettes (S3). Detecting a change of
 producer in the renderer is the fix that LEXTER-D33 rejected
@@ -620,7 +620,7 @@ stream sends `7F FF`
 
 **Rationale:** A `no-pty` terminal reuses the whole live render path, so replay
 tests exactly what the live terminal draws
-([LEXTER-DRAFT-screenshot-test-rig](Log.ScreenshotTestRig.md), "Headless
+([LEXTER-0010](Log.ScreenshotTestRig.md), "Headless
 replay path"); `pty-close` is guarded by `alive-p` so that it is safe to call
 more than once.
 
@@ -731,7 +731,7 @@ state comment lists states it does not have.
 **Severity:** low
 
 **Seed:** Compile the README's architecture section from the Spec, as
-LEXTER-DRAFT-compass-migration-O2 contemplates.
+LEXTER-O3 contemplates.
 
 ### LEXTER-DRAFT-data-structures-1e-critique-O22 — The grid's dirty bits are maintained but never consulted
 

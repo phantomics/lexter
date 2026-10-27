@@ -40,11 +40,11 @@ and parsing pipelines:
 
 *Migration note (2026-10-25):* the original Log was dated 2026-06-06. The
 date is corrected to that of commit `fbf8817`, which holds the work
-(LEXTER-DRAFT-compass-migration-D8). The Log was in two parts. Part 1,
+(LEXTER-D60). The Log was in two parts. Part 1,
 "32-bit glyph index (fixed)", is the body below, with its Problem, Fix,
 and Verification as the Log's Problem, Implementation, and Verification.
 Part 2, "3-byte UTF-8 vs. 8-bit C1 controls (diagnosed)", is the Update
-that follows it (LEXTER-DRAFT-compass-migration-D5).
+that follows it (LEXTER-D57).
 
 
 ## Problem
@@ -138,7 +138,7 @@ UTF-8/C1 problem; they are listed with the Update that records it.
 *Migration note (2026-10-25):* this section was "Part 2 -- 3-byte UTF-8
 vs. 8-bit C1 controls (diagnosed)". It records a diagnosis, committed
 with the body in `fbf8817`. Its candidate fixes become the open question
-LEXTER-O1 (LEXTER-DRAFT-compass-migration-D6).
+LEXTER-O1 (LEXTER-D58).
 
 ### Symptom
 

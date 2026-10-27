@@ -18,15 +18,15 @@ Table: Documents in the LEXTER namespace.
 | [LEXTER-0006](Log.MultiBuffer.md) | Alternate Screen Buffer: Development Log | Log | component | Implemented | vt |
 | [LEXTER-0007](Log.EnhancedDualWidth.md) | Enhanced Dual-Width Font Support: Development Log | Log | component | Implemented | fonts |
 | [LEXTER-0008](Log.OffscreenFBO.md) | Offscreen Render Target (FBO): Development Log | Log | component | Implemented | renderer |
-| [LEXTER-DRAFT-compass-migration](Plan.CompassMigration.md) | Compass Migration: Development Plan | Plan | project | Draft | — |
-| [LEXTER-DRAFT-compass-migration-log](Log.CompassMigration.md) | Compass Migration: Development Log | Log | project | Draft | — |
+| [LEXTER-0009](Log.EncodingRanges.md) | Encoding Ranges: Development Log | Log | component | Implemented | vt |
+| [LEXTER-0010](Log.ScreenshotTestRig.md) | Screenshot Test Rig: Development Log | Log | component | Implemented | test |
+| [LEXTER-0011](Plan.CompassMigration.md) | Compass Migration: Development Plan | Plan | project | Implemented | — |
+| [LEXTER-0012](Log.CompassMigration.md) | Compass Migration: Development Log | Log | project | Implemented | — |
 | [LEXTER-DRAFT-data-structures-1e](Spec.DataStructures1e.md) | Data Structures, First Edition: Specification | Spec | project | Draft | — |
 | [LEXTER-DRAFT-data-structures-1e-critique](Eval.Critique.DataStructures1e.md) | Data Structures, First Edition: Critique | Eval (critique) | project | Draft | — |
-| [LEXTER-DRAFT-encoding-ranges](Log.EncodingRanges.md) | Encoding Ranges: Development Log | Log | component | Draft | vt |
 | [LEXTER-DRAFT-layer-mechanics](Survey.LayerMechanics.md) | Layer Mechanics: Survey | Survey | component | Draft | renderer |
 | [LEXTER-DRAFT-mouse-reporting](Log.MouseReporting.md) | Mouse Reporting: Development Log | Log | component | Draft | vt |
 | [LEXTER-DRAFT-pane-profiles](Plan.PaneProfiles.md) | Pane Profiles and Scrollback Viewing: Development Plan | Plan | component | Draft | panes |
-| [LEXTER-DRAFT-screenshot-test-rig](Log.ScreenshotTestRig.md) | Screenshot Test Rig: Development Log | Log | component | Draft | test |
 
 Table: Decision, open-question, and memo records in the LEXTER namespace.
 
@@ -76,19 +76,27 @@ Table: Decision, open-question, and memo records in the LEXTER namespace.
 | [LEXTER-D42](Log.OffscreenFBO.md#lexter-d42--fbo-is-the-screenshot-source) | Decision | FBO is the screenshot source | Implemented | LEXTER-0008 |
 | [LEXTER-D43](Log.OffscreenFBO.md#lexter-d43--capture-forces-a-render) | Decision | Capture forces a render | Implemented | LEXTER-0008 |
 | [LEXTER-D44](Log.OffscreenFBO.md#lexter-d44--hidden-window-flag-for-tests) | Decision | Hidden-window flag for tests | Implemented | LEXTER-0008 |
-| [LEXTER-DRAFT-compass-migration-D1](Plan.CompassMigration.md#lexter-draft-compass-migration-d1--every-document-and-record-takes-a-provisional-identifier) | Decision | Every document and record takes a provisional identifier | Proposed | LEXTER-DRAFT-compass-migration |
-| [LEXTER-DRAFT-compass-migration-D2](Plan.CompassMigration.md#lexter-draft-compass-migration-d2--every-migrated-document-is-status-draft) | Decision | Every migrated document is status Draft | Proposed | LEXTER-DRAFT-compass-migration |
-| [LEXTER-DRAFT-compass-migration-D3](Plan.CompassMigration.md#lexter-draft-compass-migration-d3--decision-records-add-no-content) | Decision | Decision records add no content | Proposed | LEXTER-DRAFT-compass-migration |
-| [LEXTER-DRAFT-compass-migration-D4](Plan.CompassMigration.md#lexter-draft-compass-migration-d4--code-references-pin-to-the-revision-they-describe) | Decision | Code references pin to the revision they describe | Proposed | LEXTER-DRAFT-compass-migration |
-| [LEXTER-DRAFT-compass-migration-D5](Plan.CompassMigration.md#lexter-draft-compass-migration-d5--follow-up-work-takes-dated-update-sections) | Decision | Follow-up work takes dated Update sections | Proposed | LEXTER-DRAFT-compass-migration |
-| [LEXTER-DRAFT-compass-migration-D6](Plan.CompassMigration.md#lexter-draft-compass-migration-d6--undecided-choices-become-open-question-records) | Decision | Undecided choices become open-question records | Proposed | LEXTER-DRAFT-compass-migration |
-| [LEXTER-DRAFT-compass-migration-D7](Plan.CompassMigration.md#lexter-draft-compass-migration-d7--the-session-transcript-becomes-a-foreign-citation) | Decision | The session transcript becomes a foreign citation | Proposed | LEXTER-DRAFT-compass-migration |
-| [LEXTER-DRAFT-compass-migration-D8](Plan.CompassMigration.md#lexter-draft-compass-migration-d8--dates-in-the-text-are-kept-and-corrected-where-git-contradicts-them) | Decision | Dates in the text are kept, and corrected where Git contradicts them | Proposed | LEXTER-DRAFT-compass-migration |
-| [LEXTER-DRAFT-compass-migration-D9](Plan.CompassMigration.md#lexter-draft-compass-migration-d9--ci-and-code-owners-mirror-origin) | Decision | CI and code owners mirror Origin | Proposed | LEXTER-DRAFT-compass-migration |
-| [LEXTER-DRAFT-compass-migration-D10](Plan.CompassMigration.md#lexter-draft-compass-migration-d10--structure-changes-content-is-not-refreshed) | Decision | Structure changes; content is not refreshed | Proposed | LEXTER-DRAFT-compass-migration |
-| [LEXTER-DRAFT-compass-migration-log-D1](Log.CompassMigration.md#lexter-draft-compass-migration-log-d1--pinning-is-brought-forward-into-phase-2) | Decision | Pinning is brought forward into Phase 2 | Proposed | LEXTER-DRAFT-compass-migration-log |
-| [LEXTER-DRAFT-compass-migration-log-D2](Log.CompassMigration.md#lexter-draft-compass-migration-log-d2--a-decision-written-as-a-section-becomes-a-record-placed-first) | Decision | A decision written as a section becomes a record, placed first | Proposed | LEXTER-DRAFT-compass-migration-log |
-| [LEXTER-DRAFT-compass-migration-log-D3](Log.CompassMigration.md#lexter-draft-compass-migration-log-d3--a-stewards-answer-to-an-open-question-is-recorded-as-a-resolution) | Decision | A steward's answer to an open question is recorded as a Resolution | Proposed | LEXTER-DRAFT-compass-migration-log |
+| [LEXTER-D45](Log.ScreenshotTestRig.md#lexter-d45--record-the-raw-input-not-the-cell-matrix) | Decision | Record the raw input, not the cell matrix | Implemented | LEXTER-0010 |
+| [LEXTER-D46](Log.ScreenshotTestRig.md#lexter-d46--startstop-recording) | Decision | Start/stop recording | Implemented | LEXTER-0010 |
+| [LEXTER-D47](Log.ScreenshotTestRig.md#lexter-d47--exact-pixel-checksums) | Decision | Exact-pixel checksums | Implemented | LEXTER-0010 |
+| [LEXTER-D48](Log.ScreenshotTestRig.md#lexter-d48--config-set-once-many-dumps) | Decision | Config set once, many dumps | Implemented | LEXTER-0010 |
+| [LEXTER-D49](Log.ScreenshotTestRig.md#lexter-d49--separate-blobs-from-references) | Decision | Separate blobs from references | Implemented | LEXTER-0010 |
+| [LEXTER-D50](Log.ScreenshotTestRig.md#lexter-d50--input-recording-deferred) | Decision | Input recording deferred | Implemented | LEXTER-0010 |
+| [LEXTER-D51](Log.ScreenshotTestRig.md#lexter-d51--single-terminal-recording-for-now) | Decision | Single-terminal recording for now | Implemented | LEXTER-0010 |
+| [LEXTER-D52](Log.ScreenshotTestRig.md#lexter-d52--no-coupled-authoring-constructor) | Decision | No coupled authoring constructor | Implemented | LEXTER-0010 |
+| [LEXTER-D53](Plan.CompassMigration.md#lexter-d53--every-document-and-record-takes-a-provisional-identifier) | Decision | Every document and record takes a provisional identifier | Implemented | LEXTER-0011 |
+| [LEXTER-D54](Plan.CompassMigration.md#lexter-d54--every-migrated-document-is-status-draft) | Decision | Every migrated document is status Draft | Implemented | LEXTER-0011 |
+| [LEXTER-D55](Plan.CompassMigration.md#lexter-d55--decision-records-add-no-content) | Decision | Decision records add no content | Implemented | LEXTER-0011 |
+| [LEXTER-D56](Plan.CompassMigration.md#lexter-d56--code-references-pin-to-the-revision-they-describe) | Decision | Code references pin to the revision they describe | Implemented | LEXTER-0011 |
+| [LEXTER-D57](Plan.CompassMigration.md#lexter-d57--follow-up-work-takes-dated-update-sections) | Decision | Follow-up work takes dated Update sections | Implemented | LEXTER-0011 |
+| [LEXTER-D58](Plan.CompassMigration.md#lexter-d58--undecided-choices-become-open-question-records) | Decision | Undecided choices become open-question records | Implemented | LEXTER-0011 |
+| [LEXTER-D59](Plan.CompassMigration.md#lexter-d59--the-session-transcript-becomes-a-foreign-citation) | Decision | The session transcript becomes a foreign citation | Implemented | LEXTER-0011 |
+| [LEXTER-D60](Plan.CompassMigration.md#lexter-d60--dates-in-the-text-are-kept-and-corrected-where-git-contradicts-them) | Decision | Dates in the text are kept, and corrected where Git contradicts them | Implemented | LEXTER-0011 |
+| [LEXTER-D61](Plan.CompassMigration.md#lexter-d61--ci-and-code-owners-mirror-origin) | Decision | CI and code owners mirror Origin | Implemented | LEXTER-0011 |
+| [LEXTER-D62](Plan.CompassMigration.md#lexter-d62--structure-changes-content-is-not-refreshed) | Decision | Structure changes; content is not refreshed | Implemented | LEXTER-0011 |
+| [LEXTER-D63](Log.CompassMigration.md#lexter-d63--pinning-is-brought-forward-into-phase-2) | Decision | Pinning is brought forward into Phase 2 | Implemented | LEXTER-0012 |
+| [LEXTER-D64](Log.CompassMigration.md#lexter-d64--a-decision-written-as-a-section-becomes-a-record-placed-first) | Decision | A decision written as a section becomes a record, placed first | Implemented | LEXTER-0012 |
+| [LEXTER-D65](Log.CompassMigration.md#lexter-d65--a-stewards-answer-to-an-open-question-is-recorded-as-a-resolution) | Decision | A steward's answer to an open question is recorded as a Resolution | Implemented | LEXTER-0012 |
 | [LEXTER-DRAFT-mouse-reporting-D1](Log.MouseReporting.md#lexter-draft-mouse-reporting-d1--coordinates-are-pane-content-relative) | Decision | Coordinates are pane-content-relative | Proposed | LEXTER-DRAFT-mouse-reporting |
 | [LEXTER-DRAFT-mouse-reporting-D2](Log.MouseReporting.md#lexter-draft-mouse-reporting-d2--drag-capture) | Decision | Drag capture | Proposed | LEXTER-DRAFT-mouse-reporting |
 | [LEXTER-DRAFT-mouse-reporting-D3](Log.MouseReporting.md#lexter-draft-mouse-reporting-d3--cell-granularity-motion) | Decision | Cell-granularity motion | Proposed | LEXTER-DRAFT-mouse-reporting |
@@ -105,16 +113,9 @@ Table: Decision, open-question, and memo records in the LEXTER namespace.
 | [LEXTER-DRAFT-pane-profiles-D7](Plan.PaneProfiles.md#lexter-draft-pane-profiles-d7--the-wheel-factor-applies-to-local-scrolling-only) | Decision | The wheel factor applies to local scrolling only | Proposed | LEXTER-DRAFT-pane-profiles |
 | [LEXTER-DRAFT-pane-profiles-D8](Plan.PaneProfiles.md#lexter-draft-pane-profiles-d8--unseen-output-is-pane-state-polled-by-the-decorator) | Decision | Unseen output is pane state, polled by the decorator | Proposed | LEXTER-DRAFT-pane-profiles |
 | [LEXTER-DRAFT-pane-profiles-D9](Plan.PaneProfiles.md#lexter-draft-pane-profiles-d9--terminal-events-reach-the-apl-layer-through-a-generic-function) | Decision | Terminal events reach the APL layer through a generic function | Proposed | LEXTER-DRAFT-pane-profiles |
-| [LEXTER-DRAFT-screenshot-test-rig-D1](Log.ScreenshotTestRig.md#lexter-draft-screenshot-test-rig-d1--record-the-raw-input-not-the-cell-matrix) | Decision | Record the raw input, not the cell matrix | Proposed | LEXTER-DRAFT-screenshot-test-rig |
-| [LEXTER-DRAFT-screenshot-test-rig-D2](Log.ScreenshotTestRig.md#lexter-draft-screenshot-test-rig-d2--startstop-recording) | Decision | Start/stop recording | Proposed | LEXTER-DRAFT-screenshot-test-rig |
-| [LEXTER-DRAFT-screenshot-test-rig-D3](Log.ScreenshotTestRig.md#lexter-draft-screenshot-test-rig-d3--exact-pixel-checksums) | Decision | Exact-pixel checksums | Proposed | LEXTER-DRAFT-screenshot-test-rig |
-| [LEXTER-DRAFT-screenshot-test-rig-D4](Log.ScreenshotTestRig.md#lexter-draft-screenshot-test-rig-d4--config-set-once-many-dumps) | Decision | Config set once, many dumps | Proposed | LEXTER-DRAFT-screenshot-test-rig |
-| [LEXTER-DRAFT-screenshot-test-rig-D5](Log.ScreenshotTestRig.md#lexter-draft-screenshot-test-rig-d5--separate-blobs-from-references) | Decision | Separate blobs from references | Proposed | LEXTER-DRAFT-screenshot-test-rig |
-| [LEXTER-DRAFT-screenshot-test-rig-D6](Log.ScreenshotTestRig.md#lexter-draft-screenshot-test-rig-d6--input-recording-deferred) | Decision | Input recording deferred | Proposed | LEXTER-DRAFT-screenshot-test-rig |
-| [LEXTER-DRAFT-screenshot-test-rig-D7](Log.ScreenshotTestRig.md#lexter-draft-screenshot-test-rig-d7--single-terminal-recording-for-now) | Decision | Single-terminal recording for now | Proposed | LEXTER-DRAFT-screenshot-test-rig |
-| [LEXTER-DRAFT-screenshot-test-rig-D8](Log.ScreenshotTestRig.md#lexter-draft-screenshot-test-rig-d8--no-coupled-authoring-constructor) | Decision | No coupled authoring constructor | Proposed | LEXTER-DRAFT-screenshot-test-rig |
-| [LEXTER-DRAFT-compass-migration-O1](Plan.CompassMigration.md#lexter-draft-compass-migration-o1--which-documents-are-numbered-first) | Open question | Which documents are numbered first | — | LEXTER-DRAFT-compass-migration |
-| [LEXTER-DRAFT-compass-migration-O2](Plan.CompassMigration.md#lexter-draft-compass-migration-o2--a-compiled-readme) | Open question | A compiled README | — | LEXTER-DRAFT-compass-migration |
+| [LEXTER-O1](Log.EncodingRanges.md#lexter-o1--where-utf-8-is-decoded-relative-to-cl-vt) | Open question | Where UTF-8 is decoded relative to cl-vt | — | LEXTER-0009 |
+| [LEXTER-O2](Plan.CompassMigration.md#lexter-o2--which-documents-are-numbered-first) | Open question | Which documents are numbered first | — | LEXTER-0011 |
+| [LEXTER-O3](Plan.CompassMigration.md#lexter-o3--a-compiled-readme) | Open question | A compiled README | — | LEXTER-0011 |
 | [LEXTER-DRAFT-data-structures-1e-critique-O1](Eval.Critique.DataStructures1e.md#lexter-draft-data-structures-1e-critique-o1--double-width-characters-never-reach-the-gpu-from-a-screen) | Open question | Double-width characters never reach the GPU from a screen | — | LEXTER-DRAFT-data-structures-1e-critique |
 | [LEXTER-DRAFT-data-structures-1e-critique-O2](Eval.Critique.DataStructures1e.md#lexter-draft-data-structures-1e-critique-o2--the-grids-swatch-generation-has-two-meanings-and-the-gpu-swatch-table-can-stay-stale-for-good) | Open question | The grid's swatch generation has two meanings, and the GPU swatch table can stay stale for good | — | LEXTER-DRAFT-data-structures-1e-critique |
 | [LEXTER-DRAFT-data-structures-1e-critique-O3](Eval.Critique.DataStructures1e.md#lexter-draft-data-structures-1e-critique-o3--host-input-can-put-the-vt-handlers-state-outside-its-declared-types) | Open question | Host input can put the VT handler's state outside its declared types | — | LEXTER-DRAFT-data-structures-1e-critique |
@@ -137,7 +138,6 @@ Table: Decision, open-question, and memo records in the LEXTER namespace.
 | [LEXTER-DRAFT-data-structures-1e-critique-O20](Eval.Critique.DataStructures1e.md#lexter-draft-data-structures-1e-critique-o20--backends-are-told-the-panes-size-not-its-content-size) | Open question | Backends are told the pane's size, not its content size | — | LEXTER-DRAFT-data-structures-1e-critique |
 | [LEXTER-DRAFT-data-structures-1e-critique-O21](Eval.Critique.DataStructures1e.md#lexter-draft-data-structures-1e-critique-o21--descriptions-of-the-data-model-have-drifted-from-it) | Open question | Descriptions of the data model have drifted from it | — | LEXTER-DRAFT-data-structures-1e-critique |
 | [LEXTER-DRAFT-data-structures-1e-critique-O22](Eval.Critique.DataStructures1e.md#lexter-draft-data-structures-1e-critique-o22--the-grids-dirty-bits-are-maintained-but-never-consulted) | Open question | The grid's dirty bits are maintained but never consulted | — | LEXTER-DRAFT-data-structures-1e-critique |
-| [LEXTER-DRAFT-encoding-ranges-O1](Log.EncodingRanges.md#lexter-draft-encoding-ranges-o1--where-utf-8-is-decoded-relative-to-cl-vt) | Open question | Where UTF-8 is decoded relative to cl-vt | — | LEXTER-DRAFT-encoding-ranges |
 | [LEXTER-DRAFT-layer-mechanics-O1](Survey.LayerMechanics.md#lexter-draft-layer-mechanics-o1--a-32-byte-or-a-24-byte-record) | Open question | A 32-byte or a 24-byte record? | — | LEXTER-DRAFT-layer-mechanics |
 | [LEXTER-DRAFT-layer-mechanics-O2](Survey.LayerMechanics.md#lexter-draft-layer-mechanics-o2--the-operation-and-selector-code-or-a-truth-table) | Open question | The operation and selector code, or a truth table? | — | LEXTER-DRAFT-layer-mechanics |
 | [LEXTER-DRAFT-layer-mechanics-O3](Survey.LayerMechanics.md#lexter-draft-layer-mechanics-o3--one-mask-per-layer-or-two) | Open question | One mask per layer, or two? | — | LEXTER-DRAFT-layer-mechanics |

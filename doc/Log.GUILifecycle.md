@@ -41,7 +41,7 @@ points' public signatures.
 
 *Migration note (2026-10-25):* the original Log was dated 2026-06-06. The
 date is corrected to that of commit `4313881`, which holds the work
-(LEXTER-DRAFT-compass-migration-D8).
+(LEXTER-D60).
 
 
 ## Problem

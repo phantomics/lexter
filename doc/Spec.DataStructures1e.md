@@ -12,7 +12,7 @@ provenance:
   session:     "Data-structures Spec, Phase 1 (2026-10-26)"
 relates-to:
   - LEXTER-0007
-  - LEXTER-DRAFT-encoding-ranges
+  - LEXTER-0009
   - LEXTER-0003
   - LEXTER-0004
   - LEXTER-0006
@@ -21,7 +21,7 @@ relates-to:
   - LEXTER-0005
   - LEXTER-0001
   - LEXTER-0008
-  - LEXTER-DRAFT-screenshot-test-rig
+  - LEXTER-0010
   - LEXTER-DRAFT-data-structures-1e-critique
 cites:
   - title:    "Key words for use in RFCs to Indicate Requirement Levels"
@@ -350,7 +350,7 @@ Table: Per-cell storage in `screen`.
 
 The glyph index is 32 bits wide because an atlas position counts slots, not
 glyphs, and Unifont's atlas reaches about 107,000 slots
-([LEXTER-DRAFT-encoding-ranges](Log.EncodingRanges.md)).
+([LEXTER-0009](Log.EncodingRanges.md)).
 
 **Glyph 0 and the blank glyph.** Glyph index 0 in `glyphs` is a sentinel
 meaning "blank" and, to the right of a wide character, "continuation". A
@@ -799,7 +799,7 @@ that receive a capture are called with keyword arguments (`:width`,
 `:height`, `:channels`, `:checksum`, `:name`, `:config`) and MUST accept
 `&allow-other-keys`.
 
-**Rationale:** LEXTER-DRAFT-screenshot-test-rig-D1 records raw input rather
+**Rationale:** LEXTER-D45 records raw input rather
 than the cell matrix, which loses control state; -D3 compares exact pixels,
 sound because the renderer is bitmap and nearest-neighbour; -D5 keeps blobs
 apart from their expected checksums. The capture comes from the offscreen

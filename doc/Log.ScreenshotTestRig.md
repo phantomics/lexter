@@ -1,26 +1,30 @@
 ---
-id:            LEXTER-DRAFT-screenshot-test-rig
+id:            LEXTER-0010
 title:         "Screenshot Test Rig: Development Log"
 genre:         Log
 scope:         component
 project:       Lexter
 component:     test
 language:      en
-status:        Draft
+status:        Implemented
+authors:
+  - Andrew Sengul
+approved-by:   Andrew Sengul
+reviewed:      2026-10-26
 provenance:
   assistant:   opencode
 relates-to:
   - LEXTER-0008
   - LEXTER-DRAFT-data-structures-1e-critique
 decisions:
-  - LEXTER-DRAFT-screenshot-test-rig-D1
-  - LEXTER-DRAFT-screenshot-test-rig-D2
-  - LEXTER-DRAFT-screenshot-test-rig-D3
-  - LEXTER-DRAFT-screenshot-test-rig-D4
-  - LEXTER-DRAFT-screenshot-test-rig-D5
-  - LEXTER-DRAFT-screenshot-test-rig-D6
-  - LEXTER-DRAFT-screenshot-test-rig-D7
-  - LEXTER-DRAFT-screenshot-test-rig-D8
+  - LEXTER-D45
+  - LEXTER-D46
+  - LEXTER-D47
+  - LEXTER-D48
+  - LEXTER-D49
+  - LEXTER-D50
+  - LEXTER-D51
+  - LEXTER-D52
 ---
 
 # Screenshot Test Rig: Development Log
@@ -80,9 +84,9 @@ restore determinism on heterogeneous CI GPUs if ever needed.)
 
 Settled before implementation:
 
-### LEXTER-DRAFT-screenshot-test-rig-D1 — Record the raw input, not the cell matrix
+### LEXTER-D45 — Record the raw input, not the cell matrix
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** A test must capture everything that determines the rendered
 screen. The cell matrix is lossy, while the raw byte stream is the
@@ -98,9 +102,9 @@ pure: it never alters parsing behavior whether on or off.
   and it tests only the renderer's read of an already-built grid, not
   the VT parser and handler that built it (see Problem).
 
-### LEXTER-DRAFT-screenshot-test-rig-D2 — Start/stop recording
+### LEXTER-D46 — Start/stop recording
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** Authoring sets up the terminal first (resize, configure),
 then records only the interesting span.
@@ -112,9 +116,9 @@ everything from init.
 - Capturing everything from init. Rejected: authoring records only the
   interesting span.
 
-### LEXTER-DRAFT-screenshot-test-rig-D3 — Exact-pixel checksums
+### LEXTER-D47 — Exact-pixel checksums
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** Lexter's output is a deterministic function of font file,
 palette, screen model, and renderer, which makes exact-pixel checksum
@@ -131,9 +135,9 @@ rendering changes (font swap, shader fix) regenerate the checksums.
   Lexter's rendering has no antialiasing, hinting, or subpixel rounding
   (see Problem).
 
-### LEXTER-DRAFT-screenshot-test-rig-D4 — Config set once, many dumps
+### LEXTER-D48 — Config set once, many dumps
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** The terminal configuration (font, cols, rows, cell
 dimensions, pixel scale) is durable session-level data.
@@ -146,9 +150,9 @@ things: the recorded byte stream and the checksum.
 - Storing the configuration with each fixture. Rejected: it is
   session-level data, established once.
 
-### LEXTER-DRAFT-screenshot-test-rig-D5 — Separate blobs from references
+### LEXTER-D49 — Separate blobs from references
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** A fixture has a byte stream, an expected checksum, and a
 configuration, and they must be stored somewhere.
@@ -163,9 +167,9 @@ rendering intentionally changes, re-author and paste the new checksums.
 - Storing the checksum and config in a sidecar file. Rejected: they live
   in the test source instead.
 
-### LEXTER-DRAFT-screenshot-test-rig-D6 — Input recording deferred
+### LEXTER-D50 — Input recording deferred
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** A terminal carries two streams: PTY *output*
 (host->terminal) and keyboard *input* (terminal->host).
@@ -177,9 +181,9 @@ stream, so this is sufficient for rendering tests.
 **Alternatives:**
 - None recorded.
 
-### LEXTER-DRAFT-screenshot-test-rig-D7 — Single-terminal recording for now
+### LEXTER-D51 — Single-terminal recording for now
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** The longer-term vision is window-level recording yielding
 one blob per pane, replayed into a headless multipane compositor.
@@ -190,9 +194,9 @@ primitives here are the building blocks for that.
 **Alternatives:**
 - None recorded.
 
-### LEXTER-DRAFT-screenshot-test-rig-D8 — No coupled authoring constructor
+### LEXTER-D52 — No coupled authoring constructor
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** Authoring needs a terminal whose output is being recorded.
 
@@ -259,7 +263,7 @@ fixture's, so the second fixture's swatch table is never uploaded and it is
 drawn with the first fixture's colours; palettes have the same flaw, since
 every screen's palette generation starts at 1. A fixture's checksum
 therefore depends on which fixtures ran before it, against the determinism
-LEXTER-DRAFT-screenshot-test-rig-D3 rests on
+LEXTER-D47 rests on
 (LEXTER-DRAFT-data-structures-1e-critique-O5). `terminal-config-plist`
 (`src/unix-term.lisp:terminal-config-plist@1f07ee8`) returns the durable config
 plist.
@@ -377,10 +381,10 @@ Table: Files added or changed in commit `1f07ee8`.
 Its items are gathered, in the Log's own words, from the work it defers.
 
 - **Input recording.** Keyboard *input* (terminal->host) is out of scope
-  for now (LEXTER-DRAFT-screenshot-test-rig-D6).
+  for now (LEXTER-D50).
 - **Window-level recording.** The longer-term vision is window-level
   recording yielding one blob per pane, replayed into a headless
-  multipane compositor (LEXTER-DRAFT-screenshot-test-rig-D7).
+  multipane compositor (LEXTER-D51).
 - **Determinism on heterogeneous CI GPUs.** The only residual
   cross-machine risk is float rounding at quad edges in the vertex
   shader; a software rasterizer -- `LIBGL_ALWAYS_SOFTWARE=1` -- would

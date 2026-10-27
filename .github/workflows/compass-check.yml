@@ -8,8 +8,9 @@
 #
 # COMPASS_REV pins the toolchain to a Compass release tag
 # (LEXTER-DRAFT-compass-migration-D9); updating the toolchain is a change to
-# that line. Compass has published no tag yet, so it names the commit of
-# version 0.2.0 until the first tag exists.
+# that line. Compass has published no tag yet, so it names a commit until the
+# first tag exists: fe188d0, version 0.2.0 plus the critique subtype of Eval
+# (Compass commit f373b55), which doc/Eval.Critique.DataStructures1e.md uses.
 
 name: compass-check
 
@@ -23,7 +24,7 @@ permissions:
 
 env:
   COMPASS_REPO: phantomics/compass
-  COMPASS_REV: 9a6ab23fa4a7ab6425034ec795af766bca90ee61   # Compass 0.2.0; replace with its first release tag
+  COMPASS_REV: fe188d012ae48d9166d4a2273df41b0b64d37f39   # Compass 0.2.0 + critique subtype; replace with its first release tag
   QL_DIST: http://beta.quicklisp.org/dist/quicklisp/2023-06-18/distinfo.txt
 
 jobs:

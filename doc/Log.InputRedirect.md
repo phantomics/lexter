@@ -1,12 +1,16 @@
 ---
-id:            LEXTER-DRAFT-input-redirect
+id:            LEXTER-0002
 title:         "Input Redirect and Chrome Mixins: Development Log"
 genre:         Log
 scope:         component
 project:       Lexter
 component:     panes
 language:      en
-status:        Draft
+status:        Implemented
+authors:
+  - Andrew Sengul
+approved-by:   Andrew Sengul
+reviewed:      2026-10-26
 provenance:
   assistant:   opencode
 cites:
@@ -14,12 +18,12 @@ cites:
     locator:  "session-ses_2263-Lexter6.md, lines 862, 965, and 1044"
     external: true
 decisions:
-  - LEXTER-DRAFT-input-redirect-D1
-  - LEXTER-DRAFT-input-redirect-D2
-  - LEXTER-DRAFT-input-redirect-D3
-  - LEXTER-DRAFT-input-redirect-D4
-  - LEXTER-DRAFT-input-redirect-D5
-  - LEXTER-DRAFT-input-redirect-D6
+  - LEXTER-D6
+  - LEXTER-D7
+  - LEXTER-D8
+  - LEXTER-D9
+  - LEXTER-D10
+  - LEXTER-D11
 ---
 
 # Input Redirect and Chrome Mixins: Development Log
@@ -128,9 +132,9 @@ router has to change. The redirect is invisible to all of them.
 
 ## Design Decisions
 
-### LEXTER-DRAFT-input-redirect-D1 — Modality is per-pane state, expressed as one slot
+### LEXTER-D6 — Modality is per-pane state, expressed as one slot
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** Where does "this is modal right now" live?
 
@@ -152,9 +156,9 @@ modal.
   pane collection and a second focus model, bolted alongside the one
   that exists (see The Alternative).
 
-### LEXTER-DRAFT-input-redirect-D2 — Interception lives in method combination, not the router
+### LEXTER-D7 — Interception lives in method combination, not the router
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** How does input actually get diverted without touching the
 compositor's routing code?
@@ -183,9 +187,9 @@ that redirection exists. Add the `:around` methods once and every pane,
 present and future, becomes modal-capable without the routing layer
 knowing.
 
-### LEXTER-DRAFT-input-redirect-D3 — A single redirect function with a discriminated signature
+### LEXTER-D8 — A single redirect function with a discriminated signature
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** Key events and character events are distinct. Two
 redirect slots, or one?
@@ -206,9 +210,9 @@ keyword:
 
 A dialog handler is a single closure that `case`s on `:key` vs `:char`.
 
-### LEXTER-DRAFT-input-redirect-D4 — Selective passthrough via dynamic suppression
+### LEXTER-D9 — Selective passthrough via dynamic suppression
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** A redirect function sometimes wants to hand an event *back*
 to the pane's normal handler -- e.g. a semi-modal overlay that captures
@@ -237,9 +241,9 @@ event; now treat it as if no redirect were installed," without
 clearing and reinstalling the slot. The recursion guard is dynamically
 scoped, so it is automatically unwound after the forwarded call.
 
-### LEXTER-DRAFT-input-redirect-D5 — Focus trapping falls out for free
+### LEXTER-D10 — Focus trapping falls out for free
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** The overlay plan needed explicit focus capture and
 restore. What replaces it?
@@ -257,9 +261,9 @@ focus away from, and clearing the slot restores normal behavior
 instantly. The "save focus / restore focus" bookkeeping of the overlay
 stack has no analogue because there was never a focus transfer.
 
-### LEXTER-DRAFT-input-redirect-D6 — Dialog visuals are a chrome concern, drawn by the decorator
+### LEXTER-D11 — Dialog visuals are a chrome concern, drawn by the decorator
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** If the dialog isn't a separate pane, who draws its box?
 
@@ -274,7 +278,7 @@ paints the modal dialog's frame and prompt over the pane's content.
 **Alternatives:**
 - A new `dialog-pane` class with a built-in border, text layout, and
   input field, as the overlay plan called for. Rejected with the overlay
-  stack (LEXTER-DRAFT-input-redirect-D1).
+  stack (LEXTER-D6).
 
 Input behavior (redirect) and dialog appearance (chrome decorator) are
 orthogonal systems that compose: one owns the keystrokes, the other owns
@@ -284,7 +288,7 @@ the pixels.
 
 *Migration note (2026-10-25):* this Log had no Implementation section. The
 redirect mechanism's code is described with its decision records,
-LEXTER-DRAFT-input-redirect-D1 through LEXTER-DRAFT-input-redirect-D4.
+LEXTER-D6 through LEXTER-D9.
 The chrome mixin's, and the end-to-end walk-through, were sections of
 their own; they are placed in this section, under their original
 headings.

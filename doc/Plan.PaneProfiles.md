@@ -10,6 +10,7 @@ status:        Draft
 provenance:
   assistant:   opencode
 relates-to:
+  - LEXTER-DRAFT-data-structures-1e-critique
   - LEXTER-DRAFT-mouse-reporting
   - LEXTER-DRAFT-input-redirect
   - LEXTER-DRAFT-multi-buffer
@@ -54,7 +55,9 @@ for a later session.
 With mouse reporting in place, the wheel does nothing in a terminal pane on
 the primary screen. The event arrives: `pane-handle-scroll` passes it to
 `src/panes/vt-pane.lisp:%vt-pane-scroll-local@a9efdfc`, which changes the
-screen's scrollback viewport. Two things are missing.
+screen's scrollback viewport. Two things are missing, and a third is
+wrong; the data-structures critique records all three as
+LEXTER-DRAFT-data-structures-1e-critique-O12.
 
 - **Nothing draws the history.**
   `src/model.lisp:flush-to-display@a9efdfc` always copies the live screen
@@ -66,6 +69,12 @@ screen's scrollback viewport. Two things are missing.
 - **Nothing asks for a redraw.** `%vt-pane-scroll-local` does not mark the
   screen dirty, and the compositor flushes only panes whose `pane-dirty-p` is
   true.
+- **The thumb points the wrong way.**
+  `src/panes/chrome-mixin.lisp:scroll-bar-thumb-geometry@a9efdfc` places the
+  thumb at `(bar-height − thumb-height) × offset / max-offset` rows from the
+  top, so the live screen, offset 0, puts the thumb at the top of the bar,
+  the opposite of its own comment and of every scroll bar's convention. A
+  user who scrolls back sees the thumb move down.
 
 Making the wheel work raises three further needs. The number of lines per
 wheel notch should be configurable, for every pane or for one. Typing should
@@ -83,10 +92,14 @@ three patterns that the obvious designs would repeat:
   (`src/panes/vt-pane.lisp:*cursor-blink-on*@a9efdfc`). Two compositors
   overwrite each other. A global default for wheel lines would be a third
   case.
-- **Keyword dispatch through `funcall`.** The input-redirect protocol passes
-  a keyword and a lambda list to one function, so each new event kind changes
-  every redirect function. The mouse work added three kinds. A callback for
-  terminal events would be a second protocol of the same kind.
+- **A keyword-dispatched payload.** The input redirect has two parts. Its
+  interception, an `:around` method on each handler generic plus
+  `*redirect-suppressed*` for forwarding, is sound; the data-structures
+  critique lists it under What Held Up. Its payload is the weak part: every
+  event reaches one function as a keyword and an argument list that differs
+  by kind, so each new event kind changes every redirect function. The mouse
+  work added three kinds. A callback for terminal events would be a second
+  payload of the same kind.
 - **A growing `screen` struct.** `screen` holds the model, palette,
   scrollback, saved cursors, scroll region, and dirty flags. View state and
   configuration should not be added to it.
@@ -95,6 +108,8 @@ three patterns that the obvious designs would repeat:
 
 - The wheel scrolls a pane's history on the primary screen, and the history
   is drawn.
+- The scroll-bar thumb sits at the bottom of the bar for the live screen and
+  rises as the view scrolls back.
 - Lines per notch, snap-on-input, and snap-on-output are settings that can be
   set for all panes, for a workspace, for a shared group of panes, or for one
   pane, and changed at run time.
@@ -281,8 +296,10 @@ line count is LEXTER-DRAFT-pane-profiles-O1.
 
 **Context:** The APL layer needs discrete events (output, unseen output, the
 bell, a title change, a viewport change) as well as the state of
-LEXTER-DRAFT-pane-profiles-D8. A registered `funcall` callback was proposed;
-the critique faults that style in the redirect protocol.
+LEXTER-DRAFT-pane-profiles-D8. A registered `funcall` callback was proposed.
+It would repeat the weak half of the redirect protocol, a payload dispatched
+on a keyword inside one function, and not its sound half, interception by
+method combination.
 
 **Decision:** A generic function `pane-terminal-event (pane kind data)` with
 a default method that does nothing. `vt-pane` calls it for `:output` (once
@@ -295,7 +312,8 @@ observes events with methods on its pane classes or mixins.
 
 **Alternatives:**
 - A `pane-event-callback` slot holding a function. Rejected by the steward:
-  keyword dispatch through `funcall`.
+  every observer would dispatch on the keyword itself, and could not be
+  combined with others or specialised by pane class.
 - One generic function per event kind. Rejected: five functions for one
   idea, and a new kind would add another.
 
@@ -368,6 +386,12 @@ the cursor writes into the model, a side effect the critique records.
 `pane-wheel-scroll-lines`, sets the viewport, which is already clamped to the
 history, marks the screen dirty, and raises a `:viewport` event.
 
+`scroll-bar-thumb-geometry` is inverted, so that the thumb's row is
+`(bar-height − thumb-height) × (1 − offset / max-offset)`: at the bottom of
+the bar for the live screen and at the top for the oldest history. Its
+existing minimum thumb height of one cell stays. Because the decorator draws
+the thumb from this function, it moves with the view once the view moves.
+
 ## Snapping and Unseen Output
 
 `pane-handle-key` and `pane-handle-char` on `vt-pane` set the viewport to 0
@@ -397,9 +421,10 @@ Table: Terminal events raised through pane-terminal-event.
   their current form; moving `prefix-key` into the compositor's profile and
   binding the blink state around the flush instead of setting it are left for
   later, at the steward's direction.
-- **The redirect protocol is unchanged.** Its keyword dispatch, which the
-  mouse work extended (LEXTER-DRAFT-mouse-reporting-D7), could become event
-  objects with generic dispatch. That is a separate refactor.
+- **The redirect protocol is unchanged.** Its interception by method
+  combination stays as it is. Its keyword-dispatched payload, which the mouse
+  work extended (LEXTER-DRAFT-mouse-reporting-D7), could become event objects
+  passed to a generic function. That is a separate refactor.
 - **History colours share the swatch problem.** History cells carry swatch
   indices from their screen's table. The critique's main finding, that panes
   sharing one display grid overwrite each other's swatch tables, affects
@@ -467,10 +492,12 @@ Table: Prior systems and what this plan draws from each.
    (LEXTER-DRAFT-pane-profiles-O2), and the three settings. Tests for lookup
    order, parent sharing, skipping profiles without a slot, unbinding, and
    type checks.
-2. **Drawing the history.** Viewport-aware `flush-to-display`, and
+2. **Drawing the history.** Viewport-aware `flush-to-display`,
    `%vt-pane-scroll-local` using the wheel setting and marking the screen
-   dirty. Tests that flush a screen with history into a display grid at
-   several offsets and check the cells and the absent cursor.
+   dirty, and the thumb inverted. Tests that flush a screen with history into
+   a display grid at several offsets and check the cells and the absent
+   cursor, and that check the thumb's row at offset 0 and at the largest
+   offset.
 3. **Snapping.** Snap-on-input in the key and character handlers, and
    snap-on-output in `pane-process-output`. Tests with an in-memory backend.
 4. **Events and unseen output.** `pane-terminal-event`, the unseen-output

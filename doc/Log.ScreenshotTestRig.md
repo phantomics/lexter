@@ -11,6 +11,7 @@ provenance:
   assistant:   opencode
 relates-to:
   - LEXTER-DRAFT-offscreen-fbo
+  - LEXTER-DRAFT-data-structures-1e-critique
 decisions:
   - LEXTER-DRAFT-screenshot-test-rig-D1
   - LEXTER-DRAFT-screenshot-test-rig-D2
@@ -239,11 +240,27 @@ This reuses the entire real render path -- crucially the existing
 `terminal-capture` (offscreen FBO + forced full flush + `capture-pixels`)
 -- so replay tests exactly what the live terminal renders.
 
+*Note (2026-10-26):* the guards stop at `gui-initialize` and `gui-tick`. The
+input handlers were not guarded, so a key, character, or resize event on a
+`no-pty` terminal applies `pty-alive-p` or `pty-set-size` to NIL and signals
+a type error (LEXTER-DRAFT-data-structures-1e-critique-O17). A hidden replay
+window rarely receives such events, but nothing prevents it.
+
 `terminal-reset` (`src/unix-term.lisp:terminal-reset@1f07ee8`) rebuilds a blank
 screen, display grid, and VT handler on
 an existing terminal, reusing its window/atlas/renderer. This lets one
 headless terminal serve many fixtures without rebuilding the (expensive)
-GL atlas. `terminal-config-plist`
+GL atlas.
+
+*Note (2026-10-26):* reusing the renderer also reuses its records of what it
+last uploaded, and those records are bare generation numbers. A fresh grid's
+swatch generation climbs through the same small numbers as the previous
+fixture's, so the second fixture's swatch table is never uploaded and it is
+drawn with the first fixture's colours; palettes have the same flaw, since
+every screen's palette generation starts at 1. A fixture's checksum
+therefore depends on which fixtures ran before it, against the determinism
+LEXTER-DRAFT-screenshot-test-rig-D3 rests on
+(LEXTER-DRAFT-data-structures-1e-critique-O5). `terminal-config-plist`
 (`src/unix-term.lisp:terminal-config-plist@1f07ee8`) returns the durable config
 plist.
 `terminal-start-recording` / `terminal-stop-recording`
@@ -328,6 +345,11 @@ The system compiles and loads clean from scratch (cache cleared), as does
 -magic blobs are rejected. The full GL replay path could not be exercised
 headlessly here (no display), matching the project's standing constraint.
 
+*Note (2026-10-26):* the replay of several fixtures through one terminal,
+the path left unexercised, is where the order dependence noted under
+Headless replay path lies; the data-structures critique showed it with a
+stand-in for the renderer's upload rule.
+
 
 ## Files
 
@@ -364,3 +386,19 @@ Its items are gathered, in the Log's own words, from the work it defers.
   shader; a software rasterizer -- `LIBGL_ALWAYS_SOFTWARE=1` -- would
   restore determinism on heterogeneous CI GPUs if ever needed (see
   Problem).
+- **Replays depend on fixture order.** `terminal-reset` should clear the
+  renderer's recorded swatch and palette generations, so that the first
+  frame after a reset uploads both. The general fix, recording the identity
+  of the producer with its generation or drawing generations from one global
+  counter, belongs to the swatch work the critique proposes
+  (LEXTER-DRAFT-data-structures-1e-critique-O5). A regression test replays
+  two fixtures with different colours in both orders.
+- **Unguarded handlers on a `no-pty` terminal.** `handle-key-press`,
+  `handle-char-input`, and `handle-resize` should do nothing to the PTY when
+  there is none (LEXTER-DRAFT-data-structures-1e-critique-O17). The same
+  finding's other half, that `pty-close` never closes the descriptor once
+  the child has exited, belongs to the PTY code rather than to this rig.
+- **A check the rig cannot make.** Both faults above depend on what the
+  renderer recorded before the capture, which a checksum cannot see. A check
+  that compares the GPU's swatch table with the grid's, as the critique's
+  Synthesis suggests, would make such faults visible.

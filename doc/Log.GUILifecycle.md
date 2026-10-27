@@ -1,24 +1,28 @@
 ---
-id:            LEXTER-DRAFT-gui-lifecycle
+id:            LEXTER-0005
 title:         "GUI Lifecycle (Iteration API): Development Log"
 genre:         Log
 scope:         component
 project:       Lexter
 component:     gui
 language:      en
-status:        Draft
+status:        Implemented
+authors:
+  - Andrew Sengul
+approved-by:   Andrew Sengul
+reviewed:      2026-10-26
 provenance:
   assistant:   opencode
 relates-to:
-  - LEXTER-DRAFT-stop-flag
+  - LEXTER-0001
 decisions:
-  - LEXTER-DRAFT-gui-lifecycle-D1
-  - LEXTER-DRAFT-gui-lifecycle-D2
-  - LEXTER-DRAFT-gui-lifecycle-D3
-  - LEXTER-DRAFT-gui-lifecycle-D4
-  - LEXTER-DRAFT-gui-lifecycle-D5
-  - LEXTER-DRAFT-gui-lifecycle-D6
-  - LEXTER-DRAFT-gui-lifecycle-D7
+  - LEXTER-D21
+  - LEXTER-D22
+  - LEXTER-D23
+  - LEXTER-D24
+  - LEXTER-D25
+  - LEXTER-D26
+  - LEXTER-D20
 ---
 
 # GUI Lifecycle (Iteration API): Development Log
@@ -85,12 +89,12 @@ and expose each frame as a callable step.
 
 *Migration note (2026-10-25):* the choice of integration strategy was a
 section of its own, "Design: Approach B", before the other decisions. It
-is recorded here as LEXTER-DRAFT-gui-lifecycle-D7 and placed first,
+is recorded here as LEXTER-D20 and placed first,
 because the other six decisions refine it.
 
-### LEXTER-DRAFT-gui-lifecycle-D7 — Approach B: main thread for GUI, background for everything else
+### LEXTER-D20 — Approach B: main thread for GUI, background for everything else
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** Lexter must be hosted by the Origin process manager, whose
 model places a supervisor and all non-GUI processes on background
@@ -121,9 +125,9 @@ form moves out. What changes is **object lifetime management**: the
 locals that lived inside the entry function become slots on a persistent
 object that survives across ticks.
 
-### LEXTER-DRAFT-gui-lifecycle-D1 — A window-level protocol in core Lexter (`lexter/gui`)
+### LEXTER-D21 — A window-level protocol in core Lexter (`lexter/gui`)
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** Where do the lifecycle generics and the dispatcher live, and what
 do they abstract over?
@@ -152,9 +156,9 @@ implement the same protocol, and a dispatcher written once treats a
 `unix-terminal` and a `compositor` uniformly. Core already depends on
 `cl-glfw3`, so the dispatcher's `glfw:poll-events` has no new dependency.
 
-### LEXTER-DRAFT-gui-lifecycle-D2 — The dispatcher owns the loop; the caller owns GLFW init/terminate
+### LEXTER-D22 — The dispatcher owns the loop; the caller owns GLFW init/terminate
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** What runs the loop, and who calls `glfw:initialize` /
 `glfw:terminate`? GLFW initialization is process-global and must happen
@@ -175,9 +179,9 @@ GLFW around the dispatcher today, and an Origin main-thread dispatcher will own
 it at the image level later. The dispatcher is a pure poll-tick-reap loop with
 no global lifecycle responsibility.
 
-### LEXTER-DRAFT-gui-lifecycle-D3 — Per-tick context switching is mandatory
+### LEXTER-D23 — Per-tick context switching is mandatory
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** What makes several windows able to share one thread?
 
@@ -197,9 +201,9 @@ This single line is the linchpin of the whole refactor; omitting it would
 render into the wrong window or corrupt GL state. For symmetry, `gui-destroy`
 also makes the context current before destroying the renderer.
 
-### LEXTER-DRAFT-gui-lifecycle-D4 — Config-on-struct, arg-free generics
+### LEXTER-D24 — Config-on-struct, arg-free generics
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** Should `gui-initialize` take configuration arguments, or read them
 from the object?
@@ -218,9 +222,9 @@ object -- and matches the natural division: the constructor is the
 configuration surface, the lifecycle generics are the mechanism. It also makes
 an object inspectable before it is initialized, which a host scheduler wants.
 
-### LEXTER-DRAFT-gui-lifecycle-D5 — Replace `with-init-window`; promote locals to slots
+### LEXTER-D25 — Replace `with-init-window`; promote locals to slots
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** How does window/resource lifetime change?
 
@@ -239,9 +243,9 @@ The frame-timing promotion is the subtle one: the old loop kept `last-time` as
 a loop local to compute the cursor-blink delta. Across independent tick calls
 there is no loop local, so it becomes a `last-tick-time` slot.
 
-### LEXTER-DRAFT-gui-lifecycle-D6 — Idempotent destroy; standalone wrappers preserved
+### LEXTER-D26 — Idempotent destroy; standalone wrappers preserved
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** How do the public entry points keep working, and how is double
 teardown avoided?
@@ -303,7 +307,7 @@ down. Added to the core `lexter` system in `lexter.asd@4313881` after
   (with the context current) -- plus `glfw:destroy-window`, guarded for
   idempotence.
 - **`run-terminal`** (`src/unix-term.lisp:run-terminal@4313881`) is now the
-  thin wrapper described in LEXTER-DRAFT-gui-lifecycle-D6.
+  thin wrapper described in LEXTER-D26.
 
 ### `compositor` (`src/panes/compositor.lisp`)
 
@@ -416,7 +420,7 @@ the 3270 cursor.
 ## Outstanding Work
 
 - **Origin main-thread GUI dispatcher.** The consumer side of Approach B
-  (LEXTER-DRAFT-gui-lifecycle-D7): a
+  (LEXTER-D20): a
   main-thread loop in Origin that owns `glfw:initialize`/`terminate`, hosts one
   or more Lexter objects via `gui-initialize` / `gui-tick` / `gui-destroy`, and
   reports their status. This refactor makes Lexter ready for it; the thread-

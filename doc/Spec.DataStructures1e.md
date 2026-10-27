@@ -22,6 +22,7 @@ relates-to:
   - LEXTER-DRAFT-stop-flag
   - LEXTER-DRAFT-offscreen-fbo
   - LEXTER-DRAFT-screenshot-test-rig
+  - LEXTER-DRAFT-data-structures-1e-critique
 cites:
   - title:    "Key words for use in RFCs to Indicate Requirement Levels"
     locator:  "RFC 2119"
@@ -904,9 +905,10 @@ may lift them:
 ### Known nonconformance
 
 At commit `2d4d743` the code departs from this contract in the places below.
-They were found by reading the code and have not all been reproduced. A
-critique of this edition will examine each one, with evidence and severity;
-this list only locates them.
+This list only locates them. Each is examined, with evidence and a severity,
+in [LEXTER-DRAFT-data-structures-1e-critique](Eval.Critique.DataStructures1e.md),
+which reproduces most of them and records further departures; the table after
+the list gives the finding for each item.
 
 1. **Wide characters lose their flag in the flush.** `flush-to-display` writes
    the right half of a wide character as an ordinary cell, and
@@ -966,6 +968,33 @@ this list only locates them.
     the shader comments also say 16 bits; `grid.lisp`'s header assigns slots
     2 and 3 to cursor and selection, which nothing does; and `+layered-stride+`
     is defined twice for one symbol (`src/renderer.lisp@2d4d743`).
+
+Table: The critique finding that examines each item.
+
+| Item | Finding |
+|---|---|
+| 1 | LEXTER-DRAFT-data-structures-1e-critique-O1 |
+| 2 | LEXTER-DRAFT-data-structures-1e-critique-O8 |
+| 3 | LEXTER-DRAFT-data-structures-1e-critique-O10 |
+| 4 | LEXTER-DRAFT-data-structures-1e-critique-O10 |
+| 5 | LEXTER-DRAFT-data-structures-1e-critique-O6 |
+| 6 | LEXTER-DRAFT-data-structures-1e-critique-O2 |
+| 7 | LEXTER-DRAFT-data-structures-1e-critique-O5 |
+| 8 | LEXTER-DRAFT-data-structures-1e-critique-O4 |
+| 9 | LEXTER-DRAFT-data-structures-1e-critique-O18 |
+| 10 | LEXTER-DRAFT-data-structures-1e-critique-O9 |
+| 11 | LEXTER-DRAFT-data-structures-1e-critique-O3 |
+| 12 | LEXTER-DRAFT-data-structures-1e-critique-O11 |
+| 13 | LEXTER-DRAFT-data-structures-1e-critique-O20 |
+| 14 | LEXTER-DRAFT-data-structures-1e-critique-O13 |
+| 15 | LEXTER-DRAFT-data-structures-1e-critique-O16 |
+| 16 | LEXTER-DRAFT-data-structures-1e-critique-O21, -O18 |
+
+The critique also records departures this list does not name:
+LEXTER-DRAFT-data-structures-1e-critique-O7 (TN3270E negotiation), -O12 (the scrollback viewport and scroll bar),
+-O14 (workspace switching), -O15 (autowrap and the scrolling region), -O17
+(the headless and teardown paths), -O19 (package exports), and -O22 (the grid's
+unused dirty bits).
 
 ### What would close the gap
 

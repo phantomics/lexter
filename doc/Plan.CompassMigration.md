@@ -1,30 +1,34 @@
 ---
-id:            LEXTER-DRAFT-compass-migration
+id:            LEXTER-0011
 title:         "Compass Migration: Development Plan"
 genre:         Plan
 scope:         project
 project:       Lexter
 language:      en
-status:        Draft
+status:        Implemented
+authors:
+  - Andrew Sengul
+approved-by:   Andrew Sengul
+reviewed:      2026-10-26
 provenance:
   assistant:   opencode
 relates-to:
   - CLASSIC-0032
   - ORIGIN-0001
 decisions:
-  - LEXTER-DRAFT-compass-migration-D1
-  - LEXTER-DRAFT-compass-migration-D2
-  - LEXTER-DRAFT-compass-migration-D3
-  - LEXTER-DRAFT-compass-migration-D4
-  - LEXTER-DRAFT-compass-migration-D5
-  - LEXTER-DRAFT-compass-migration-D6
-  - LEXTER-DRAFT-compass-migration-D7
-  - LEXTER-DRAFT-compass-migration-D8
-  - LEXTER-DRAFT-compass-migration-D9
-  - LEXTER-DRAFT-compass-migration-D10
+  - LEXTER-D53
+  - LEXTER-D54
+  - LEXTER-D55
+  - LEXTER-D56
+  - LEXTER-D57
+  - LEXTER-D58
+  - LEXTER-D59
+  - LEXTER-D60
+  - LEXTER-D61
+  - LEXTER-D62
 open-questions:
-  - LEXTER-DRAFT-compass-migration-O1
-  - LEXTER-DRAFT-compass-migration-O2
+  - LEXTER-O2
+  - LEXTER-O3
 ---
 
 # Compass Migration: Development Plan
@@ -103,9 +107,9 @@ to a Lexter document, so the renames broke no links.
 
 ## Settled Decisions
 
-### LEXTER-DRAFT-compass-migration-D1 — Every document and record takes a provisional identifier
+### LEXTER-D53 — Every document and record takes a provisional identifier
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** About 60 records and 13 documents (the eleven Logs, this plan,
 and its Log) need identifiers. None has been accepted, and Lexter has
@@ -122,9 +126,9 @@ steward accepts each document.
   numbers are assigned at acceptance by the steward (§13), and these
   documents are drafts.
 
-### LEXTER-DRAFT-compass-migration-D2 — Every migrated document is status Draft
+### LEXTER-D54 — Every migrated document is status Draft
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** An assistant never sets an authoritative status or
 `approved-by` (§6). The eleven Logs record work that was built and
@@ -140,9 +144,9 @@ reviewing it.
   a Log eligible for `compass assign`, and that eligibility is the
   steward's to grant.
 
-### LEXTER-DRAFT-compass-migration-D3 — Decision records add no content
+### LEXTER-D55 — Decision records add no content
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** 57 decisions need to become ADR-shaped records (§8). In
 five Logs each carries a **Question:** and a **Decision:**; the rest are a
@@ -164,9 +168,9 @@ Log is marked `*Migration note (<date>):*`.
   history. Rejected: it would put claims in a historical record that its
   author never made.
 
-### LEXTER-DRAFT-compass-migration-D4 — Code references pin to the revision they describe
+### LEXTER-D56 — Code references pin to the revision they describe
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** A Log's code references must be pinned to a revision (§9).
 Lexter's line references were written against the tree at a particular
@@ -214,9 +218,9 @@ Table: The commits each Log's references are expected to pin to, confirmed per r
 - Pin to the current `HEAD` and update the line numbers. Rejected: it
   rewrites history.
 
-### LEXTER-DRAFT-compass-migration-D5 — Follow-up work takes dated Update sections
+### LEXTER-D57 — Follow-up work takes dated Update sections
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** Four Logs record more than one piece of work, in four
 different forms: Encoding Ranges as `## Part 1`/`## Part 2`, Multi Buffer
@@ -238,16 +242,16 @@ done; it becomes the Log's Outstanding Work.
   forms would still need normalising, and Offscreen FBO's Phase 2 is a
   list of future work, not a phase.
 
-### LEXTER-DRAFT-compass-migration-D6 — Undecided choices become open-question records
+### LEXTER-D58 — Undecided choices become open-question records
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** Encoding Ranges closes on "Candidate fixes (decision
 pending)": two ways to stop the VT parser treating UTF-8 continuation
 bytes as C1 controls, one preferred but not chosen. A Log's decision
 records state choices that were made.
 
-**Decision:** The choice becomes `LEXTER-DRAFT-encoding-ranges-O1`, an
+**Decision:** The choice becomes `LEXTER-O1`, an
 open-question record listing both candidates and the stated preference,
 mirrored into `open-questions:`. The Log that implements a fix resolves
 it.
@@ -258,9 +262,9 @@ it.
 - Leave the candidates in Outstanding Work. Rejected: the choice could not
   be cited by identifier.
 
-### LEXTER-DRAFT-compass-migration-D7 — The session transcript becomes a foreign citation
+### LEXTER-D59 — The session transcript becomes a foreign citation
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** Input Redirect and Palette Paging cite
 `session-ses_2263-Lexter6.md` by line number in four places. The file is
@@ -277,9 +281,9 @@ locators.
   Rejected: `provenance` records how a document was written, and these
   passages cite the transcript as a source.
 
-### LEXTER-DRAFT-compass-migration-D8 — Dates in the text are kept, and corrected where Git contradicts them
+### LEXTER-D60 — Dates in the text are kept, and corrected where Git contradicts them
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** Each Log has a `**Date:**` line under its abstract, and two
 have a second for their follow-up work. Seven of the thirteen are earlier
@@ -299,9 +303,9 @@ sections, the date moves into the Update heading.
   record when the work was done, which can differ from when the Log was
   committed.
 
-### LEXTER-DRAFT-compass-migration-D9 — CI and code owners mirror Origin
+### LEXTER-D61 — CI and code owners mirror Origin
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** Classic and Origin enforce the standard with a CI workflow
 that builds the toolchain at a pinned revision and checks the corpus
@@ -317,9 +321,9 @@ the steward in GitHub's settings.
 - No CI for now. Rejected: the uniqueness of numbers depends on a check
   that cannot be bypassed.
 
-### LEXTER-DRAFT-compass-migration-D10 — Structure changes; content is not refreshed
+### LEXTER-D62 — Structure changes; content is not refreshed
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** Several Logs record work as pending or deferred, such as
 Encoding Ranges' UTF-8 fix and Mouse Reporting's deferred items, and later
@@ -342,7 +346,7 @@ consistent with Classic and Origin.
    ledger entries name the steward. Verify with `git check-mailmap`.
 2. **The ledger.** Create `doc/REGISTRY.sexp` with
    `compass init --ledger` (run with `--dry-run` first). It starts empty.
-3. **CI and code owners** (LEXTER-DRAFT-compass-migration-D9).
+3. **CI and code owners** (LEXTER-D61).
 4. **`AGENTS.md`.** Refresh the Compass block from the current snippet:
    add `next` to the commands, and the sentence on `compass assign` and the
    ledger.
@@ -353,19 +357,19 @@ consistent with Classic and Origin.
 ## Phase 2 — Front-matter on every document
 
 1. **Add front-matter** to the eleven Logs, following the Log template:
-   a provisional `id` (LEXTER-DRAFT-compass-migration-D1), a `title`
+   a provisional `id` (LEXTER-D53), a `title`
    matching the H1, `genre: Log`, `scope: component`, `project: Lexter`,
    the component below, `language: en`, `status: Draft`
-   (LEXTER-DRAFT-compass-migration-D2), and
+   (LEXTER-D54), and
    `provenance: { assistant: opencode }`
-   (LEXTER-DRAFT-compass-migration-D10). `created` and `updated` are
-   omitted (LEXTER-DRAFT-compass-migration-D8).
+   (LEXTER-D62). `created` and `updated` are
+   omitted (LEXTER-D60).
 
    Table: Front-matter to add to each Log.
 
    | Document | Identifier | Component |
    |---|---|---|
-   | `Log.EncodingRanges.md` | `LEXTER-DRAFT-encoding-ranges` | vt |
+   | `Log.EncodingRanges.md` | `LEXTER-0009` | vt |
    | `Log.EnhancedDualWidth.md` | `LEXTER-0007` | fonts |
    | `Log.GUILifecycle.md` | `LEXTER-0005` | gui |
    | `Log.InputRedirect.md` | `LEXTER-0002` | panes |
@@ -374,7 +378,7 @@ consistent with Classic and Origin.
    | `Log.OffscreenFBO.md` | `LEXTER-0008` | renderer |
    | `Log.PalettePaging.md` | `LEXTER-0004` | renderer |
    | `Log.PersistentPalette.md` | `LEXTER-0003` | renderer |
-   | `Log.ScreenshotTestRig.md` | `LEXTER-DRAFT-screenshot-test-rig` | test |
+   | `Log.ScreenshotTestRig.md` | `LEXTER-0010` | test |
    | `Log.StopFlag.md` | `LEXTER-0001` | origin |
 
 2. **`relates-to`** is filled only where one Log builds on or names
@@ -387,9 +391,9 @@ consistent with Classic and Origin.
    Redirect, Palette Paging, and Persistent Palette, and the four
    transcript references. The gate in step 5 cannot pass until they are
    pinned, and CI would fail on them. They are pinned in this phase
-   (LEXTER-DRAFT-compass-migration-D4), and the transcript becomes a
+   (LEXTER-D56), and the transcript becomes a
    `cites:` entry in the two Logs that use it
-   (LEXTER-DRAFT-compass-migration-D7).
+   (LEXTER-D59).
 
    Table: The revisions the Phase 2 references are pinned to.
 
@@ -414,11 +418,11 @@ consistent with Classic and Origin.
 
 Every Log receives the same treatment:
 
-- decision records (LEXTER-DRAFT-compass-migration-D3), mirrored into
+- decision records (LEXTER-D55), mirrored into
   `decisions:`;
 - pinned code references for the references Phase 2 did not pin, such
   as files and symbols named without a location
-  (LEXTER-DRAFT-compass-migration-D4);
+  (LEXTER-D56);
 - the §14 spine: Problem, Design Decisions, Implementation, Verification,
   Files, Outstanding Work, with the optional sections the Log template
   admits kept in place. A missing spine section is added with a migration
@@ -435,7 +439,7 @@ Every Log receives the same treatment:
   files the table does not list, a migration note names them; no rows
   are added. A Log with no Files table gets one built from its work
   commit, with a migration note;
-- dates (LEXTER-DRAFT-compass-migration-D8).
+- dates (LEXTER-D60).
 
 The Logs also need these specific changes:
 
@@ -443,10 +447,10 @@ Table: Changes specific to each Log, besides the common treatment.
 
 | Log | Specific changes |
 |---|---|
-| `Log.EncodingRanges.md` | Part 1 becomes the body and Part 2 an Update (LEXTER-DRAFT-compass-migration-D5); the candidate fixes become `LEXTER-DRAFT-encoding-ranges-O1` (LEXTER-DRAFT-compass-migration-D6); the `(pending)` Files rows move to the Update's Outstanding Work; a Design Decisions section is added with a migration note, since Part 1 records no decisions; the steward resolved `LEXTER-DRAFT-encoding-ranges-O1` (cl-vt's UTF-8 mode, enabled in the work commit `fbf8817`), recorded as a `**Resolution:**` with a `cites:` entry for cl-vt, which has no Compass namespace |
+| `Log.EncodingRanges.md` | Part 1 becomes the body and Part 2 an Update (LEXTER-D57); the candidate fixes become `LEXTER-O1` (LEXTER-D58); the `(pending)` Files rows move to the Update's Outstanding Work; a Design Decisions section is added with a migration note, since Part 1 records no decisions; the steward resolved `LEXTER-O1` (cl-vt's UTF-8 mode, enabled in the work commit `fbf8817`), recorded as a `**Resolution:**` with a `cites:` entry for cl-vt, which has no Compass namespace |
 | `Log.InputRedirect.md` | Implementation and Verification sections added (its line references and transcript citation were done in Phase 2) |
 | `Log.MouseReporting.md` | Bold-lead decisions become records, and the "Deferred" paragraph moves to Outstanding Work; Future work becomes Outstanding Work; the Files list becomes a table |
-| `Log.MultiBuffer.md` | The addendum becomes an Update (LEXTER-DRAFT-compass-migration-D5), and its decision `LEXTER-D33`; the two-buffer choice in "How real terminals do this" becomes `LEXTER-D27`, placed first among the records |
+| `Log.MultiBuffer.md` | The addendum becomes an Update (LEXTER-D57), and its decision `LEXTER-D33`; the two-buffer choice in "How real terminals do this" becomes `LEXTER-D27`, placed first among the records |
 | `Log.OffscreenFBO.md` | Motivation becomes Problem; the Phase 2 section becomes Outstanding Work; the in-body `**Status:**` label is removed |
 | `Log.PalettePaging.md` | Files table built from `04d69c2` (its line references and transcript citation were done in Phase 2) |
 | `Log.PersistentPalette.md` | The H1 appendix becomes an Update, and its "Remaining nuance" the Update's Outstanding Work; Files table built for the main work (its line references were pinned in Phase 2) |
@@ -481,10 +485,10 @@ pinned references, and captions. The index is regenerated, and
 Outside this plan:
 
 - Refreshing stale content in any Log
-  (LEXTER-DRAFT-compass-migration-D10).
+  (LEXTER-D62).
 - The steward's review of statuses, acceptance of decision records, and
   `compass assign`.
-- Converting `README.md` (LEXTER-DRAFT-compass-migration-O2).
+- Converting `README.md` (LEXTER-O3).
 
 ## Tensions and Risks
 
@@ -498,20 +502,20 @@ Outside this plan:
   Decision, and Alternatives can shift its emphasis. Each record keeps its
   original wording where it can.
 - **Pinning is judgment.** A reference's revision is chosen by where it
-  resolves (LEXTER-DRAFT-compass-migration-D4); `ref/code-exists` confirms
+  resolves (LEXTER-D56); `ref/code-exists` confirms
   the path and revision but only finds symbols by pattern.
 - **Many records to accept.** The migration yields about 60 records, all
   `Proposed`.
 
 ## Open Questions
 
-### LEXTER-DRAFT-compass-migration-O1 — Which documents are numbered first
+### LEXTER-O2 — Which documents are numbered first
 
 Once the migration lands, every document and record has a provisional
 identifier. Should the steward number the corpus at once, or document by
 document as each Log is reviewed and set `Implemented`?
 
-### LEXTER-DRAFT-compass-migration-O2 — A compiled README
+### LEXTER-O3 — A compiled README
 
 Compass lets a repository README be compiled from a template that includes
 sections of the corpus by identifier (§10). Lexter's README describes the
@@ -541,4 +545,4 @@ Table: Prior work in the federation and what this plan draws from each.
    fonts and encoding; VT and testing.
 5. Phase 4: `Log.CompassMigration.md`, recording the work.
 6. The steward reviews statuses, accepts records, and numbers with
-   `compass assign` (LEXTER-DRAFT-compass-migration-O1).
+   `compass assign` (LEXTER-O2).

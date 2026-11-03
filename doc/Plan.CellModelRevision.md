@@ -10,6 +10,8 @@ provenance:
   assistant:   opencode
   session:     "Cell model revision plan (2026-11-02)"
 relates-to:
+  - LEXTER-DRAFT-terminal-fixes-1e
+  - LEXTER-DRAFT-pane-profiles
   - LEXTER-DRAFT-layer-mechanics
   - LEXTER-DRAFT-cell-field-format
   - LEXTER-DRAFT-data-structures-1e
@@ -41,6 +43,7 @@ open-questions:
   - LEXTER-DRAFT-cell-model-revision-O8
   - LEXTER-DRAFT-cell-model-revision-O9
   - LEXTER-DRAFT-cell-model-revision-O10
+  - LEXTER-DRAFT-cell-model-revision-O11
 cites:
   - title:    "Session transcript ses_febe-LexterCritique"
     locator:  "session-ses_febe-LexterCritique.md, the closing review"
@@ -111,7 +114,7 @@ three mask glyphs, and the cell-field-format survey proposes its layout.
   renders correctly now.
 - Give every swatch table one owner and one range of a GPU store, so that
   panes cannot overwrite each other's colours and every upload record names
-  its source.
+  its source, before any of the changes that depend on it.
 - Replace the present cells with the dense 32-byte record, in which the
   record, not each function, keeps a cell's invariants.
 - Draw cursors and other sparse, moving glyphs from an overlay list kept
@@ -146,8 +149,16 @@ and backend sizing (-O20).
 
 **Decision:** This plan covers the cell model: the cells, their swatches,
 how they are drawn, and the VT handler's writing of double-width characters,
-which is part of how cells are made. The other fixes go in a separate plan.
-Where one of them is a prerequisite here, this plan names it in its Roadmap.
+which is part of how cells are made. The other fixes go in
+[LEXTER-DRAFT-terminal-fixes-1e](Plan.TerminalFixes1e.md), except the
+scroll-bar thumb and the scrollback viewport, which
+[LEXTER-DRAFT-pane-profiles](Plan.PaneProfiles.md) already plans. Two of the
+companion plan's fixes are prerequisites here and are named in the Roadmap:
+the consolidation of the two terminal stacks
+(LEXTER-DRAFT-terminal-fixes-1e-D2) before Phase 1, and the workspace-switch
+repaint (LEXTER-DRAFT-terminal-fixes-1e-D6) before Phase 3. The review's
+finding that the 3270 pane bypasses the model belongs to this plan
+(LEXTER-DRAFT-cell-model-revision-O11).
 
 **Alternatives:**
 - One plan for the whole sequence. Rejected: the other fixes are independent
@@ -251,9 +262,16 @@ again.
 
 **Status:** Proposed
 
-**Context:** Whether the second edition draws a grid per pane or one
-composed grid is open (LEXTER-DRAFT-cell-model-revision-O1). The first
-edition has one composed display grid and one draw call.
+**Context:** Swatch ownership is a precondition of everything after it in
+this plan. The dense record copies rows and uploads dirty rows, which needs
+swatch indices that mean the same wherever they are copied and upload
+records that name their source; the record cannot supply either, which is
+why the layer-mechanics survey puts swatch ownership before the dense design
+rather than after it. The overlay list takes its colours from tables'
+ranges, and eviction works within a range. Whether the second edition draws a
+grid per pane or one composed grid is open
+(LEXTER-DRAFT-cell-model-revision-O1). The first edition has one composed
+display grid and one draw call.
 
 **Decision:** Build the swatch ranges on the first edition. The flush adds the
 screen table's base to each swatch index as it writes the composed grid, and
@@ -263,7 +281,8 @@ decides, without changing the store.
 
 **Alternatives:**
 - Wait for the dense model and build the ranges into it. Rejected: the
-  swatch faults are high in severity and do not depend on the cell format.
+  dense model depends on the ranges, not the other way round, and the swatch
+  faults are high in severity and do not depend on the cell format.
 
 ### LEXTER-DRAFT-cell-model-revision-D6 — The first edition's cursor exchanges slots instead of interning a reversed swatch
 
@@ -465,6 +484,20 @@ edition, as LEXTER-DRAFT-cell-model-revision-D5 describes.
 When the phase is done, LEXTER-DRAFT-data-structures-1e-critique-O2, -O4, and
 -O5 are resolved, and -O6 is a limit per table with a policy for a full table.
 
+**Phase 2 is a precondition of every later phase.** It is complete when every
+swatch writer interns into a table with its own range, nothing calls
+`set-swatch` on a grid, and every upload record names its table. Each later
+phase depends on that:
+
+Table: What each later phase needs from swatch ownership.
+
+| Phase | Needs |
+|---|---|
+| 3, the dense cell model | Swatch indices that mean the same wherever rows are copied, and upload records that name their source, for dirty-row uploads |
+| 4, the overlay list | A table and range from which each overlay takes its colours |
+| 5, partial redraw | The dense model's dirty-row uploads, and so Phase 2 through Phase 3 |
+| 6, eviction | Ranges to evict within, and tables whose versions force a range to be uploaded again |
+
 ## The Dense Cell Model
 
 Phase 3 replaces the present cells with the record of
@@ -480,6 +513,13 @@ Table: The record, by word.
 | 2–4 | The display glyphs of layers 0–2 |
 | 5–7 | Tail: the three mask glyphs when any mask has a target, or a payload named by the tail type |
 
+- **Swatch ownership comes first.** The phase begins only when Phase 2 is
+  complete (see Swatch Ranges): the record holds swatch indices but cannot
+  make them mean the same in every copy, nor tell the renderer where an
+  upload came from.
+- **The 3270 pane.** It keeps a screen of its own and writes the grid
+  directly; whether it is rewritten to write records or keeps a path of its
+  own is LEXTER-DRAFT-cell-model-revision-O11.
 - **The grid's array is its upload buffer.** Cells are stored row by row, so
   each dirty row is one contiguous range, uploaded by itself. The renderer
   records which grid it uploaded, by an identity or an epoch from one global
@@ -515,8 +555,8 @@ cursors as its first use.
   instance layout and the same coverage function as the record.
 - **Positions in cells or pixels**, so an overlay can move smoothly and is not
   bound to the grid.
-- **Colours** from the swatch table of the pane or chrome it belongs to
-  (LEXTER-DRAFT-cell-model-revision-O4).
+- **Colours** from the swatch table and range of the pane or chrome it
+  belongs to, which Phase 2 provides (LEXTER-DRAFT-cell-model-revision-O4).
 - **The block cursor** needs the cell beneath it
   (LEXTER-DRAFT-cell-model-revision-O5).
 - **Redraw.** Moving, adding, removing, or animating an instance marks the
@@ -552,10 +592,14 @@ free the rest, and bump the table's version.
 - **Alignment.** SBCL does not place grid-sized arrays on 32-byte boundaries;
   records laid from the start of an array split cache lines
   (LEXTER-DRAFT-cell-model-revision-O10).
-- **Dependence on the other plan.** Dirty-row uploads would leave a stale
-  workspace on screen until the workspace switch schedules a repaint
-  (LEXTER-DRAFT-data-structures-1e-critique-O14), which the separate plan
-  fixes.
+- **Dependence on the other plans.** Phase 1 waits for the consolidation of
+  the two terminal stacks (LEXTER-DRAFT-terminal-fixes-1e-D2), so that its
+  repairs land once. Dirty-row uploads would leave a stale workspace on
+  screen until the workspace switch schedules a repaint
+  (LEXTER-DRAFT-data-structures-1e-critique-O14), which
+  LEXTER-DRAFT-terminal-fixes-1e-D6 fixes before Phase 3. The pane-profiles
+  plan also changes `flush-to-display`, to draw the history, so its order
+  with Phase 1 is settled when the phases are scheduled.
 - **Spare bits.** The header has three and word 1 two; the palette-slot and
   cursor bits may be freed (LEXTER-DRAFT-cell-model-revision-O1, -O5), but
   underline styles, a hover bit, and a protected bit compete for them
@@ -633,6 +677,17 @@ The Lisp heap with records offset by 16 bytes, foreign memory, or mapped GPU
 memory; and custom VOPs, sb-simd, or typed Lisp. It is
 LEXTER-DRAFT-layer-mechanics-O7.
 
+### LEXTER-DRAFT-cell-model-revision-O11 — Is the 3270 pane rewritten to the record, or does it keep its own path?
+
+The 3270 pane keeps a screen of its own, of codepoints and field attributes,
+and writes the display grid directly
+(`src/tn3270-pane/tn3270-pane.lisp:get-or-create-swatch@2d4d743`); the review
+found that it never touches the model. Under the dense model it can be
+rewritten to write records, or keep its own path into its own grid if each
+pane has one (LEXTER-DRAFT-cell-model-revision-O1). Either way, Phase 2 gives
+it a swatch table in place of its global cache. It is settled before
+Phase 3.
+
 ## Prior Art
 
 Table: Prior systems and what this plan draws from each.
@@ -653,17 +708,20 @@ Table: Prior systems and what this plan draws from each.
 1. **Phase 0: the regression suite.** A headless test system with a test for
    each finding in scope, reproducing it before it is repaired
    (LEXTER-DRAFT-cell-model-revision-D11).
-2. **Phase 1: the first edition repaired.** The repairs of The First Edition
+2. **Phase 1: the first edition repaired.** It starts after the companion
+   plan's consolidation of the two terminal stacks
+   (LEXTER-DRAFT-terminal-fixes-1e-D2). The repairs of The First Edition
    Repaired, finding by finding, each turning its test green. Double-width
    text renders through the VT path. A Log records the phase.
 3. **Phase 2: swatch ranges.** The store, the allocator, interning by every
    writer, upload records that name their tables, and indices translated in
    the flush (LEXTER-DRAFT-cell-model-revision-D4, -D5). Fixtures replay the
    same in any order. LEXTER-DRAFT-cell-model-revision-O3 and -O4 are settled
-   first. A Log records the phase.
-4. **Gate.** LEXTER-DRAFT-cell-model-revision-O1, -O2, -O6, and -O8 are
-   settled, and the separate plan's repair of the workspace switch has
-   landed.
+   first. A Log records the phase. Every later phase waits for it.
+4. **Gate.** Phase 2 is complete, as Swatch Ranges defines;
+   LEXTER-DRAFT-cell-model-revision-O1, -O2, -O6, -O8, and -O11 are settled;
+   and the companion plan's workspace-switch repaint
+   (LEXTER-DRAFT-terminal-fixes-1e-D6) has landed.
 5. **Phase 3: the dense cell model.** The descriptor
    (LEXTER-DRAFT-cell-model-revision-D9), the record
    (LEXTER-DRAFT-cell-model-revision-D7), halves

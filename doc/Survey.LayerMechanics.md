@@ -28,6 +28,15 @@ cites:
   - title:    "sb-simd"
     locator:  "SBCL contributed module sb-simd, as installed with SBCL 2.3.4"
     external: true
+  - title:    "EGL_EXT_buffer_age and GLX_EXT_buffer_age"
+    locator:  "Khronos EGL and OpenGL extension registries"
+    external: true
+  - title:    "EGL_KHR_swap_buffers_with_damage"
+    locator:  "Khronos EGL extension registry"
+    external: true
+  - title:    "Perform partial rendering when possible"
+    locator:  "Alacritty issue 5843, github.com/alacritty/alacritty"
+    external: true
 open-questions:
   - LEXTER-DRAFT-layer-mechanics-O1
   - LEXTER-DRAFT-layer-mechanics-O2
@@ -68,7 +77,7 @@ record the decision. The present structures are specified in
 this survey asks what a second edition's cell could be, and maps the findings
 of that critique and of an earlier review onto the dense design. Its main
 finding is that the dense design keeps cells consistent by construction but
-depends on one owner for the swatch namespace, which must come first. Scroll
+depends on settled ownership of the swatches, which must come first. Scroll
 bars of the kind [LEXTER-DRAFT-pane-profiles](Plan.PaneProfiles.md) leaves to
 decorators are its first use case.
 
@@ -238,6 +247,12 @@ Table: A 32-byte cell record.
 | 5–6 | layer 2: display glyph, mask glyph |
 | 7 | per layer, 9 bits: ink slot (2), fill slot (2), fill on (1), mask code (4); 5 spare |
 
+The layout of [LEXTER-DRAFT-cell-field-format](Survey.CellFieldFormat.md)
+supersedes this table: it gives the swatch index 16 bits, puts the settings
+of all three layers in one word, and places the three display glyphs ahead
+of a tail that holds the masks or another payload. The table is kept here for
+the argument about size that follows.
+
 A 24-byte record is possible with 24-bit glyph indices, each glyph word
 carrying 8 bits of settings; it uses about 44 of its 48 setting bits and
 leaves almost nothing spare. It has no room for layer-present bits, so an
@@ -252,22 +267,23 @@ record fills one 256-bit AVX2 register (LEXTER-DRAFT-layer-mechanics-O1).
 
 **Layers are for glyphs; attributes are bits.** Underline, strikethrough, and
 overline are rules of pixels the shader can draw from bits, and should not
-use up layers that text needs: a Vietnamese letter with two stacked
-diacritics already takes three. The five line-attribute bits of word 0 hold
-underline, strikethrough, and overline (one bit each) and a swatch slot for
-the underline colour (two bits). The cursor takes two bits as well: none,
-block, underline, or bar. The flush sets them on the cursor's cell, and the
-shader draws the block by swapping the ink and fill slots and the other two
-as rules. That removes the reversed swatch the flush now interns and writes
-into the grid on every frame, which is the write behind
+use up layers that text needs. Text can need them: a letter with two
+diacritics that arrive as separate combining marks takes three layers if
+each mark has a layer of its own, or two if one mark is a union mask on the
+letter's layer, though most text arrives precomposed (ệ is U+1EC7) and needs
+one. The five line-attribute bits of word 0 hold underline, strikethrough,
+and overline (one bit each) and a swatch slot for the underline colour (two
+bits). An earlier draft gave the cursor two bits as well, set by the flush on
+the cursor's cell; the steward has since chosen to draw cursors from an
+overlay list (see Cursors and the Overlay List), which leaves those bits free
+unless the block style keeps them (LEXTER-DRAFT-layer-mechanics-O15). Either
+way, the flush stops interning a reversed swatch and writing it into the grid
+on every frame, which is the write behind
 LEXTER-DRAFT-data-structures-1e-critique-O2, a source of the growth in
 LEXTER-DRAFT-data-structures-1e-critique-O6, and the reason overlays vanish
-under the cursor in LEXTER-DRAFT-data-structures-1e-critique-O9. It also
-makes drawable the cursor styles that the screen stores but no code draws
-(LEXTER-DRAFT-data-structures-1e-critique-O21). Three bits of word 0 and five
-of word 7 remain for later attributes. The steward has since chosen to draw
-cursors from an overlay list instead (see Cursors and the Overlay List), which
-would leave the cursor bits free.
+under the cursor in LEXTER-DRAFT-data-structures-1e-critique-O9, and the
+cursor styles that the screen stores but no code draws become drawable
+(LEXTER-DRAFT-data-structures-1e-critique-O21).
 
 The record changes how the renderer works:
 
@@ -305,7 +321,8 @@ frag_color = acc;
 
 The worst case per pixel is six atlas reads, one swatch read, and up to four
 palette reads. A 4K window at 8×16 pixels has about 64,800 cells, and the
-whole frame stays well under a millisecond on integrated graphics.
+whole frame should stay well under a millisecond on integrated graphics, an
+estimate not yet measured.
 
 The grid's array can be the upload buffer itself. Since it is row-major,
 each dirty row is one contiguous byte range, uploaded with
@@ -429,10 +446,10 @@ it makes the record, rather than each function, the keeper of a cell's
 invariants, which is the fix the Eval's synthesis asks for under its second
 theme. It leaves untouched the Eval's first theme, copies of the same data
 with no owner, and the swatch findings in particular; it raises the stakes
-of those, since row copying needs one swatch numbering and dirty-row uploads
-need trustworthy records. And it replaces the part of the cell format the
-Eval found sound: the GPU instance layout agrees byte for byte between
-packer and attribute setup. The case for the dense design is therefore
+of those, since copied rows need swatch indices that mean the same wherever
+they go, and dirty-row uploads need trustworthy records. And it replaces the
+part of the cell format the Eval found sound: the GPU instance layout agrees
+byte for byte between packer and attribute setup. The case for the dense design is therefore
 capacity, speed, and maintainability, not the correctness of today's
 layout.
 
@@ -451,7 +468,8 @@ Operations that fit:
 - recolouring a region by rewriting the swatch field of each record;
 - animating masks by rewriting the mask words of many cells from a computed
   sequence;
-- copying a pane's rows into the composed grid.
+- copying a pane's rows into a composed grid, if there is one
+  (LEXTER-DRAFT-layer-mechanics-O14).
 
 The 32-byte record suits SIMD exactly. One record is one 256-bit AVX2
 register: a kernel loads a cell, merges new fields under a lane mask with a
@@ -572,7 +590,9 @@ The model could store the grid's record too:
   is the seed of LEXTER-DRAFT-data-structures-1e-critique-O9. Copying
   requires a swatch index in a pane's screen to mean the same in the grid,
   which today it does not (LEXTER-DRAFT-data-structures-1e-critique-O4,
-  LEXTER-DRAFT-layer-mechanics-O5).
+  LEXTER-DRAFT-layer-mechanics-O5). With a grid per pane, the screen's array
+  would itself be uploaded and there would be nothing to copy
+  (LEXTER-DRAFT-layer-mechanics-O14).
 - **Attributes need a home.** The SGR attributes that are drawn, underline
   and its relatives, become the record's line-attribute bits. Those that
   affect only how colours are chosen, such as bold as bright and reverse
@@ -582,9 +602,10 @@ The model could store the grid's record too:
   lists, and keeps layers. 2000 lines of 80 cells take about 5 MB, against
   about 9 MB for the lists. Lines of different widths, left by resizing,
   need a fixed maximum width or a vector per line.
-- **The cursor becomes bits.** The copy into the grid would set the cursor
-  field on the cursor's cell, and the shader would draw it; drawing the
-  cursor would no longer write into the model (see The Dense Cell Array).
+- **The cursor leaves the model.** Drawing the cursor would no longer write
+  into the model: the overlay list draws it over the grid, or, for the block
+  style, the copy sets cursor bits in the grid's record (see Cursors and the
+  Overlay List, LEXTER-DRAFT-layer-mechanics-O15).
 - **The model grows.** A screen of 80×24 records is 61 KB, against about
   20 KB now. That is small, but it is three times larger.
 
@@ -759,7 +780,7 @@ draw the cursor follow from that.
 **The steward's choice.** The steward has chosen the overlay list, on the
 principle of separation of concerns: the grid is a uniform and stable model
 of text, the overlay list a model of ephemeral, sparse, and moving things,
-and the two can be addressed and scaled independently. The choice fits The
+and the two can be addressed and scaled independently. The choice fits the
 deeper claim below, a format uniform within a surface and separate across
 surfaces, with the overlay list as a surface of its own. It works with
 today's renderer, as one more instanced draw, as well as with the dense
@@ -798,15 +819,31 @@ uploads only dirty rows, but Lexter redraws the whole window on every frame
 it renders, and must: after a buffer swap the contents of the window's back
 buffer are undefined. Drawing only what changed needs a target that keeps its
 contents. The offscreen target of [LEXTER-0008](Log.OffscreenFBO.md) does,
-but it is opt-in (LEXTER-D39); partial redraw would draw into it, then present
-it.
+but it is opt-in: LEXTER-D39 made it so because it "costs an extra
+full-screen blit per frame". Partial redraw would keep it on, overturning
+that decision, draw into it, and then present it. The blit is then the cost
+that remains on every presented frame: cheap, but it covers the whole window.
+
+A second route needs no offscreen target. The extensions `EGL_EXT_buffer_age`
+and `GLX_EXT_buffer_age` report how many frames old the back buffer's
+contents are, so a renderer can redraw only what has changed since then, and
+`EGL_KHR_swap_buffers_with_damage` tells the system's compositor which
+rectangles changed. They are extensions rather than core OpenGL, their
+availability depends on the platform, and GLFW reaches them only through its
+native-access functions.
 
 With such a target, the dense design makes partial redraw simple:
 
 - **Rows by instance range.** A cell's position comes from its instance
   number, so rows *r* to *r+k* of a grid are one instanced draw of
-  `cols × (k+1)` instances, given the first cell by a uniform. Nothing
-  outside those rows is processed, so no scissor rectangle is needed. Today's
+  `cols × (k+1)` instances. The draw needs two adjustments, because OpenGL
+  3.3 has no base instance: `gl_InstanceID` restarts at 0, so a uniform gives
+  the first cell's index for computing positions; and per-instance
+  attributes are fetched from the start of the bound buffer, so the record's
+  attribute pointers move to the first row's byte offset, as the renderer
+  already moves them between layers. Reading records from a texture buffer by
+  computed index is the alternative to moving pointers. Nothing outside those
+  rows is processed, so no scissor rectangle is needed. Today's
   renderer stores positions and packs instances compactly, skipping
   continuation cells and separating layered ones, so its instances do not map
   onto rows.
@@ -818,11 +855,15 @@ With such a target, the dense design makes partial redraw simple:
 - **Per pane.** With a grid per pane, each pane redraws its own dirty rows.
 - **Exceptions.** In the transparent overlay the scene beneath changes on
   every frame, so the whole window is composited each time. Replacing a
-  grid, switching workspace, or resizing redraws everything, as the upload
-  rules under The Dense Cell Array already require.
+  grid, switching workspace, or resizing redraws everything, just as the
+  rules under The Dense Cell Array upload everything in those cases. A
+  workspace switch that schedules no repaint, as today's does
+  (LEXTER-DRAFT-data-structures-1e-critique-O14), would leave the old
+  workspace on screen.
 
 The saving is in GPU work and power: an idle terminal whose cursor animates
-redraws one row rather than the window.
+redraws one row rather than the window, though it still presents the window
+once per frame.
 
 ## Worked Example: A Scroll-Bar Thumb
 
@@ -873,8 +914,8 @@ and makes the record the keeper of every cell's invariants. Across
 surfaces, separate pipelines let depth and colour vary where the content
 needs them, without making every cell pay for the deepest case.
 
-The rule has a precondition that the record cannot meet: each namespace a
-record points into, swatches above all, needs one owner, and each record of
+The rule has a precondition that the record cannot meet: each table a record
+points into, swatches above all, needs a settled owner, and each record of
 "what changed" needs an identity. Both critiques put swatch ownership first,
 and the dense design leans on it harder than today's format does, so it
 comes before the dense design rather than after it.
@@ -901,8 +942,9 @@ it out and decide it.
    until it does, the stopgap of exchanged slots removes the cursor's swatch
    writes in the first edition.
 5. **Partial redraw**, optional: rows drawn by instance range into the
-   persistent offscreen target (see Partial Redraw). It depends on the dense
-   model, whose instances map onto rows.
+   persistent offscreen target, or into a back buffer whose age is known (see
+   Partial Redraw). It depends on the dense model, whose instances map onto
+   rows.
 6. **Eviction within a range**, separately, and only if
    LEXTER-DRAFT-data-structures-1e-critique-O6 is fixed by evicting unused
    swatches rather than by a large range and a fallback.
@@ -947,9 +989,11 @@ learns the cell beneath it (LEXTER-DRAFT-layer-mechanics-O15).
   allocation and release, and a policy for a full table.
 - **The overlay list is a second format.** It has its own instance layout,
   its own pass, and its own record of the rows it covers.
-- **Partial redraw needs a persistent target,** which is opt-in today, and
-  saves nothing in the transparent overlay, where the whole window is
-  composited on every frame.
+- **Partial redraw needs a persistent target or buffer age.** The offscreen
+  target is opt-in today, for the cost of a full-window blit per frame
+  (LEXTER-D39), and the buffer-age extensions depend on the platform. Either
+  way partial redraw saves nothing in the transparent overlay, where the whole
+  window is composited on every frame.
 
 ## Relationship to Other Work
 
@@ -996,6 +1040,23 @@ Outside it:
 - **Notcurses** keeps a fixed-size cell and stores long grapheme clusters in
   a side pool, an escape hatch from a dense format.
 - **kitty** keeps separate per-cell records for the CPU and the GPU.
+- **Hardware sprites**, on the Commodore 64's VIC-II (eight on screen) and
+  the NES's PPU (64, at most eight on a scanline), are drawn over a
+  background of tiles by separate hardware, as the overlay list is drawn over
+  the grid.
+- **Cursor planes** in display controllers, which Linux's DRM exposes as
+  planes of the cursor type, keep the pointer out of the framebuffer
+  altogether: the separation of concerns the overlay list adopts.
+- **Sub-palettes chosen by region**: the NES's attribute table gives each
+  two-by-two block of background tiles one of four four-colour palettes, and
+  each Mega Drive tile selects one of four 16-colour palette lines. Each is a
+  small base into a shared colour store, chosen per region, as
+  `u_swatch_base` would be chosen per pane.
+- **Damage tracking and buffer age**: `EGL_EXT_buffer_age`,
+  `GLX_EXT_buffer_age`, and `EGL_KHR_swap_buffers_with_damage`, cited above,
+  let a renderer redraw and present only what changed. Alacritty tracks
+  damage, and its issue tracker proposes going further with buffer age to
+  render only the damaged regions.
 
 ## Open Questions
 

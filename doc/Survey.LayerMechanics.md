@@ -40,6 +40,10 @@ open-questions:
   - LEXTER-DRAFT-layer-mechanics-O9
   - LEXTER-DRAFT-layer-mechanics-O10
   - LEXTER-DRAFT-layer-mechanics-O11
+  - LEXTER-DRAFT-layer-mechanics-O12
+  - LEXTER-DRAFT-layer-mechanics-O13
+  - LEXTER-DRAFT-layer-mechanics-O14
+  - LEXTER-DRAFT-layer-mechanics-O15
 ---
 
 # Layer Mechanics: Survey
@@ -54,8 +58,11 @@ colours. The survey covers the screen model, the display grid, and the
 renderer; compares the two designs; and looks at what the dense design makes
 possible: mutation of the grid by assembly kernels, reuse of unused mask
 fields for other effects, and a choice between one pipeline and fully
-separate pipelines of different depths. It decides nothing. The present
-structures are specified in
+separate pipelines of different depths. Later sections take up who owns the
+swatches, how cursors and other moving glyphs are drawn, partial redraw, and
+a development sequence. The survey decides nothing itself; where the steward
+has chosen a direction it says so, and the development plan that follows will
+record the decision. The present structures are specified in
 [LEXTER-DRAFT-data-structures-1e](Spec.DataStructures1e.md) and criticised in
 [LEXTER-DRAFT-data-structures-1e-critique](Eval.Critique.DataStructures1e.md);
 this survey asks what a second edition's cell could be, and maps the findings
@@ -251,14 +258,16 @@ underline, strikethrough, and overline (one bit each) and a swatch slot for
 the underline colour (two bits). The cursor takes two bits as well: none,
 block, underline, or bar. The flush sets them on the cursor's cell, and the
 shader draws the block by swapping the ink and fill slots and the other two
-as rules. That removes the reversed swatch the flush now interns on every
-frame, which is the write behind
+as rules. That removes the reversed swatch the flush now interns and writes
+into the grid on every frame, which is the write behind
 LEXTER-DRAFT-data-structures-1e-critique-O2, a source of the growth in
 LEXTER-DRAFT-data-structures-1e-critique-O6, and the reason overlays vanish
 under the cursor in LEXTER-DRAFT-data-structures-1e-critique-O9. It also
 makes drawable the cursor styles that the screen stores but no code draws
 (LEXTER-DRAFT-data-structures-1e-critique-O21). Three bits of word 0 and five
-of word 7 remain for later attributes.
+of word 7 remain for later attributes. The steward has since chosen to draw
+cursors from an overlay list instead (see Cursors and the Overlay List), which
+would leave the cursor bits free.
 
 The record changes how the renderer works:
 
@@ -336,8 +345,8 @@ Table: The current system and the dense cell array compared.
 | Plain text | 12 bytes read, simple shader | 32 bytes read, empty layers skipped |
 | Scrollback | A list per cell, layers lost | A record per cell, layers kept |
 | Transparent overlay | Layer 0 always opaque | Fill per layer; one final blend |
-| Palette slot | One per frame | Per cell, from 2 bits |
-| Cursor | A reversed swatch interned into the model every frame | Two bits, drawn by the shader |
+| Palette slot | One per frame | Per pane, from a uniform, or per cell, from 2 bits (see Swatch Ownership) |
+| Cursor | A reversed swatch interned into the model every frame | An instance in the overlay list, drawn over the grid |
 | Line attributes | Not drawn | Bits, drawn by the shader |
 | Mutation by kernels | Impractical: hash tables and structs | Natural: fixed offsets |
 
@@ -355,13 +364,14 @@ tested each structure against scenarios and reproduced or traced each of its
 class and struct composition for limits on adaptability and fragile
 components. They were made independently: the Eval's Method records that its
 critic did not read the session transcript save for exposure to the 40-line
-header containing the intial prompt and model reasoning and fragments of
+header containing the initial prompt and model reasoning and fragments of
 Plan.PaneProfiles.md that touched on the swatch finding. They agree on the
 most important point, that panes overwrite each other's swatches in the shared
-grid, and otherwise complement each other: the review found ceilings and
-coupling that are not yet faults, and the Eval found faults that reading the
-structure alone did not show, chief among them that wide characters never
-reach the GPU.
+grid, which the review calls "the single most fragile thing in the codebase"
+and the first thing to fix. Otherwise they complement each other: the review
+found ceilings and coupling that it did not show to be faults, and the Eval
+found faults that reading the structure alone did not show, chief among them
+that wide characters never reach the GPU.
 
 The table sorts every finding of both by what the dense design does to it.
 
@@ -369,33 +379,34 @@ Table: Findings of both critiques and the effect of the dense design on each.
 
 | Finding | Source | Severity | Effect | Why |
 |---|---|---|---|---|
-| Wide characters never reach the GPU | LEXTER-DRAFT-data-structures-1e-critique-O1 | high | Eased | Halves remove the grid and cursor faults; the VT handler must still ask the atlas whether a glyph is wide |
-| The grid's swatch generation has two meanings | LEXTER-DRAFT-data-structures-1e-critique-O2 | high | Eased | The cursor bits remove the per-frame swatch write that triggers it; the counter protocol remains |
+| Wide characters never reach the GPU | LEXTER-DRAFT-data-structures-1e-critique-O1 | high | Eased | Halves remove the grid and cursor faults; the VT handler must still ask the atlas whether a glyph is wide, and whatever writes a wide glyph must write both halves |
+| The grid's swatch generation has two meanings | LEXTER-DRAFT-data-structures-1e-critique-O2 | high | Eased | A cursor that writes no swatches removes the trigger; the cause, a counter with two meanings, goes only with per-screen swatch ranges (see Swatch Ownership) |
 | Host input escapes the handler's declared types | LEXTER-DRAFT-data-structures-1e-critique-O3 | high | Unaffected | The handler, not the cell format |
-| Panes write their own swatch numbering into one store | LEXTER-DRAFT-data-structures-1e-critique-O4; review | high | Unaffected, now a prerequisite | Copying rows needs one swatch numbering |
-| Generation records are trusted across producers | LEXTER-DRAFT-data-structures-1e-critique-O5 | high | Unaffected, a new risk | Dirty-row uploads depend on the same kind of record |
-| The swatch table outgrows the grid and the GPU | LEXTER-DRAFT-data-structures-1e-critique-O6; review | high | Eased | The cursor no longer interns swatches; the 15-bit field still needs a capacity enforced at interning |
+| Panes write their own swatch numbering into one store | LEXTER-DRAFT-data-structures-1e-critique-O4; review | high | Unaffected, now a prerequisite | Copied rows need swatch indices that mean the same wherever they go; per-screen ranges provide that (see Swatch Ownership). The review also names the 3270 pane's global swatch allocator |
+| Generation records are trusted across producers | LEXTER-DRAFT-data-structures-1e-critique-O5 | high | Unaffected, a new risk | Dirty-row uploads depend on the same kind of record; per-screen ranges record each table's identity |
+| The swatch table outgrows the grid and the GPU | LEXTER-DRAFT-data-structures-1e-critique-O6; review | high | Eased | The cursor no longer interns swatches; capacity must still be enforced at interning, per table under per-screen ranges. The review saw the overflow only at the grid |
 | TN3270E negotiation fails with RFC 2355 servers | LEXTER-DRAFT-data-structures-1e-critique-O7 | high | Unaffected | A protocol, not a structure |
 | Moving or clearing cells leaves wide flags behind | LEXTER-DRAFT-data-structures-1e-critique-O8 | medium | Resolved | The record is the unit of every move and clear |
-| Layered cells diverge between model and grid | LEXTER-DRAFT-data-structures-1e-critique-O9 | medium | Resolved | Whole records are copied; the cursor is bits |
-| Glyph 0 and codepoint 32 are overloaded | LEXTER-DRAFT-data-structures-1e-critique-O10; review | medium | Eased | Layer-present bits make glyph 0 unnecessary as a sentinel; writers must still take the blank from the atlas |
+| Layered cells diverge between model and grid | LEXTER-DRAFT-data-structures-1e-critique-O9 | medium | Resolved | Whole records are copied; the cursor is drawn over the grid, not into it |
+| Glyph 0 and codepoint 32 are overloaded | LEXTER-DRAFT-data-structures-1e-critique-O10; review | medium | Eased | Layer-present bits make glyph 0 unnecessary as a sentinel; writers must still take the blank from the atlas. The review names only the codepoint half |
 | The active buffer is not always read through the handler | LEXTER-DRAFT-data-structures-1e-critique-O11 | medium | Unaffected | Ownership of buffers, not their format |
 | The viewport moves the scroll bar but not the picture | LEXTER-DRAFT-data-structures-1e-critique-O12 | medium | Eased | History of records is drawn by copying rows; the inverted thumb is unaffected |
 | The TN3270 screen assumes a fixed size | LEXTER-DRAFT-data-structures-1e-critique-O13 | medium | Unaffected | The 3270 pane would be rewritten to the record, but its sizing is separate |
 | A workspace switch clears the grid without a repaint | LEXTER-DRAFT-data-structures-1e-critique-O14 | medium | Unaffected, a new risk | Stale rows would stay on the GPU under dirty-row uploads |
 | Autowrap ignores the scrolling region | LEXTER-DRAFT-data-structures-1e-critique-O15 | medium | Unaffected | The handler |
-| The telnet client mangles code 255 | LEXTER-DRAFT-data-structures-1e-critique-O16 | medium | Unaffected | A protocol |
+| The telnet client mangles code 255 | LEXTER-DRAFT-data-structures-1e-critique-O16 | low | Unaffected | A protocol |
 | The headless paths dereference a missing PTY | LEXTER-DRAFT-data-structures-1e-critique-O17 | low | Unaffected | The terminal, not the cell |
 | Constants and names are defined more than once | LEXTER-DRAFT-data-structures-1e-critique-O18; review | low | Resolved for the cell format | One descriptor; the duplicated default palettes remain |
-| Package boundaries disagree with the code | LEXTER-DRAFT-data-structures-1e-critique-O19; review | low | Eased | The flush becomes a record copy through an exported interface, not a `::` read of the grid's arrays |
+| Package boundaries disagree with the code | LEXTER-DRAFT-data-structures-1e-critique-O19; review | low | Eased | The flush becomes a record copy through an exported interface, not a `::` read of the grid's arrays. The review names only that one `::` read |
 | Backends are told the pane's size | LEXTER-DRAFT-data-structures-1e-critique-O20 | low | Unaffected | The pane protocol |
 | Descriptions have drifted from the model | LEXTER-DRAFT-data-structures-1e-critique-O21 | low | Eased in part | The stored cursor styles become drawable |
 | The grid's dirty bits are never read | LEXTER-DRAFT-data-structures-1e-critique-O22; review | low | Resolved | They drive the uploads |
-| The cursor writes into the model during the flush | Review | — | Resolved | The cursor is bits |
+| The cursor writes into the model during the flush, so the model cannot be flushed twice | Review | — | Resolved | The cursor is an overlay instance drawn over the grid |
 | Two parallel stacks, `unix-term` and the compositor | Review | — | Unaffected | Both would need the new format |
 | The 3270 pane bypasses the model | Review | — | Unaffected | It must be rewritten to the record, or keep its own path |
-| Global state in place of instance state | Review | — | Unaffected | `*cursor-blink-on*`, `*prefix-key*`, the window title |
-| Four palette slots | Review | — | Eased | A per-cell slot lets every pane draw with its own; four remains the limit |
+| Global state in place of instance state | Review | — | Unaffected | `*cursor-blink-on*`, `*prefix-key*`, the window title, the 3270 pane's swatch cache |
+| Mode state kept in two places: stubs on the screen, the real state in the handler | Review | — | Unaffected | The handler, not the cell format |
+| Four palette slots | Review | — | Eased | A per-pane uniform or a per-cell slot lets every pane draw with its own; four remains the limit. The review assumes four can be used at once today; only the focused pane's is |
 | Four colours per cell | Review | — | Kept by choice | Legibility; depth goes to a separate pipeline |
 | `screen` drifts toward a god-struct | Review | — | Eased | Cell data becomes one array; the other slots remain |
 | Scrollback stores a list per cell | Review | — | Resolved | Rows of records |
@@ -403,8 +414,14 @@ Table: Findings of both critiques and the effect of the dense design on each.
 | Reliance on babel's internals | Review | — | Unaffected | Encoding, not cells |
 | The record's alignment in the Lisp heap | This survey | — | A new risk | See Mutation Kernels |
 
-In the Source column, "review" is the review in the critique session, which
-gave no severities.
+In the Source column, "review" is the review in the critique session. It gave
+no severity labels but ranked its findings in three tiers: four "fragile
+load-bearing components", led by the swatch table, then "adaptability limits",
+then "smaller observations". Its ranking differs from the Eval's on two rows:
+it put the duplicated stride (LEXTER-DRAFT-data-structures-1e-critique-O18)
+and the unread dirty bits (LEXTER-DRAFT-data-structures-1e-critique-O22) in
+its first tier, where the Eval rates them low. Its remedy for the swatch table
+was a single authoritative intern table or content-addressed slots.
 
 Three observations follow. The redesign resolves or eases most of the
 medium- and low-severity findings, and almost all of them are about cells:
@@ -571,6 +588,242 @@ The model could store the grid's record too:
 - **The model grows.** A screen of 80×24 records is 61 KB, against about
   20 KB now. That is small, but it is three times larger.
 
+## Swatch Ownership
+
+The swatch findings of the data-structures critique come from one
+arrangement: each screen interns swatches into a table of its own, numbered
+from 0, and every pane copies its table into the single table of the display
+grid, which the renderer mirrors on the GPU.
+
+**Why the GPU's copy goes stale.** The grid's swatch counter has two meanings
+(LEXTER-DRAFT-data-structures-1e-critique-O2). Every `set-swatch` on the grid
+increments it, and the flush overwrites it with the model's counter after
+copying the model's table. The cursor's reversed swatch, written into the
+grid on every frame the cursor is drawn, leaves the grid one ahead of the
+model. When the model then gains exactly one swatch, the two counters agree,
+the flush skips its copy, and the renderer uploads a table that lacks the new
+swatch. Later flushes repair the grid but reset its counter, and the cursor's
+increment returns it to the number the renderer last recorded, so the GPU
+stays stale until another swatch is interned. The cursor's write is the
+trigger; the cause is a counter that can be assigned, and so can go down. A
+cursor that writes no swatches (see Cursors and the Overlay List) removes the
+trigger in a window with one terminal, but the 3270 pane,
+`setup-default-swatches`, and decorators also write swatches into the grid,
+and any of them can bring the coincidence back.
+
+**A window-wide table.** One way out is a single swatch table per window,
+owned by the compositor, into which every screen and every other writer
+interns. Indices then mean the same everywhere, and the grid need not hold a
+copy. It gives up more than it first appears to.
+
+Table: What a window-wide swatch table gives up.
+
+| Lost | Consequence |
+|---|---|
+| Per-screen numbering | A screen's indices mean something only in its window; moving a screen to another window, or `terminal-reset`, means interning again |
+| Separate capacity | One colourful pane can use up entries the others need |
+| The colour model in one place | LEXTER-D12 put the palette on the screen beside the swatch table it already owned; swatches would move to the window while palettes stay with screens |
+| Local eviction | Freeing an unused swatch means scanning every screen's cells and scrollback |
+
+Per-pane colour schemes do not depend on per-screen swatch tables. A swatch
+holds palette indices, and the colours come from the palette (LEXTER-D12), so
+two panes with different palettes can share the swatch (0 7 7 0) and still
+show different colours.
+
+**Per-screen swatch ranges.** The steward prefers to keep a swatch table per
+screen and give each table its own range of one GPU swatch store:
+
+- **One store, divided into ranges.** The texture buffer that
+  [LEXTER-DRAFT-cell-field-format](Survey.CellFieldFormat.md) proposes holds
+  65,536 swatches in 256 KB. Each table owns one range: each screen's, a
+  table that replaces the 3270 pane's global cache, and one for chrome.
+  Reserved swatches, which LEXTER-DRAFT-cell-field-format-O6 considers for
+  animating colours, would be a part of a table's range that interning never
+  hands out.
+- **The grid holds indices only.** Cells keep the local indices of their
+  screen's table. Each table uploads into its range when its identity or its
+  count changes. A table that only grows has a version that only rises, its
+  count, and the renderer records for each range which table it uploaded and
+  how many entries.
+- **Every writer interns.** Nothing calls `set-swatch` on a grid:
+  `setup-default-swatches`, the 3270 pane, the demo, and decorators intern
+  into a table.
+- **The primary and alternate screens can share one table.** OSC colour
+  changes already apply to the palettes of both buffers; one swatch table and
+  range for both is the same idea for swatches.
+
+There are two ways to draw from the ranges
+(LEXTER-DRAFT-layer-mechanics-O14):
+
+- **A grid per pane.** Each pane's cells are their own array, drawn by one
+  instanced draw with the uniforms `u_swatch_base` and `u_palette_slot`.
+  Indices stay local, a pane's dirty rows are uploaded from its own array
+  with no composed grid to copy into, and each pane draws with its own
+  palette slot, so cells need no palette-slot bits
+  (LEXTER-DRAFT-layer-mechanics-O9). It costs a draw call per pane, and
+  chrome needs a grid or overlay of its own. It is separation by surface, in
+  the sense of Pipeline Separation.
+- **One composed grid.** Panes are copied into one window-wide grid drawn in
+  one call. The copy adds each table's base to every swatch index, so it is
+  no longer a plain copy, and each pane's palette must travel in the
+  palette-slot bits of its cells.
+
+Table: The swatch findings under per-screen ranges.
+
+| Finding | Effect |
+|---|---|
+| LEXTER-DRAFT-data-structures-1e-critique-O2 | Resolved: the grid holds no swatch copy, and each table's count only rises |
+| LEXTER-DRAFT-data-structures-1e-critique-O4 | Resolved: ranges never overlap |
+| LEXTER-DRAFT-data-structures-1e-critique-O5 | Resolved: the renderer's record names the table, so a replaced table is uploaded |
+| LEXTER-DRAFT-data-structures-1e-critique-O6 | A capacity per table, at its range's size, with a local policy for a full table |
+
+The first holds on two conditions: every writer interns, and a table that
+changes other than by growing bumps a version that forces its range to be
+uploaded again.
+
+**Releasing ranges and swatches.** Two kinds of cleanup are needed, and
+fixing LEXTER-DRAFT-data-structures-1e-critique-O2 needs neither. When a
+screen goes away, because its pane is destroyed or `terminal-reset` replaces
+it, its range returns to the allocator; that is an explicit release, not
+garbage collection. Freeing unused swatches within a range when its table
+fills is the collecting part, and it is how
+LEXTER-DRAFT-data-structures-1e-critique-O6 would be fixed by eviction: mark
+the indices still used by the screen's cells and scrollback, free the rest,
+and bump the table's version, since eviction breaks the rule that a table
+only grows. A range large enough, with a fallback when it fills such as the
+nearest existing swatch, avoids eviction altogether. How ranges are sized and
+released is LEXTER-DRAFT-layer-mechanics-O12, and where the swatches of
+writers without a screen live is LEXTER-DRAFT-layer-mechanics-O13.
+
+## Cursors and the Overlay List
+
+**What the cursor costs today.** `flush-to-display` draws the cursor by
+interning a reversed swatch into the screen's table, writing it into the
+grid with `set-swatch`, and rewriting the cursor's cell as a plain narrow
+cell (`src/model.lisp:flush-to-display@2d4d743`). The first is a write to the
+model during the flush, the second is the trigger of
+LEXTER-DRAFT-data-structures-1e-critique-O2, and the third breaks wide pairs
+(LEXTER-DRAFT-data-structures-1e-critique-O1) and drops layers
+(LEXTER-DRAFT-data-structures-1e-critique-O9). The rule that removes all
+three is that the cursor belongs to the view, with its blink phase and focus
+owned by the window, and is never written into a screen's cells or its
+swatch table.
+
+A block cursor needs no mask glyph in the mask code of Mask Encodings,
+because the code can always express the negation of a layer's result:
+
+Table: The mask code of a layer, and the code that negates its result.
+
+| Layer's code | The same layer, result negated |
+|---|---|
+| none, display selector *s* | none, display selector not *s* |
+| union | intersection, both selectors flipped |
+| intersection | union, both selectors flipped |
+| exclusion | exclusion, one selector flipped |
+
+With the fill on, negating layer 0 is reverse video; in the transparent
+overlay it is an inked block with a hole in the glyph's shape. Four ways to
+draw the cursor follow from that.
+
+- **A stopgap in the first edition.** The present layered format gives each
+  layer its own ink and background slot
+  (`src/grid.lisp:cell-layer@2d4d743`). Drawing the cursor's cell as layered,
+  with layer 0's slots exchanged, gives reverse video without interning a
+  swatch; the grid keeps the wide flag, and the next flush of the row removes
+  the layer when the cursor moves.
+- **A stamped mask.** The copy into the grid stamps the cursor on the grid's
+  copy of the cell. A block negates layer 0; an underline or bar is a union
+  with "▁" or "▏", which needs a free mask or a free layer. Contention is
+  low. VT content uses one layer and no masks, since no escape sequence makes
+  layers, and a diacritic, once combining marks are supported, is best drawn
+  as a union mask on its letter's layer, which adds ink in the letter's own
+  colour and leaves two layers free. Animating a stamped cursor rewrites the
+  cell and uploads its row on every frame. It needs the dense design's masks.
+- **A uniform cursor.** Uniforms set each frame give the cursor's cell,
+  glyph, mask, code, and ink slot, and the shader applies them to that one
+  cell as a fourth, virtual layer in the same pass. It writes no cells and
+  competes for nothing, but every pixel compares its cell with each entry, so
+  it suits one cursor and not dozens.
+- **An overlay list.** Cursors and other sparse, moving glyphs are instances
+  in a list of their own, drawn by a second instanced draw over the grid.
+  Each instance carries a glyph, a mask or two (instances are not stored in
+  cells, so they are not held to the record's one mask per layer), a mask
+  code, a colour from a swatch table's range, and a position in cells or in
+  pixels. Its cost follows the area the overlays cover, not the window's, so
+  hundreds are cheap. It is drawn in list order, which keeps test captures
+  deterministic, and moving or animating an instance marks for redraw the
+  rows under its old and new positions (see Partial Redraw). Pixel positions
+  free overlays from the grid: a smoothly moving cursor, a mouse pointer, a
+  dragged item.
+
+**The steward's choice.** The steward has chosen the overlay list, on the
+principle of separation of concerns: the grid is a uniform and stable model
+of text, the overlay list a model of ephemeral, sparse, and moving things,
+and the two can be addressed and scaled independently. The choice fits The
+deeper claim below, a format uniform within a surface and separate across
+surfaces, with the overlay list as a surface of its own. It works with
+today's renderer, as one more instanced draw, as well as with the dense
+design. Its consequences:
+
+- **The block cursor needs the cell beneath it.** Negating layer 0's coverage
+  depends on that cell, which a pass drawn afterwards cannot read. Either the
+  CPU copies layer 0's glyph and settings into the cursor's instance and
+  refreshes them when the cell's row changes, or the block style stays in the
+  grid pass as cursor bits in the record's header
+  (LEXTER-DRAFT-layer-mechanics-O15).
+- **The header's cursor bits may be freed.** If every style is drawn as an
+  overlay, the two cursor bits of the header in
+  [LEXTER-DRAFT-cell-field-format](Survey.CellFieldFormat.md) join the spare
+  bits that LEXTER-DRAFT-cell-field-format-O7 counts.
+- **Overlays need colours.** An overlay belongs to a pane or to chrome and
+  takes its swatches from that table's range
+  (LEXTER-DRAFT-layer-mechanics-O13).
+- **Animation still costs frames.** An animated overlay writes no cells and
+  uploads no rows, but the CPU still runs a tick, sets a time uniform, issues
+  the draws, and presents the frame on every animation frame. The larger
+  cost, redrawing the window, is what partial redraw limits. Animating only
+  the focused pane, at a modest rate, and fixing time during test captures
+  (LEXTER-DRAFT-layer-mechanics-O8) keep the cost small.
+- **Exotic cursors become cheap.** A cursor that scans sideways like a wave
+  is the lower one-eighth block "▁" cut by the left blocks "▏" to "▉". With
+  one mask that gives a wipe: intersection with a growing left block, then
+  with the background of a growing left block, sweeps across the cell. A
+  short segment that travels needs three shapes, the underline and both of
+  its ends, which an overlay instance with two masks can carry.
+
+## Partial Redraw
+
+Uploading less and drawing less are separate savings. The dense design
+uploads only dirty rows, but Lexter redraws the whole window on every frame
+it renders, and must: after a buffer swap the contents of the window's back
+buffer are undefined. Drawing only what changed needs a target that keeps its
+contents. The offscreen target of [LEXTER-0008](Log.OffscreenFBO.md) does,
+but it is opt-in (LEXTER-D39); partial redraw would draw into it, then present
+it.
+
+With such a target, the dense design makes partial redraw simple:
+
+- **Rows by instance range.** A cell's position comes from its instance
+  number, so rows *r* to *r+k* of a grid are one instanced draw of
+  `cols × (k+1)` instances, given the first cell by a uniform. Nothing
+  outside those rows is processed, so no scissor rectangle is needed. Today's
+  renderer stores positions and packs instances compactly, skipping
+  continuation cells and separating layered ones, so its instances do not map
+  onto rows.
+- **What is redrawn** is each grid's dirty rows together with the rows under
+  any overlay instance that appeared, moved, animated, or disappeared.
+- **A row is enough.** A row costs about `cols` times as much as a cell to
+  redraw, and both are small; a rectangle per cell is not worth its
+  bookkeeping.
+- **Per pane.** With a grid per pane, each pane redraws its own dirty rows.
+- **Exceptions.** In the transparent overlay the scene beneath changes on
+  every frame, so the whole window is composited each time. Replacing a
+  grid, switching workspace, or resizing redraws everything, as the upload
+  rules under The Dense Cell Array already require.
+
+The saving is in GPU work and power: an idle terminal whose cursor animates
+redraws one row rather than the window.
+
 ## Worked Example: A Scroll-Bar Thumb
 
 A thumb that starts three-eighths of the way down row 2 and ends
@@ -626,6 +879,41 @@ record points into, swatches above all, needs one owner, and each record of
 and the dense design leans on it harder than today's format does, so it
 comes before the dense design rather than after it.
 
+## A Development Sequence
+
+The steward's intended order of work follows. The development plan will set
+it out and decide it.
+
+1. **The fixes needed under any design**, the first group of
+   LEXTER-DRAFT-layer-mechanics-O11: the VT handler's part of
+   LEXTER-DRAFT-data-structures-1e-critique-O1;
+   LEXTER-DRAFT-data-structures-1e-critique-O3, -O7, -O11, -O13 to -O17, and
+   -O20; and the inverted thumb of
+   LEXTER-DRAFT-data-structures-1e-critique-O12.
+2. **Per-screen swatch ranges**, which resolve
+   LEXTER-DRAFT-data-structures-1e-critique-O2, -O4, and -O5 and give -O6 a
+   capacity per table (see Swatch Ownership).
+3. **The dense cell model.** It comes after the ranges: copying rows and
+   uploading dirty rows both need swatch indices that mean the same wherever
+   they go, and records of uploads that name their source.
+4. **The overlay list**, with cursors as its first use (see Cursors and the
+   Overlay List). It works with today's renderer and so could come earlier;
+   until it does, the stopgap of exchanged slots removes the cursor's swatch
+   writes in the first edition.
+5. **Partial redraw**, optional: rows drawn by instance range into the
+   persistent offscreen target (see Partial Redraw). It depends on the dense
+   model, whose instances map onto rows.
+6. **Eviction within a range**, separately, and only if
+   LEXTER-DRAFT-data-structures-1e-critique-O6 is fixed by evicting unused
+   swatches rather than by a large range and a fallback.
+
+Design questions remain within it: how ranges are sized and released, and
+whether the primary and alternate screens share a table
+(LEXTER-DRAFT-layer-mechanics-O12); where the swatches of writers without a
+screen live (LEXTER-DRAFT-layer-mechanics-O13); a grid per pane or one
+composed grid (LEXTER-DRAFT-layer-mechanics-O14); and how the block cursor
+learns the cell beneath it (LEXTER-DRAFT-layer-mechanics-O15).
+
 ## Honest Limits
 
 - **A fixed ceiling.** Three layers and one mask per layer, permanently for
@@ -637,13 +925,13 @@ comes before the dense design rather than after it.
   directly, would all change.
 - **Plain text pays.** A cell with one glyph reads 32 bytes instead of 12.
 - **The swatch problem is a prerequisite, not a consequence.** A new format
-  does not give panes one swatch numbering
+  does not stop panes overwriting each other's swatches
   (LEXTER-DRAFT-data-structures-1e-critique-O4) or make the change records
   trustworthy (LEXTER-DRAFT-data-structures-1e-critique-O2,
   LEXTER-DRAFT-data-structures-1e-critique-O5), and row copying and
   dirty-row uploads depend on both.
-- **The present layout is sound.** The GPU instance layout is the one part
-  of the format the data-structures critique found correct; replacing it is
+- **The present layout is sound.** The GPU instance layout is the part of
+  the cell format the data-structures critique found correct; replacing it is
   justified by capacity, speed, and maintainability, not by a fault in it.
 - **Alignment is not guaranteed.** SBCL places a grid-sized array's data 16
   bytes past a 64-byte boundary, so 32-byte records need an offset that
@@ -655,6 +943,13 @@ comes before the dense design rather than after it.
   test rig.
 - **Glyph rounding.** Masks cannot make eighths exact where the font's cell
   height does not divide by eight.
+- **Ranges need an allocator.** Per-screen swatch ranges add range
+  allocation and release, and a policy for a full table.
+- **The overlay list is a second format.** It has its own instance layout,
+  its own pass, and its own record of the rows it covers.
+- **Partial redraw needs a persistent target,** which is opt-in today, and
+  saves nothing in the transparent overlay, where the whole window is
+  composited on every frame.
 
 ## Relationship to Other Work
 
@@ -670,10 +965,16 @@ Within Lexter:
   across panes and the GPU remains unsurveyed.
 - [LEXTER-DRAFT-pane-profiles](Plan.PaneProfiles.md) leaves scroll bars to
   decorators, which would write masked cells.
+- [LEXTER-DRAFT-cell-field-format](Survey.CellFieldFormat.md) proposes the
+  dense record's layout and the swatch store whose ranges Swatch Ownership
+  describes; its header's cursor bits are among those the overlay list would
+  free.
 - [LEXTER-0004](Log.PalettePaging.md) introduced the four
-  palette slots; a per-cell slot would let every pane use its own.
+  palette slots; a palette-slot uniform per pane, or a per-cell slot, would
+  let every pane use its own.
 - [LEXTER-0008](Log.OffscreenFBO.md) provides the offscreen
-  target that a transparent overlay and the test rig both draw into.
+  target that a transparent overlay and the test rig both draw into, and that
+  partial redraw would need to keep.
 - [LEXTER-0007](Log.EnhancedDualWidth.md) defines wide
   glyphs, which the dense record would store as halves.
 - [LEXTER-0010](Log.ScreenshotTestRig.md) checks
@@ -728,11 +1029,14 @@ the model three times larger. The model's attributes would need a place.
 
 ### LEXTER-DRAFT-layer-mechanics-O5 — Who owns the swatch namespace?
 
-That panes need one swatch numbering is settled by both critiques
-(LEXTER-DRAFT-data-structures-1e-critique-O4); the question is the owner. A
-swatch table owned by the compositor and shared by every writer; a base
-offset per pane into a partitioned table; or a grid per pane, which fits
-separate pipelines by surface. The choice also decides how capacity is
+That panes must stop overwriting each other's swatches is settled by both
+critiques (LEXTER-DRAFT-data-structures-1e-critique-O4); the question is the
+owner. A swatch table owned by the compositor and shared by every writer; a
+table per screen with its own range of one store, drawn from a grid per pane
+or from one composed grid (LEXTER-DRAFT-layer-mechanics-O14); or
+content-addressed slots, the review's alternative. The steward prefers
+per-screen ranges, for what a window-wide table gives up (see Swatch
+Ownership). The choice also decides how capacity is
 enforced (LEXTER-DRAFT-data-structures-1e-critique-O6) and how change records
 carry an identity (LEXTER-DRAFT-data-structures-1e-critique-O5). It is a
 prerequisite of row copying, and of the dense design generally.
@@ -761,7 +1065,10 @@ open.
 ### LEXTER-DRAFT-layer-mechanics-O9 — Should each cell carry a palette slot?
 
 Two bits per cell would let every pane draw with its own palette, rather
-than all of them with the focused pane's.
+than all of them with the focused pane's. With a grid per pane
+(LEXTER-DRAFT-layer-mechanics-O14), a palette-slot uniform for each pane's
+draw does the same, and the bits are needed only if palettes must vary
+within a pane.
 
 ### LEXTER-DRAFT-layer-mechanics-O10 — How are generated shapes added to the atlas?
 
@@ -786,4 +1093,36 @@ stride of LEXTER-DRAFT-data-structures-1e-critique-O18, the dirty bits of
 LEXTER-DRAFT-data-structures-1e-critique-O22, and the grid's half of
 LEXTER-DRAFT-data-structures-1e-critique-O1. The rest are small either way.
 The question is whether to repair the second group in place, as a stopgap,
-or to leave it for the second edition.
+or to leave it for the second edition. The steward's intended order of work
+is under A Development Sequence.
+
+### LEXTER-DRAFT-layer-mechanics-O12 — How are swatch ranges sized and released?
+
+Ranges can be fixed, for example 2048 entries each, which fits 32 tables in
+65,536, or allocated as tables grow, with relocation. Relocating a range
+changes only a base uniform with a grid per pane, but means re-copying cells
+into a composed grid. Open with it: whether the primary and alternate screens
+share one table, when a range is released, and whether a full table evicts
+unused swatches or falls back to the nearest existing one.
+
+### LEXTER-DRAFT-layer-mechanics-O13 — Where do the swatches of writers without a screen live?
+
+Chrome drawn by decorators, the overlay list, and the 3270 pane write colours
+without a VT screen's table. They could share a chrome table with a range of
+its own, or intern into the table of the pane they belong to.
+
+### LEXTER-DRAFT-layer-mechanics-O14 — A grid per pane, or one composed grid?
+
+A grid per pane keeps swatch indices local, lets a pane's dirty rows be
+uploaded straight from its own array, and gives each pane its palette slot by
+a uniform, at the cost of a draw call per pane and a separate home for chrome.
+One composed grid keeps a single draw call, but its copy must add each
+table's base to every swatch index, and palettes must travel in each cell's
+palette-slot bits.
+
+### LEXTER-DRAFT-layer-mechanics-O15 — How does the block cursor learn the cell beneath it?
+
+An overlay drawn after the grid cannot read the cell it negates. The CPU can
+copy layer 0's glyph and settings into the cursor's instance and refresh them
+when that row changes, or the block style can stay in the grid pass as cursor
+bits in the record's header while the other styles are drawn as overlays.

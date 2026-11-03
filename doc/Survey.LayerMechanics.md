@@ -1182,7 +1182,10 @@ uploaded straight from its own array, and gives each pane its palette slot by
 a uniform, at the cost of a draw call per pane and a separate home for chrome.
 One composed grid keeps a single draw call, but its copy must add each
 table's base to every swatch index, and palettes must travel in each cell's
-palette-slot bits.
+palette-slot bits. *Update:* the steward has chosen one composed grid, with
+screens that store global swatch indices so that the copy needs no
+translation, as LEXTER-DRAFT-cell-model-revision-D12 and -D5 in
+[LEXTER-DRAFT-cell-model-revision](Plan.CellModelRevision.md) record.
 
 ### LEXTER-DRAFT-layer-mechanics-O15 — How does the block cursor learn the cell beneath it?
 

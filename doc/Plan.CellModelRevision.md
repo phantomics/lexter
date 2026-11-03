@@ -32,6 +32,8 @@ decisions:
   - LEXTER-DRAFT-cell-model-revision-D9
   - LEXTER-DRAFT-cell-model-revision-D10
   - LEXTER-DRAFT-cell-model-revision-D11
+  - LEXTER-DRAFT-cell-model-revision-D12
+  - LEXTER-DRAFT-cell-model-revision-D13
 open-questions:
   - LEXTER-DRAFT-cell-model-revision-O1
   - LEXTER-DRAFT-cell-model-revision-O2
@@ -47,6 +49,9 @@ open-questions:
 cites:
   - title:    "Session transcript ses_febe-LexterCritique"
     locator:  "session-ses_febe-LexterCritique.md, the closing review"
+    external: true
+  - title:    "Session transcript ses_1640-Lexter14"
+    locator:  "session-ses_1640-Lexter14.md, lines 1719-1736 (a cell dump rejected because swatch indices depend on interning order)"
     external: true
   - title:    "EGL_EXT_buffer_age and GLX_EXT_buffer_age"
     locator:  "Khronos EGL and OpenGL extension registries"
@@ -258,7 +263,7 @@ again.
   still needs a store to resolve it, and does not say which table an upload
   came from.
 
-### LEXTER-DRAFT-cell-model-revision-D5 — Ranges arrive in the first edition, with indices translated in the flush
+### LEXTER-DRAFT-cell-model-revision-D5 — Ranges arrive in the first edition, and screens store global indices
 
 **Status:** Proposed
 
@@ -268,18 +273,25 @@ swatch indices that mean the same wherever they are copied and upload
 records that name their source; the record cannot supply either, which is
 why the layer-mechanics survey puts swatch ownership before the dense design
 rather than after it. The overlay list takes its colours from tables'
-ranges, and eviction works within a range. Whether the second edition draws a
-grid per pane or one composed grid is open
-(LEXTER-DRAFT-cell-model-revision-O1). The first edition has one composed
-display grid and one draw call.
+ranges, and eviction works within a range. Both editions draw one composed
+grid (LEXTER-DRAFT-cell-model-revision-D12), into which every pane's cells
+are copied.
 
-**Decision:** Build the swatch ranges on the first edition. The flush adds the
-screen table's base to each swatch index as it writes the composed grid, and
-the shader reads swatches from the texture buffer. The second edition then
-keeps translation or draws per pane, as LEXTER-DRAFT-cell-model-revision-O1
-decides, without changing the store.
+**Decision:** Build the swatch ranges on the first edition. A screen's table
+hands out global indices, its range's base plus the local number, and the
+screen stores those in its cells, so the flush copies a cell's swatch index
+unchanged and the shader reads swatches from the texture buffer. In the
+second edition the same indices sit in the record, and composing a pane into
+the grid is a plain copy of row segments. Because cells hold absolute
+indices, moving a range would mean rewriting a screen's cells and
+scrollback, so ranges are fixed in place
+(LEXTER-DRAFT-cell-model-revision-O3).
 
 **Alternatives:**
+- Store local indices and translate them in the flush, adding each table's
+  base as cells are written. Rejected: the copy is no longer plain, every
+  copy path and kernel must add the base, and it gains only the freedom to
+  move ranges, which fixed ranges do not need.
 - Wait for the dense model and build the ranges into it. Rejected: the
   dense model depends on the ranges, not the other way round, and the swatch
   faults are high in severity and do not depend on the cell format.
@@ -440,6 +452,81 @@ headless suite.
 - Screenshot fixtures alone. Rejected: they need a display, and cannot see
   stale state that a capture happens not to show.
 
+### LEXTER-DRAFT-cell-model-revision-D12 — One composed grid holds every text pane and its chrome
+
+**Status:** Proposed
+
+**Context:** LEXTER-DRAFT-cell-model-revision-O1 asked whether the second
+edition draws a grid per pane or one composed grid. A grid per pane needs no
+copy and lets panes differ in font, cell size, pixel offset, and effect, and
+overlap with transparency; but it costs a draw and an upload record per pane,
+needs a separate grid for the decorations in the space between panes, and
+breaks the idea that the window is one grid of characters. The case against
+a composed grid was translating each pane's swatch indices as it is copied,
+which global indices (LEXTER-DRAFT-cell-model-revision-D5) remove. The
+steward judges multiple fonts and filters for each screen to stray from
+Lexter's design goals and, in most situations, to be confusing and harmful
+to usability.
+
+**Decision:** The window has one composed grid of records, drawn in one call.
+Every text pane, and the chrome drawn by decorators, are cells in it. A
+pane's records hold global swatch indices and the pane's palette slot, in
+the palette-slot bits of the header, which therefore stay; composing a pane
+into the grid copies its row segments unchanged. What a grid per pane alone
+would give, such as a different font or an effect of its own, is provided
+where it is wanted by a surface: cells that reference a surface drawn in
+their area, as LEXTER-DRAFT-cell-model-revision-O7 records among the
+candidate tail types. A surface may hold a video, an image, or a
+sub-terminal with a grid and font of its own. Surfaces and effects are left
+to a later survey.
+
+**Alternatives:**
+- A grid per pane. Rejected: its unique abilities are exceptions, better
+  given to the area that needs them than paid for by every pane, and the
+  steward judges them contrary to the design in ordinary use.
+- One composed grid with indices translated on the copy. Rejected for the
+  reasons LEXTER-DRAFT-cell-model-revision-D5 gives.
+
+### LEXTER-DRAFT-cell-model-revision-D13 — Phase 3's tests also check a checksum of the normalised record array
+
+**Status:** Proposed
+
+**Context:** The test rig checks the exact pixels of a replay
+(LEXTER-D47). That checks the whole path from parser to shader, but it needs
+a GL context, holds only on one GPU and driver, and cannot say which stage
+failed. LEXTER-D45 rejected the cell matrix as the fixture, because it is
+lossy as a description of the input, not as an assertion about the output.
+An earlier session rejected a cell dump because swatch indices depend on the
+order in which swatches were interned (*Session transcript
+ses_1640-Lexter14*, lines 1719-1736).
+
+**Decision:** From Phase 3, each fixture records, beside its pixel checksum,
+a checksum of the grid's record array and the overlay instances after the
+replay, computed with no display. The checksum is taken over a normalised
+form: each swatch index is replaced by the four palette indices it resolves
+to, so that the order of interning does not matter, and the words of absent
+layers, an unused tail, and spare bits are taken as zero, as writers are
+required to leave them. Glyph indices stay atlas positions, since the fixture's configuration
+fixes the font. The checksum is a literal in the test source beside the
+pixel checksum, as LEXTER-D49 keeps references apart from blobs, so the blob
+format does not change.
+
+Read together, the two checksums place a failure: a changed cell checksum
+points to the parser, handler, model, or copy; a changed pixel checksum with
+an unchanged cell checksum points to the atlas, renderer, shaders, or
+uploads. The cell checksum cannot see a GPU copy that has gone stale, which
+the pixel checksum and the check of
+LEXTER-DRAFT-cell-model-revision-D11 cover.
+
+**Alternatives:**
+- The raw record bytes. Rejected: they change with the order of interning
+  and with garbage in fields the shader ignores, failing tests whose
+  pictures are unchanged.
+- Codepoints from the text array in place of atlas positions. Rejected: the
+  checksum would no longer see a wrong lookup in the atlas.
+- Hash the first edition's instance buffers now. Not chosen: every checksum
+  would be re-authored at Phase 3.
+
 ## The First Edition Repaired
 
 Phase 1 repairs the present structures in place
@@ -480,11 +567,12 @@ edition, as LEXTER-DRAFT-cell-model-revision-D5 describes.
 - **Uploads.** The renderer records, for each range, the table it uploaded
   and the count, and uploads the new tail of a table that has grown, or the
   whole range for a table that is new or has bumped its version.
-- **The flush.** Indices are translated to the store's numbering as cells are
-  written into the composed grid.
+- **Global indices.** A table hands out global indices, its range's base
+  plus the local number, and screens store them, so the flush copies each
+  swatch index unchanged (LEXTER-DRAFT-cell-model-revision-D5).
 - **The wide bit.** The first edition's instances carry the wide flag in bit
   15 of their swatch field (`src/grid.lisp:build-render-data@2d4d743`), so a
-  translated index must stay below 32,768. Until Phase 3 gives the swatch
+  global index must stay below 32,768. Until Phase 3 gives the swatch
   index 16 bits and the wide flag a bit of its own, the allocator uses only
   the store's first 32,768 entries. Moving the flag into the instance's
   padding bytes would lift the limit sooner, at the cost of changing the
@@ -517,15 +605,15 @@ Table: The record, by word.
 
 | Word | Contents |
 |---|---|
-| 0 | Header: swatch index, wide and right-half bits, layer count, line attributes, and the bits whose use is open (palette slot, cursor) |
+| 0 | Header: swatch index (global), palette slot (LEXTER-DRAFT-cell-model-revision-D12), wide and right-half bits, layer count, line attributes, and the cursor bits, whose use is open (LEXTER-DRAFT-cell-model-revision-O5) |
 | 1 | Layer settings under the fill rule, and the three masks' control fields (LEXTER-DRAFT-cell-model-revision-D7) |
 | 2–4 | The display glyphs of layers 0–2 |
 | 5–7 | Tail: the three mask glyphs when any mask has a target, or a payload named by the tail type |
 
 - **Swatch ownership comes first.** The phase begins only when Phase 2 is
   complete (see Swatch Ranges): the record holds swatch indices but cannot
-  make them mean the same in every copy, nor tell the renderer where an
-  upload came from.
+  make them mean the same in every copy, nor tell the renderer where an upload
+  came from.
 - **The 3270 pane.** It keeps a screen of its own and writes the grid
   directly; whether it is rewritten to write records or keeps a path of its
   own is LEXTER-DRAFT-cell-model-revision-O11.
@@ -534,9 +622,10 @@ Table: The record, by word.
   records which grid it uploaded, by an identity or an epoch from one global
   counter, and uploads the whole grid when the grid is replaced, the workspace
   changes, or the size changes.
-- **One draw per grid.** The shader computes a cell's position from its
-  instance number, composites the three layers in order with their masks, and
-  writes premultiplied colour, so there are no passes per layer.
+- **One composed grid, one draw** (LEXTER-DRAFT-cell-model-revision-D12). The
+  shader computes a cell's position from its instance number, composites the
+  three layers in order with their masks, and writes premultiplied colour, so
+  there are no passes per layer.
 - **Halves.** Double-width glyphs are stored as halves
   (LEXTER-DRAFT-cell-model-revision-D8). How a mask applies to a half is
   LEXTER-DRAFT-cell-model-revision-O6.
@@ -545,14 +634,14 @@ Table: The record, by word.
   readers. Its form is LEXTER-DRAFT-cell-model-revision-O8.
 - **Scrollback as rows of records.** History keeps layers and costs a record
   per cell, not a list.
-- **The model's storage and the pane's grid** are
-  LEXTER-DRAFT-cell-model-revision-O2 and -O1, both settled before the phase
-  begins.
+- **The model's storage** is LEXTER-DRAFT-cell-model-revision-O2, settled
+  before the phase begins. Panes are copied into the one composed grid by row
+  segments (LEXTER-DRAFT-cell-model-revision-D12).
 - **Kernels follow correctness.** Typed Lisp loops over the record come first;
   generated kernels, and where the grid lives in memory, are
-  LEXTER-DRAFT-cell-model-revision-O10. Where the grid lives is settled
-  before the phase, because it decides how rows are uploaded; the route for
-  kernels can wait.
+  LEXTER-DRAFT-cell-model-revision-O10. Where the grid lives is settled before
+  the phase, because it decides how rows are uploaded; the route for kernels
+  can wait.
 - **Tail types later.** The phase needs only the mask tail and the tail type
   that means "nothing"; the other tail types
   (LEXTER-DRAFT-cell-model-revision-O7) can be added after it, since a
@@ -610,15 +699,16 @@ free the rest, and bump the table's version.
   (LEXTER-DRAFT-cell-model-revision-O10).
 - **Dependence on the other plans.** Phase 1 waits for the consolidation of
   the two terminal stacks (LEXTER-DRAFT-terminal-fixes-1e-D2), so that its
-  repairs land once. Dirty-row uploads would leave a stale workspace on
-  screen until the workspace switch schedules a repaint
+  repairs land once. Dirty-row uploads would leave a stale workspace on screen
+  until the workspace switch schedules a repaint
   (LEXTER-DRAFT-data-structures-1e-critique-O14), which
   LEXTER-DRAFT-terminal-fixes-1e-D6 fixes before Phase 3. The pane-profiles
-  plan also changes `flush-to-display`, to draw the history, so its order
-  with Phase 1 is settled when the phases are scheduled.
-- **Spare bits.** The header has three and word 1 two; the palette-slot and
-  cursor bits may be freed (LEXTER-DRAFT-cell-model-revision-O1, -O5), but
-  underline styles, a hover bit, and a protected bit compete for them
+  plan also changes `flush-to-display`, to draw the history, so its order with
+  Phase 1 is settled when the phases are scheduled.
+- **Spare bits.** The header has three and word 1 two; the palette-slot bits
+  stay (LEXTER-DRAFT-cell-model-revision-D12), the cursor bits may be freed
+  (LEXTER-DRAFT-cell-model-revision-O5), and underline styles, a hover bit,
+  and a protected bit compete for what is left
   (LEXTER-DRAFT-cell-field-format-O7).
 - **A larger model.** A screen of 80×24 records is 61 KB, three times today's
   size; small, but it grows with every pane and its scrollback.
@@ -634,19 +724,30 @@ for chrome. One composed grid keeps one draw call, but its copy translates
 every swatch index, and palettes travel in each cell's bits. It is
 LEXTER-DRAFT-layer-mechanics-O14, and it is settled before Phase 3.
 
+**Resolution:** 2026-11-03 — accepted, recorded at the steward's direction:
+one composed grid, with global swatch indices so that composing needs no
+translation, and surfaces for the areas that need a font or effect of their
+own (LEXTER-DRAFT-cell-model-revision-D12, -D5).
+
 ### LEXTER-DRAFT-cell-model-revision-O2 — Does the model store the record?
 
-Storing the record makes the flush a copy, or no step at all with a grid per
-pane, and makes scrollback compact; it triples the model's size, and the
-model's attributes need a place. It is LEXTER-DRAFT-layer-mechanics-O4, and it
-depends on LEXTER-DRAFT-cell-model-revision-O1.
+Storing the record makes the flush a copy and makes scrollback compact; it
+triples the model's size, and the model's attributes need a place. It is
+LEXTER-DRAFT-layer-mechanics-O4. The decisions for one composed grid and
+global indices (LEXTER-DRAFT-cell-model-revision-D12, -D5) make it more
+attractive: a screen whose cells are records, with their global swatch indices
+and palette slot already set, composes into the grid by a plain copy of row
+segments, which a kernel can do as one block move per row.
 
 ### LEXTER-DRAFT-cell-model-revision-O3 — How are swatch ranges sized and released, and what does a full table do?
 
 Fixed ranges, such as 2048 entries for each of 32 tables, or ranges allocated
-and relocated as tables grow. Whether the primary and alternate screens share
-one table. Whether a full table evicts unused swatches (Phase 6) or falls
-back to the nearest existing one. It is LEXTER-DRAFT-layer-mechanics-O12.
+and relocated as tables grow. The steward leans to fixed ranges: screens store
+global indices (LEXTER-DRAFT-cell-model-revision-D5), so moving a range would
+mean rewriting a screen's cells and its scrollback. What remains open is their
+size. Whether the primary and alternate screens share one table. Whether a
+full table evicts unused swatches (Phase 6) or falls back to the nearest
+existing one. It is LEXTER-DRAFT-layer-mechanics-O12.
 
 ### LEXTER-DRAFT-cell-model-revision-O4 — Where do the swatches of writers without a screen live?
 
@@ -674,6 +775,17 @@ surface, inline colours, an effect, and tiles, with one value for no payload;
 the six bits from masks 1 and 2 could carry a mode, as tile mode's mode field
 would.
 
+One candidate is a **void**: the surface reference of the cell-field-format
+survey, a cell the grid does not draw, so that a surface drawn separately
+shows in its area. The steward's uses for it are a video player, an image in a
+gallery, and a sub-terminal with a grid and font of its own, which gives a
+pane the abilities a separate grid would (see
+LEXTER-DRAFT-cell-model-revision-D12). Void cells would also mark the area
+that effects applied to the whole grid, such as scanlines or a tint, pass
+over, so that the surface can take an effect of its own; glyph layers may sit
+over a void, as captions over a video. The details of surfaces and effects are
+left to a later survey.
+
 ### LEXTER-DRAFT-cell-model-revision-O8 — What does the text array hold?
 
 Codepoints, combining marks, and grapheme clusters need a form, such as a
@@ -699,10 +811,10 @@ The 3270 pane keeps a screen of its own, of codepoints and field attributes,
 and writes the display grid directly
 (`src/tn3270-pane/tn3270-pane.lisp:get-or-create-swatch@2d4d743`); the review
 found that it never touches the model. Under the dense model it can be
-rewritten to write records, or keep its own path into its own grid if each
-pane has one (LEXTER-DRAFT-cell-model-revision-O1). Either way, Phase 2 gives
-it a swatch table in place of its global cache. It is settled before
-Phase 3.
+rewritten to keep its screen as records, or keep its own screen and write
+records into its region of the composed grid
+(LEXTER-DRAFT-cell-model-revision-D12). Either way, Phase 2 gives it a swatch
+table in place of its global cache. It is settled before Phase 3.
 
 ## Prior Art
 
@@ -730,21 +842,24 @@ Table: Prior systems and what this plan draws from each.
    Repaired, finding by finding, each turning its test green. Double-width
    text renders through the VT path. A Log records the phase.
 3. **Phase 2: swatch ranges.** The store, the allocator, interning by every
-   writer, upload records that name their tables, and indices translated in
-   the flush (LEXTER-DRAFT-cell-model-revision-D4, -D5). Fixtures replay the
+   writer, upload records that name their tables, and global indices stored by
+   screens (LEXTER-DRAFT-cell-model-revision-D4, -D5). Fixtures replay the
    same in any order. LEXTER-DRAFT-cell-model-revision-O3 and -O4 are settled
    first. A Log records the phase. Every later phase waits for it.
 4. **Gate.** Phase 2 is complete, as Swatch Ranges defines;
-   LEXTER-DRAFT-cell-model-revision-O1, -O2, -O6, -O8, and -O11 are settled,
-   with the half of -O10 that decides where the grid lives; and the companion
+   LEXTER-DRAFT-cell-model-revision-O2, -O6, -O8, and -O11 are settled, with
+   the half of -O10 that decides where the grid lives; and the companion
    plan's workspace-switch repaint (LEXTER-DRAFT-terminal-fixes-1e-D6) has
    landed. The tail types of -O7 may wait until after Phase 3.
 5. **Phase 3: the dense cell model.** The descriptor
    (LEXTER-DRAFT-cell-model-revision-D9), the record
    (LEXTER-DRAFT-cell-model-revision-D7), halves
    (LEXTER-DRAFT-cell-model-revision-D8), the text array, scrollback of
-   records, one draw per grid, and dirty-row uploads. The suite passes on the
-   new model, and fixtures are re-authored. A Log records the phase.
+   records, one composed grid drawn in one call
+   (LEXTER-DRAFT-cell-model-revision-D12), and dirty-row uploads. The suite
+   passes on the new model, and fixtures are re-authored with a cell checksum
+   beside each pixel checksum (LEXTER-DRAFT-cell-model-revision-D13). A Log
+   records the phase.
 6. **Phase 4: the overlay list.** The pass, cursors as overlays, and the
    removal of LEXTER-DRAFT-cell-model-revision-D6's exchanged slots, after
    LEXTER-DRAFT-cell-model-revision-O5 is settled. A Log records the phase.

@@ -122,8 +122,11 @@ encoded through babel's internal functions.
 
 **Status:** Proposed
 
-**Context:** The cell plan's LEXTER-DRAFT-cell-model-revision-D1 keeps to
-the cell model and leaves the other fixes to a separate plan. One finding in
+**Context:** The development sequence of
+[LEXTER-DRAFT-layer-mechanics](Survey.LayerMechanics.md) begins with fixes
+needed under any design. The cell plan's
+LEXTER-DRAFT-cell-model-revision-D1 keeps to the cell model and leaves the
+other fixes to a separate plan. One finding in
 that set, the scrollback viewport and the inverted scroll-bar thumb
 (LEXTER-DRAFT-data-structures-1e-critique-O12), is already planned in
 [LEXTER-DRAFT-pane-profiles](Plan.PaneProfiles.md), whose
@@ -161,8 +164,11 @@ standalone terminal's API: `make-terminal`, `terminal-reset`,
 
 **Decision:** The standalone terminal becomes a compositor holding one
 workspace with one `uterm-pane`, behind the existing `unix-terminal` API,
-which becomes a thin layer over it. The duplicated code in `unix-term` is
-removed. The consolidation is the first fix of this plan, and the cell plan's
+which becomes a thin layer over it and keeps the `gui-*` protocol of
+[LEXTER-0005](Log.GUILifecycle.md). The layer keeps the functions and the
+accessors that callers use, as The Consolidated Stack lists. The duplicated
+code in `unix-term` is removed. The consolidation is the first fix of this
+plan, and the cell plan's
 Phase 1 waits for it, so that its repairs land once. The headless mode keeps
 working: a pane with no PTY is fed by `process-output`, and how the
 compositor keeps such a terminal alive is
@@ -194,9 +200,12 @@ screen is resized; each signals an error inside `process-output`
 
 **Decision:** Every value the host supplies is clamped or ignored before it
 reaches a typed slot or indexes an array. `rgb-to-256` maps into 0–255, an
-indexed colour above 255 is ignored as xterm ignores it, and tab stops are
-rebuilt for the new width whenever the screen is resized. The rule extends to
-every parameter the handler stores.
+indexed colour above 255 is ignored and leaves the current colour unchanged,
+and tab stops are rebuilt for the new width whenever the screen is resized.
+The rule extends to every parameter the handler stores. Where xterm's
+behaviour for a value out of range is documented, the fix matches it; that
+is checked against xterm's control-sequence documentation before the fix is
+built.
 
 **Alternatives:**
 - Wrap `process-output` in a handler that discards the rest of a failing
@@ -278,7 +287,10 @@ arrays are always 1920 elements, and record framing scans for the byte pair
 
 **Decision:** Negotiation follows RFC 2355: the client recognises
 `SEND DEVICE-TYPE`, answers `DEVICE-TYPE REQUEST` with its device type,
-accepts `DEVICE-TYPE IS … CONNECT …`, and then begins the FUNCTIONS exchange.
+accepts `DEVICE-TYPE IS … CONNECT …`, and then itself sends
+`FUNCTIONS REQUEST`, as RFC 2355 section 7.2 requires of the client; today's
+client only answers a server's request with `FUNCTIONS IS`
+(`src/tn3270/client.lisp:send-tn3270e-functions@2d4d743`).
 The screen is made by a constructor that sizes every array from its columns
 and rows. Records are framed by a small IAC state machine that undoubles
 `FF FF` and ends a record only at an unescaped IAC EOR. What a record larger
@@ -303,8 +315,11 @@ rules against negotiation loops forbid
 
 **Decision:** Strings are encoded first, in the pane's encoding (UTF-8 or
 CP437, as the pane already decodes output), and IAC is doubled on the encoded
-bytes. Option negotiation keeps a state for each option on each side, by the
-Q method of RFC 1143, and answers only a request that changes it.
+bytes. The encoding is known to the pane, not to the client in the
+`lexter/telnet` package, so encoding moves into the telnet pane and the
+client's write functions take bytes. Option negotiation keeps a state for
+each option on each side, by the Q method of RFC 1143, and answers only a
+request that changes it.
 
 **Alternatives:**
 - Keep the seven-bit mask and only fix the test for 255. Rejected: the mask
@@ -361,7 +376,10 @@ handler read other packages' internals with `::`
 **Decision:** Undefined exports are removed or defined. Each `::` read across
 packages becomes an exported function, except where the cell plan replaces
 the code that makes it. A check run with the test suite fails when an
-exported symbol of a Lexter package is neither bound nor fbound.
+exported symbol of a Lexter package names nothing: it is not bound, not
+fbound, and names neither a class (`find-class`) nor a type, unless it is on
+a short, documented list of exceptions, such as symbols exported only for
+use as keywords in a protocol.
 
 **Alternatives:**
 - Export the internals as they are. Rejected: it publishes slot accessors
@@ -459,6 +477,14 @@ Table: The standalone terminal's API after consolidation.
 | `terminal-start-recording`, `terminal-stop-recording` | The pane's VT handler |
 | `terminal-reset` | A new screen and handler for the pane, with the window, atlas, and renderer kept |
 | `no-pty` mode | A pane with no PTY, fed by `process-output` |
+| `unix-terminal-vt-handler`, used by the test rig's `replay-blob` | The pane's VT handler |
+| `unix-terminal-cols`, `-rows`, `-command`, `-pixel-scale`, `-title`, read by the Origin integration | The compositor's configuration and the pane's |
+| `unix-terminal-pty`, read by the Origin integration | The pane's PTY, or NIL for a headless terminal |
+| `unix-terminal-screen`, read by the Origin integration | Removed; readers ask the handler for the active screen (LEXTER-DRAFT-terminal-fixes-1e-D5) |
+
+The Origin integration reads the accessors through `::`
+(`src/origin-impulse.lisp:%window-fields@2d4d743`); those it keeps are
+exported (LEXTER-DRAFT-terminal-fixes-1e-D11).
 
 Key encoding, cursor blink, resize, palette upload, and default swatches then
 exist once, in the pane and compositor code. The Origin integration keeps the
@@ -532,7 +558,7 @@ Table: Prior systems and what this plan draws from each.
 | xterm | The behaviour to match for SGR parameters out of range, auto-wrap within a scrolling region, and the alternate screen |
 | RFC 1143's Q method | Option negotiation that cannot loop |
 | x3270 and c3270 | A TN3270E client that negotiates by RFC 2355 and supports screen sizes other than 80×24 |
-| Emacs `term`, VTE | Many terminal views served by one terminal core rather than parallel implementations |
+| VTE | One terminal core serving every application that embeds a terminal, rather than parallel implementations |
 
 ## Roadmap
 
@@ -559,3 +585,7 @@ Table: Prior systems and what this plan draws from each.
 8. **Records.** A Log for each group of steps, and the Known nonconformance
    list of [LEXTER-DRAFT-data-structures-1e](Spec.DataStructures1e.md) updated
    as its items are fixed.
+
+How these steps interleave with the cell plan's phases and the pane-profiles
+plan is set out in the ordering table at the end of the cell plan's Roadmap
+([LEXTER-DRAFT-cell-model-revision](Plan.CellModelRevision.md)).

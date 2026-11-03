@@ -1155,7 +1155,10 @@ LEXTER-DRAFT-data-structures-1e-critique-O22, and the grid's half of
 LEXTER-DRAFT-data-structures-1e-critique-O1. The rest are small either way.
 The question is whether to repair the second group in place, as a stopgap,
 or to leave it for the second edition. The steward's intended order of work
-is under A Development Sequence.
+is under A Development Sequence. *Update:* the steward has chosen to repair
+the first edition in full before the second edition begins, as
+LEXTER-DRAFT-cell-model-revision-D2 in
+[LEXTER-DRAFT-cell-model-revision](Plan.CellModelRevision.md) records.
 
 ### LEXTER-DRAFT-layer-mechanics-O12 — How are swatch ranges sized and released?
 

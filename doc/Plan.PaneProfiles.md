@@ -420,7 +420,9 @@ Table: Terminal events raised through pane-terminal-event.
 - **The two globals stay.** `*prefix-key*` and `*cursor-blink-on*` keep
   their current form; moving `prefix-key` into the compositor's profile and
   binding the blink state around the flush instead of setting it are left for
-  later, at the steward's direction.
+  later, at the steward's direction. *Update:* the steward has since placed
+  the globals in [LEXTER-DRAFT-terminal-fixes-1e](Plan.TerminalFixes1e.md),
+  whose LEXTER-DRAFT-terminal-fixes-1e-D12 moves them into instances.
 - **The redirect protocol is unchanged.** Its interception by method
   combination stays as it is. Its keyword-dispatched payload, which the mouse
   work extended (LEXTER-DRAFT-mouse-reporting-D7), could become event objects
@@ -434,7 +436,9 @@ Table: Terminal events raised through pane-terminal-event.
   per cell, which the critique notes as a cost. The format is not changed
   here.
 - **The single-terminal path is excluded.** `unix-term` has no panes and no
-  mouse handling; it gains neither profiles nor wheel scrolling.
+  mouse handling; it gains neither profiles nor wheel scrolling. *Update:*
+  LEXTER-DRAFT-terminal-fixes-1e-D2 makes the standalone terminal a
+  compositor with one pane, after which it gains both.
 
 ## Open Questions
 

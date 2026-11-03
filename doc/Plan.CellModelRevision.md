@@ -107,6 +107,14 @@ written into the model during the flush. The layer-mechanics survey argues
 for a dense record in which every cell has room for three display glyphs and
 three mask glyphs, and the cell-field-format survey proposes its layout.
 
+## Thesis
+
+A cell's rules belong to its representation, and a table's contents belong
+to one owner. The first edition kept cell rules in functions and swatch
+tables in several copies; this plan moves the rules into a record that every
+operation copies whole, and the tables into ranges that only their owners
+write.
+
 ## Goals
 
 - Repair the present data model, in place, so that it meets its
@@ -123,14 +131,6 @@ three mask glyphs, and the cell-field-format survey proposes its layout.
   each.
 - Leave a second edition of the data-model specification, superseding the
   first.
-
-## Thesis
-
-A cell's rules belong to its representation, and a table's contents belong
-to one owner. The first edition kept cell rules in functions and swatch
-tables in several copies; this plan moves the rules into a record that every
-operation copies whole, and the tables into ranges that only their owners
-write.
 
 ## Settled Decisions
 
@@ -366,7 +366,8 @@ erase both halves together, as a terminal must.
 
 **Alternatives:**
 - Keep one double-width instance. Rejected: it is how wide characters are
-  lost today, and it makes the record's size depend on its neighbour.
+  lost today. It makes what a cell draws depend on its neighbour, and leaves
+  a continuation cell that must never be written on its own.
 
 ### LEXTER-DRAFT-cell-model-revision-D9 — One descriptor defines the record for Lisp and the shader
 
@@ -402,10 +403,14 @@ table's range, and a position in cells or pixels, and the list is drawn by
 one instanced draw after the grid, in list order.
 
 **Alternatives:**
-- A stamped mask. Rejected: it competes with text for layers and masks, and
-  animating it rewrites a cell and uploads its row on every frame.
-- A uniform cursor. Rejected: every pixel compares its cell with every
-  entry, so it does not scale past a few cursors.
+- A stamped mask. Rejected because it writes ephemeral state into the stable
+  model of text, which the separation above keeps apart. Secondary costs:
+  animating it rewrites a cell and uploads its row on every frame, and it
+  needs a free mask or layer, though the survey found such contention rare,
+  since VT content uses one layer and a diacritic can be a union mask.
+- A uniform cursor. Rejected because it puts the cursor into the work of
+  every pixel rather than into a model of its own: every pixel compares its
+  cell with every entry, so it does not scale past a few cursors.
 - Cursor bits in the record's header. Rejected for the styles that can be
   overlays; whether the block style keeps them is
   LEXTER-DRAFT-cell-model-revision-O5.
@@ -422,10 +427,14 @@ renderer recorded before a capture.
 
 **Decision:** Before each finding is repaired, a test that reproduces it is
 added to a new test system, using FiveAM and cl-hamcrest as the Origin tests
-do. Faults on the GPU side are tested against a stand-in for the renderer's
-upload rule, as the critique did, and by a check that compares the swatch
-data the renderer last uploaded with its source. The tests run against both
-editions.
+do. Tests are written against behaviour that both editions share, so that
+they carry over: the screen's API, what a flush or upload produces for a
+cell, and a stand-in for the renderer's upload rule, as the critique used.
+Tests that must inspect first-edition internals, such as its wide and
+continuation flag vectors, are rewritten in Phase 3. A check that compares
+the swatch data the renderer last uploaded with its source needs a GL
+context, so it runs in the screenshot test rig's hidden window, not in the
+headless suite.
 
 **Alternatives:**
 - Screenshot fixtures alone. Rejected: they need a display, and cannot see
@@ -541,7 +550,14 @@ Table: The record, by word.
   begins.
 - **Kernels follow correctness.** Typed Lisp loops over the record come first;
   generated kernels, and where the grid lives in memory, are
-  LEXTER-DRAFT-cell-model-revision-O10.
+  LEXTER-DRAFT-cell-model-revision-O10. Where the grid lives is settled
+  before the phase, because it decides how rows are uploaded; the route for
+  kernels can wait.
+- **Tail types later.** The phase needs only the mask tail and the tail type
+  that means "nothing"; the other tail types
+  (LEXTER-DRAFT-cell-model-revision-O7) can be added after it, since a
+  renderer that meets an unknown type can draw the cell's layers without a
+  payload.
 
 The first edition's simple and layered paths, its hash tables of layered
 cells, the instance packer, and the per-layer draws are removed.
@@ -719,9 +735,10 @@ Table: Prior systems and what this plan draws from each.
    same in any order. LEXTER-DRAFT-cell-model-revision-O3 and -O4 are settled
    first. A Log records the phase. Every later phase waits for it.
 4. **Gate.** Phase 2 is complete, as Swatch Ranges defines;
-   LEXTER-DRAFT-cell-model-revision-O1, -O2, -O6, -O8, and -O11 are settled;
-   and the companion plan's workspace-switch repaint
-   (LEXTER-DRAFT-terminal-fixes-1e-D6) has landed.
+   LEXTER-DRAFT-cell-model-revision-O1, -O2, -O6, -O8, and -O11 are settled,
+   with the half of -O10 that decides where the grid lives; and the companion
+   plan's workspace-switch repaint (LEXTER-DRAFT-terminal-fixes-1e-D6) has
+   landed. The tail types of -O7 may wait until after Phase 3.
 5. **Phase 3: the dense cell model.** The descriptor
    (LEXTER-DRAFT-cell-model-revision-D9), the record
    (LEXTER-DRAFT-cell-model-revision-D7), halves
@@ -739,3 +756,22 @@ Table: Prior systems and what this plan draws from each.
    Spec.DataStructures2e, superseding
    [LEXTER-DRAFT-data-structures-1e](Spec.DataStructures1e.md), and README.md
    brought up to date (LEXTER-DRAFT-data-structures-1e-critique-O21).
+
+Three plans work in this area: this one,
+[LEXTER-DRAFT-terminal-fixes-1e](Plan.TerminalFixes1e.md), and
+[LEXTER-DRAFT-pane-profiles](Plan.PaneProfiles.md). Their steps interleave as
+follows.
+
+Table: The order of work across the three plans.
+
+| Order | Step | Waits for |
+|---|---|---|
+| 1 | This plan's Phase 0: the regression suite | — |
+| 2 | The terminal-fixes plan's tests, in that suite | 1 |
+| 3 | The terminal-fixes plan's consolidation of the two stacks (LEXTER-DRAFT-terminal-fixes-1e-D2) | 2 |
+| 4 | This plan's Phase 1: the first edition repaired | 3 |
+| 5 | This plan's Phase 2: swatch ranges | 4 |
+| 6 | The terminal-fixes plan's workspace-switch repaint (LEXTER-DRAFT-terminal-fixes-1e-D6) | 3 |
+| 7 | This plan's Phase 3 and later | 5, 6, and the gate's questions |
+| — | The pane-profiles plan's history drawing in `flush-to-display` | Its order relative to step 4 is settled when the phases are scheduled |
+| — | The terminal-fixes plan's protocol fixes (LEXTER-DRAFT-terminal-fixes-1e-D7, -D8) | Nothing; at any time |

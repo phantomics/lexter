@@ -107,8 +107,10 @@ Beyond the faults, the present format has limits that the steward's plans
 outrun. A cell is either one glyph or a sparse stack of up to three layers in
 a hash table keyed by conses; every frame packs every cell in Lisp and
 uploads it whole; a glyph cannot be cut by another, so a scroll bar's thumb
-can be placed only to the nearest cell; and the cursor is a special case
-written into the model during the flush. The layer-mechanics survey argues
+can be placed only to the nearest cell; the cursor is a special case written
+into the model during the flush; and, as the review found, the 3270 pane
+keeps a screen of its own and writes the display grid directly, never
+touching the model. The layer-mechanics survey argues
 for a dense record in which every cell has room for three display glyphs and
 three mask glyphs, and the cell-field-format survey proposes its layout.
 
@@ -134,6 +136,8 @@ write.
   apart from the grid.
 - Keep every repaired fault repaired, with a headless regression test for
   each.
+- Check each test fixture's cells as well as its pixels, with a checksum of
+  the normalised record array that needs no display.
 - Leave a second edition of the data-model specification, superseding the
   first.
 
@@ -249,9 +253,10 @@ cell-field-format survey proposes. Tables only grow, so a table's count is
 its version, and the renderer records for each range which table it
 uploaded and how many entries. Every writer interns into a table, and
 nothing calls `set-swatch` on a grid: `setup-default-swatches`, the 3270
-pane, the demo, and decorators get tables of their own. A table that changes
-other than by growing bumps a version that forces its range to be uploaded
-again.
+pane, the demo, and decorators intern as screens do. Which table a writer
+without a screen of its own uses, a chrome table or the table of the pane it
+belongs to, is LEXTER-DRAFT-cell-model-revision-O4. A table that changes other
+than by growing bumps a version that forces its range to be uploaded again.
 
 **Alternatives:**
 - One table per window, owned by the compositor. Rejected: it loses each
@@ -374,7 +379,9 @@ its own. A broken pair corrupts flags.
 both and the right-half bit in the second, and let each cell draw its own
 half. Every quad is one cell, continuation flags go away, and a broken pair
 shows half a glyph instead of corrupting state. Writers still write and
-erase both halves together, as a terminal must.
+erase both halves together, as a terminal must. The atlas keeps each wide
+glyph in two adjacent columns, as [LEXTER-0007](Log.EnhancedDualWidth.md)
+packs them, and the right half samples the second.
 
 **Alternatives:**
 - Keep one double-width instance. Rejected: it is how wide characters are
@@ -498,27 +505,51 @@ failed. LEXTER-D45 rejected the cell matrix as the fixture, because it is
 lossy as a description of the input, not as an assertion about the output.
 An earlier session rejected a cell dump because swatch indices depend on the
 order in which swatches were interned (*Session transcript
-ses_1640-Lexter14*, lines 1719-1736).
+ses_1640-Lexter14*, lines 1719-1736). A replay today cannot run without a GL
+context even to produce cells, because building the atlas queries
+`GL_MAX_TEXTURE_SIZE` and uploads a texture
+(`src/atlas.lisp:build-atlas@2d4d743`).
 
 **Decision:** From Phase 3, each fixture records, beside its pixel checksum,
 a checksum of the grid's record array and the overlay instances after the
-replay, computed with no display. The checksum is taken over a normalised
-form: each swatch index is replaced by the four palette indices it resolves
-to, so that the order of interning does not matter, and the words of absent
-layers, an unused tail, and spare bits are taken as zero, as writers are
-required to leave them. Glyph indices stay atlas positions, since the fixture's configuration
-fixes the font. The checksum is a literal in the test source beside the
-pixel checksum, as LEXTER-D49 keeps references apart from blobs, so the blob
-format does not change.
+replay.
+
+- **Computed with no display.** The atlas's packing, which assigns each glyph
+  its position and keeps its pixels, is separated from the upload of its
+  texture, and its column count is fixed by the fixture's configuration
+  instead of being derived from the GPU's maximum texture size, so glyph
+  positions do not depend on the machine. The handler, the model, and
+  composition already need no GL. The cell checksum is then computed by
+  replaying a blob in a terminal that has no window, which runs on any
+  machine.
+- **Normalised.** Each swatch index is replaced by the four palette indices
+  it resolves to, so that the order of interning does not matter, and the
+  words of absent layers, an unused tail, and spare bits are taken as zero,
+  as writers are required to leave them. Glyph indices stay atlas positions,
+  since the fixture's configuration fixes the font.
+- **Palettes included.** The contents of every palette that a cell's
+  palette-slot bits select are hashed with the cells, so that a palette
+  changed by the host, through OSC 4 or OSC 104, changes the cell checksum
+  as well as the pixels.
+- **Kept with the test.** The checksum is a literal in the test source beside
+  the pixel checksum, as LEXTER-D49 keeps references apart from blobs, so the
+  blob format does not change.
 
 Read together, the two checksums place a failure: a changed cell checksum
-points to the parser, handler, model, or copy; a changed pixel checksum with
-an unchanged cell checksum points to the atlas, renderer, shaders, or
-uploads. The cell checksum cannot see a GPU copy that has gone stale, which
-the pixel checksum and the check of
+points to the parser, handler, model, palettes, or composition; a changed
+pixel checksum with an unchanged cell checksum points to the atlas's texture,
+the renderer, the shaders, or the uploads. The cell checksum cannot see a GPU
+copy that has gone stale, which the pixel checksum and the check of
 LEXTER-DRAFT-cell-model-revision-D11 cover.
 
 **Alternatives:**
+- Compute the cell checksum only during the hidden-window replay that takes
+  the pixel checksum. Rejected: it would need a GL context, so it could not
+  run on a server without one.
+- Resolve each swatch slot to its RGB colour instead of hashing the palettes.
+  Not chosen: it would fold a change of palette and a change of swatch into
+  one difference, where hashing the palettes beside the cells keeps both
+  visible in the data.
 - The raw record bytes. Rejected: they change with the order of interning
   and with garbage in fields the shader ignores, failing tests whose
   pictures are unchanged.
@@ -745,9 +776,14 @@ Fixed ranges, such as 2048 entries for each of 32 tables, or ranges allocated
 and relocated as tables grow. The steward leans to fixed ranges: screens store
 global indices (LEXTER-DRAFT-cell-model-revision-D5), so moving a range would
 mean rewriting a screen's cells and its scrollback. What remains open is their
-size. Whether the primary and alternate screens share one table. Whether a
-full table evicts unused swatches (Phase 6) or falls back to the nearest
-existing one. It is LEXTER-DRAFT-layer-mechanics-O12.
+size. In Phase 2 only the store's first 32,768 entries are usable, because the
+first edition's instances carry the wide flag in bit 15 of their swatch field
+(see Swatch Ranges), so ranges of 2048 entries give 16 tables until Phase 3.
+Ranges are fixed in place, so those allocated in Phase 2 carry into Phase 3
+unchanged, and Phase 3 opens the rest of the store. Also open: whether the
+primary and alternate screens share one table, and whether a full table
+evicts unused swatches (Phase 6) or falls back to the nearest existing one.
+It is LEXTER-DRAFT-layer-mechanics-O12.
 
 ### LEXTER-DRAFT-cell-model-revision-O4 — Where do the swatches of writers without a screen live?
 
@@ -775,11 +811,11 @@ surface, inline colours, an effect, and tiles, with one value for no payload;
 the six bits from masks 1 and 2 could carry a mode, as tile mode's mode field
 would.
 
-One candidate is a **void**: the surface reference of the cell-field-format
-survey, a cell the grid does not draw, so that a surface drawn separately
-shows in its area. The steward's uses for it are a video player, an image in a
-gallery, and a sub-terminal with a grid and font of its own, which gives a
-pane the abilities a separate grid would (see
+The reference to a surface is the steward's **void**: a cell whose un-inked
+pixels the grid leaves undrawn, so that a surface drawn separately shows
+through them in the cell's area. The steward's uses for it are a video
+player, an image in a gallery, and a sub-terminal with a grid and font of its
+own, which gives a pane the abilities a separate grid would (see
 LEXTER-DRAFT-cell-model-revision-D12). Void cells would also mark the area
 that effects applied to the whole grid, such as scanlines or a tint, pass
 over, so that the surface can take an effect of its own; glyph layers may sit
@@ -830,6 +866,7 @@ Table: Prior systems and what this plan draws from each.
 | NES attribute tables, Mega Drive palette lines | A small base into a shared colour store chosen per region, as each table's range is |
 | Hardware sprites (C64 VIC-II, NES PPU), DRM cursor planes | Moving objects drawn apart from the background, as the overlay list is |
 | Buffer age and damage tracking (EGL, GLX, Alacritty) | Redrawing and presenting only what changed |
+| kitty, tmux, Alacritty's reference tests, VTE | Tests that assert on the screen model rather than on pixels, as the screenshot-test-rig Log ([LEXTER-0010](Log.ScreenshotTestRig.md)) records; the cell checksum adds such an assertion beside the pixel checksum |
 
 ## Roadmap
 

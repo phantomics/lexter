@@ -10,6 +10,7 @@ status:        Draft
 provenance:
   assistant:   opencode
 relates-to:
+  - LEXTER-DRAFT-cell-field-format
   - LEXTER-DRAFT-data-structures-1e
   - LEXTER-DRAFT-data-structures-1e-critique
   - LEXTER-DRAFT-pane-profiles
@@ -180,11 +181,12 @@ The encoding is complete for practical purposes. Of the sixteen logical
 functions of two inputs, union with the selectors gives the four forms of
 OR, intersection the four forms of AND, and exclusion gives XOR and its
 negation. Operation "none" gives the display glyph plain or inverted. The
-only functions missing are the mask glyph alone, which is the same as using
-it as the display glyph, and the two constants, which are a full block and
-an empty layer. The encoding has two redundancies: exclusion with both
-selectors set equals exclusion with neither, and "none" ignores the mask
-selector. The second is free for other use (see Overloading Unused Masks).
+only functions missing are the mask glyph alone plain or inverted, which
+is the same as using it as the display glyph, and the two constants, which
+are a full block and an empty layer. The encoding has two redundancies:
+exclusion with both selectors set equals exclusion with neither, and "none"
+ignores the mask selector. The second is free for other use (see Overloading
+Unused Masks).
 
 The selectors are what make the scroll bar work with Unicode as it is.
 Block Elements has every lower block in eighths (U+2581 to U+2588) but only
@@ -273,7 +275,9 @@ The record changes how the renderer works:
   are no per-layer passes, no blending between layers, and no sliding of
   attribute pointers. A layered cell is shaded once rather than up to three
   times. Settings are the same across a cell, so a cell with empty upper
-  layers skips them without divergence.
+  layers skips them without divergence, apart from the case of neighboring
+  cells with different layer counts; these may share a GPU warp and retain
+  divergence.
 - **Transparency is resolved in the shader.** The shader composites the
   layers itself and outputs premultiplied colour; only the final blend, over
   another scene, uses the GPU's blending.
@@ -350,12 +354,14 @@ tested each structure against scenarios and reproduced or traced each of its
 22 findings. The earlier review in the critique session cited above read the
 class and struct composition for limits on adaptability and fragile
 components. They were made independently: the Eval's Method records that its
-critic did not read the session transcript. They agree on the most important
-point, that panes overwrite each other's swatches in the shared grid, and
-otherwise complement each other: the review found ceilings and coupling that
-are not yet faults, and the Eval found faults that reading the structure
-alone did not show, chief among them that wide characters never reach the
-GPU.
+critic did not read the session transcript save for exposure to the 40-line
+header containing the intial prompt and model reasoning and fragments of
+Plan.PaneProfiles.md that touched on the swatch finding. They agree on the
+most important point, that panes overwrite each other's swatches in the shared
+grid, and otherwise complement each other: the review found ceilings and
+coupling that are not yet faults, and the Eval found faults that reading the
+structure alone did not show, chief among them that wide characters never
+reach the GPU.
 
 The table sorts every finding of both by what the dense design does to it.
 
@@ -407,7 +413,7 @@ invariants, which is the fix the Eval's synthesis asks for under its second
 theme. It leaves untouched the Eval's first theme, copies of the same data
 with no owner, and the swatch findings in particular; it raises the stakes
 of those, since row copying needs one swatch numbering and dirty-row uploads
-need trustworthy records. And it replaces the one part of the format the
+need trustworthy records. And it replaces the part of the cell format the
 Eval found sound: the GPU instance layout agrees byte for byte between
 packer and attribute setup. The case for the dense design is therefore
 capacity, speed, and maintainability, not the correctness of today's
@@ -709,7 +715,11 @@ the truth table makes every code a distinct function.
 
 One mask fits the record and covers most of the scroll bar. A thin band
 inside one cell needs a second mask, which would cost 12 more bytes per
-cell, or a generated glyph.
+cell, or a generated glyph. A third possibility costs nothing in size: keep
+three masks but give each a target layer, so that two can cut the same
+layer. The mask-target update of
+[LEXTER-DRAFT-cell-field-format](Survey.CellFieldFormat.md) records it, with
+two encodings, as a possibility rather than a decision.
 
 ### LEXTER-DRAFT-layer-mechanics-O4 — Should the model store the grid's record?
 

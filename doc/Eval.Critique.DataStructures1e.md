@@ -612,7 +612,7 @@ stream sends `7F FF`
 (`src/telnet/client.lisp:telnet-write-string@2d4d743`). Traced:
 `src/telnet/client.lisp:%handle-will@2d4d743` replies unconditionally.
 
-**Severity:** low
+**Severity:** medium
 
 **Seed:** Encode before escaping, and keep a per-option state table.
 

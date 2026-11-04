@@ -10,6 +10,7 @@ provenance:
   assistant:   opencode
   session:     "Cell model revision plan (2026-11-02)"
 relates-to:
+  - LEXTER-DRAFT-cell-model
   - LEXTER-DRAFT-terminal-fixes-1e
   - LEXTER-DRAFT-pane-profiles
   - LEXTER-DRAFT-layer-mechanics
@@ -382,7 +383,13 @@ tail type, and those of masks 1 and 2 give six bits for the payload. One
 tail-type value means that the tail holds nothing. Operation 3 removes the
 running coverage from the mask's pixels, a function no other value
 expresses. The tail types and the use of the six bits are refined after this
-plan (LEXTER-DRAFT-cell-model-revision-O7).
+plan (LEXTER-DRAFT-cell-model-revision-O7). *Update:* the steward has since
+refined the encoding in [LEXTER-DRAFT-cell-model](Arch.CellModel.md): each
+layer's and mask's settings move into the top byte of its own glyph word,
+masks keep their operations, selector, and target, and word 0 becomes a
+kind word that gives the numbers of layers and masks
+(LEXTER-DRAFT-cell-model-D1, -D3, -D4, -D5), in place of word 1's fixed
+fields and the tail type folded into unused masks.
 
 **Alternatives:**
 - Four operations and no selector. Rejected: the two operations it drops can
@@ -612,7 +619,10 @@ internal format `GL_RGBA8UI`, read in the shaders as `usamplerBuffer` with
   palette slot's entries begin at the slot's number times 256. The uniform
   buffer is removed. The store's guaranteed 65,536 texels lift the limit of
   LEXTER-D17, which belonged to the float uniform buffer; how many slots a
-  record can name is not changed by this decision.
+  record can name is not changed by this decision. *Update:* the record's
+  palette slot is widened to six bits, and the store's size set by the
+  configuration, in LEXTER-DRAFT-cell-model-D7 and -D12 of
+  [LEXTER-DRAFT-cell-model](Arch.CellModel.md).
 - **Bytes on the CPU.** The model keeps palette entries as bytes, so that the
   upload copies them unchanged and the CPU renderer
   (LEXTER-DRAFT-cell-model-revision-D16) reads the values the GPU reads.
@@ -840,9 +850,14 @@ Table: What each later phase needs from swatch ownership.
 
 Phase 3 replaces the present cells with the record of
 LEXTER-DRAFT-cell-model-revision-D7, laid out as the cell-field-format survey
-proposes, with mask targets.
+proposes, with mask targets. *Update:* the record's layout is now specified
+by [LEXTER-DRAFT-cell-model](Arch.CellModel.md), which supersedes the table
+below: word 0 is a kind word with the numbers of layers and masks, word 1 the
+header, and words 2–7 glyph words, each holding its own settings, or a
+payload that the kind defines. The header no longer holds the layer count,
+the line attributes, or the cursor bits.
 
-Table: The record, by word.
+Table: The record, by word, as first planned.
 
 | Word | Contents |
 |---|---|
@@ -1041,6 +1056,11 @@ instance and refreshes them when the row changes, or the block style keeps
 cursor bits in the header and is drawn in the grid's pass. It is
 LEXTER-DRAFT-layer-mechanics-O15.
 
+**Resolution:** 2026-11-03 — accepted, recorded at the steward's direction:
+the block cursor's overlay instance carries a full copy of the record
+beneath it, drawn inverted, and the header has no cursor bits
+(LEXTER-DRAFT-cell-model-D13 in [LEXTER-DRAFT-cell-model](Arch.CellModel.md)).
+
 ### LEXTER-DRAFT-cell-model-revision-O6 — How does a mask apply to a wide display glyph?
 
 A narrow mask applied to one half, or the matching half of a wide mask
@@ -1063,7 +1083,11 @@ LEXTER-DRAFT-cell-model-revision-D12). Void cells would also mark the area
 that effects applied to the whole grid, such as scanlines or a tint, pass
 over, so that the surface can take an effect of its own; glyph layers may sit
 over a void, as captions over a video. The details of surfaces and effects are
-left to a later survey.
+left to a later survey. *Update:* tail types and escape cells are now one
+namespace of kinds, named by the first byte of the record
+(LEXTER-DRAFT-cell-model-D2 in [LEXTER-DRAFT-cell-model](Arch.CellModel.md)):
+plain, void, inline colours, effect, and tiles. What the void and the effect
+carry remains open there, as LEXTER-DRAFT-cell-model-O9.
 
 ### LEXTER-DRAFT-cell-model-revision-O8 — What does the text array hold?
 

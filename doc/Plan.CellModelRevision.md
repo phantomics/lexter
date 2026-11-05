@@ -386,10 +386,11 @@ expresses. The tail types and the use of the six bits are refined after this
 plan (LEXTER-DRAFT-cell-model-revision-O7). *Update:* the steward has since
 refined the encoding in [LEXTER-DRAFT-cell-model](Arch.CellModel.md): each
 layer's and mask's settings move into the top byte of its own glyph word,
-masks keep their operations, selector, and target, and word 0 becomes a
-kind word that gives the numbers of layers and masks
-(LEXTER-DRAFT-cell-model-D1, -D3, -D4, -D5), in place of word 1's fixed
-fields and the tail type folded into unused masks.
+masks keep their operations and selector, and layers and masks are
+interleaved, each mask cutting the layer before it, so that no mask needs a
+target. Word 0 becomes a format word that gives the number of glyphs and
+which of them are masks (LEXTER-DRAFT-cell-model-D1, -D3, -D4, -D5), in place
+of word 1's fixed fields and the tail type folded into unused masks.
 
 **Alternatives:**
 - Four operations and no selector. Rejected: the two operations it drops can
@@ -620,7 +621,7 @@ internal format `GL_RGBA8UI`, read in the shaders as `usamplerBuffer` with
   buffer is removed. The store's guaranteed 65,536 texels lift the limit of
   LEXTER-D17, which belonged to the float uniform buffer; how many slots a
   record can name is not changed by this decision. *Update:* the record's
-  palette slot is widened to six bits, and the store's size set by the
+  palette slot is widened to eight bits, and the store's size set by the
   configuration, in LEXTER-DRAFT-cell-model-D7 and -D12 of
   [LEXTER-DRAFT-cell-model](Arch.CellModel.md).
 - **Bytes on the CPU.** The model keeps palette entries as bytes, so that the
@@ -852,10 +853,12 @@ Phase 3 replaces the present cells with the record of
 LEXTER-DRAFT-cell-model-revision-D7, laid out as the cell-field-format survey
 proposes, with mask targets. *Update:* the record's layout is now specified
 by [LEXTER-DRAFT-cell-model](Arch.CellModel.md), which supersedes the table
-below: word 0 is a kind word with the numbers of layers and masks, word 1 the
-header, and words 2–7 glyph words, each holding its own settings, or a
-payload that the kind defines. The header no longer holds the layer count,
-the line attributes, or the cursor bits.
+below: word 0 is a format word with the format, the number of glyphs, which
+of them are masks, and the wide bits; word 1 is a header word with the
+swatch index and the palette slot; and words 2–7 are glyph words, each
+holding its own settings, or a payload that the format defines. The header
+no longer holds the wide bits, the layer count, the line attributes, or the
+cursor bits.
 
 Table: The record, by word, as first planned.
 
@@ -1084,7 +1087,7 @@ that effects applied to the whole grid, such as scanlines or a tint, pass
 over, so that the surface can take an effect of its own; glyph layers may sit
 over a void, as captions over a video. The details of surfaces and effects are
 left to a later survey. *Update:* tail types and escape cells are now one
-namespace of kinds, named by the first byte of the record
+namespace of formats, named by the first byte of the record
 (LEXTER-DRAFT-cell-model-D2 in [LEXTER-DRAFT-cell-model](Arch.CellModel.md)):
 plain, void, inline colours, effect, and tiles. What the void and the effect
 carry remains open there, as LEXTER-DRAFT-cell-model-O9.

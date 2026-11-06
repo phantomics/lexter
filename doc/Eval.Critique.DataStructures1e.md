@@ -1,5 +1,5 @@
 ---
-id:            LEXTER-DRAFT-data-structures-1e-critique
+id:            LEXTER-0014
 title:         "Data Structures, First Edition: Critique"
 genre:         Eval
 subtype:       critique
@@ -22,28 +22,28 @@ relates-to:
   - LEXTER-0006
   - LEXTER-0010
 open-questions:
-  - LEXTER-DRAFT-data-structures-1e-critique-O1
-  - LEXTER-DRAFT-data-structures-1e-critique-O2
-  - LEXTER-DRAFT-data-structures-1e-critique-O3
-  - LEXTER-DRAFT-data-structures-1e-critique-O4
-  - LEXTER-DRAFT-data-structures-1e-critique-O5
-  - LEXTER-DRAFT-data-structures-1e-critique-O6
-  - LEXTER-DRAFT-data-structures-1e-critique-O7
-  - LEXTER-DRAFT-data-structures-1e-critique-O8
-  - LEXTER-DRAFT-data-structures-1e-critique-O9
-  - LEXTER-DRAFT-data-structures-1e-critique-O10
-  - LEXTER-DRAFT-data-structures-1e-critique-O11
-  - LEXTER-DRAFT-data-structures-1e-critique-O12
-  - LEXTER-DRAFT-data-structures-1e-critique-O13
-  - LEXTER-DRAFT-data-structures-1e-critique-O14
-  - LEXTER-DRAFT-data-structures-1e-critique-O15
-  - LEXTER-DRAFT-data-structures-1e-critique-O16
-  - LEXTER-DRAFT-data-structures-1e-critique-O17
-  - LEXTER-DRAFT-data-structures-1e-critique-O18
-  - LEXTER-DRAFT-data-structures-1e-critique-O19
-  - LEXTER-DRAFT-data-structures-1e-critique-O20
-  - LEXTER-DRAFT-data-structures-1e-critique-O21
-  - LEXTER-DRAFT-data-structures-1e-critique-O22
+  - LEXTER-O19
+  - LEXTER-O20
+  - LEXTER-O21
+  - LEXTER-O22
+  - LEXTER-O23
+  - LEXTER-O24
+  - LEXTER-O25
+  - LEXTER-O26
+  - LEXTER-O27
+  - LEXTER-O28
+  - LEXTER-O29
+  - LEXTER-O30
+  - LEXTER-O31
+  - LEXTER-O32
+  - LEXTER-O33
+  - LEXTER-O34
+  - LEXTER-O35
+  - LEXTER-O36
+  - LEXTER-O37
+  - LEXTER-O38
+  - LEXTER-O39
+  - LEXTER-O40
 cites:
   - title:    "TN3270 Enhancements"
     locator:  "RFC 2355, section 4 (Command Meanings) and section 7.1 (DEVICE-TYPE Negotiation)"
@@ -101,7 +101,7 @@ request, and a directory listing, with no findings); a count of the lines in it
 matching one search term; and fragments of `doc/Plan.PaneProfiles.md` shown by a
 repository search, one of which named, in part, a finding about panes and the
 swatch indices of their screens. That subject overlaps
-LEXTER-DRAFT-data-structures-1e-critique-O4, which an independent catalogue of
+LEXTER-O22, which an independent catalogue of
 the code had already identified before the exposure.
 
 **Evidence standard.** A finding is either *reproduced* or *traced*.
@@ -162,7 +162,7 @@ Table: Qualities the data model is judged against.
 
 Findings are ordered by severity, then by reach.
 
-### LEXTER-DRAFT-data-structures-1e-critique-O1 — Double-width characters never reach the GPU from a screen
+### LEXTER-O19 — Double-width characters never reach the GPU from a screen
 
 **Rationale:** The wide-glyph design keeps the full glyph range by carrying the
 wide flag in bit 15 of the instance's swatch field (*Session transcript
@@ -201,7 +201,7 @@ grid loses both flags when the cursor's `set-simple-cell` call rewrites it.
 continuation cells instead of writing them. A regression fixture with one CJK
 character would have caught all three faults.
 
-### LEXTER-DRAFT-data-structures-1e-critique-O2 — The grid's swatch generation has two meanings, and the GPU swatch table can stay stale for good
+### LEXTER-O20 — The grid's swatch generation has two meanings, and the GPU swatch table can stay stale for good
 
 **Rationale:** LEXTER-D13 adopts a generation counter
 as "a clean, race-free 'has this changed?' predicate", explicitly "the *same*
@@ -237,7 +237,7 @@ cell with it gives: frame 0, model 3, grid 4, uploaded, GPU swatch 2 =
 version" bumped on any change to `swatch-data`), or have the cursor use a
 swatch interned once rather than writing the table every frame.
 
-### LEXTER-DRAFT-data-structures-1e-critique-O3 — Host input can put the VT handler's state outside its declared types
+### LEXTER-O21 — Host input can put the VT handler's state outside its declared types
 
 **Rationale:** Palette indices are 0 to 255 by construction, so the handler's
 colour slots are typed `(unsigned-byte 8)`, and `rgb-to-256` exists to map
@@ -270,7 +270,7 @@ length 10, and `ESC [ 1;12 H` followed by HT signals an invalid-index error
 parameters, fix the grey ramp's upper bound, and make tab stops part of what
 resize resizes. A fuzz fixture of malformed sequences would guard C4.
 
-### LEXTER-DRAFT-data-structures-1e-critique-O4 — Every pane writes its own swatch numbering into one shared swatch store
+### LEXTER-O22 — Every pane writes its own swatch numbering into one shared swatch store
 
 **Rationale:** One display grid per window keeps a single GPU-facing resource;
 LEXTER-D33 rejects per-buffer grids as "heavier; the grid is
@@ -302,7 +302,7 @@ cell is drawn in A's colour (`src/model.lisp:flush-to-display@2d4d743`). The
 every writer, or a per-pane base offset into a partitioned GPU table. The
 second edition should decide who owns the swatch namespace.
 
-### LEXTER-DRAFT-data-structures-1e-critique-O5 — Generation records are trusted across producers, so replays depend on fixture order
+### LEXTER-O23 — Generation records are trusted across producers, so replays depend on fixture order
 
 **Rationale:** LEXTER-D18 keeps one recorded generation per
 palette slot so that each resident palette is uploaded only when it changes.
@@ -338,7 +338,7 @@ palette entry 1 once, to red and to green, both report generation 2
 generations from one global counter so that no two states share a number;
 `terminal-reset` can also clear the renderer's records.
 
-### LEXTER-DRAFT-data-structures-1e-critique-O6 — The swatch table grows past what the grid and the GPU can hold
+### LEXTER-O24 — The swatch table grows past what the grid and the GPU can hold
 
 **Rationale:** Interning removes duplicate colour combinations, so a screen
 needs only as many swatches as it uses distinct colour pairs, and 2048 entries
@@ -364,7 +364,7 @@ signals an invalid-index error at index 8192 of an 8192-byte array
 back to the nearest existing one), and size the grid and texture from one
 constant.
 
-### LEXTER-DRAFT-data-structures-1e-critique-O7 — TN3270E negotiation cannot complete with a server that follows RFC 2355
+### LEXTER-O25 — TN3270E negotiation cannot complete with a server that follows RFC 2355
 
 **Rationale:** No decision record covers the TN3270 client. Its code accepts
 `DO TN3270E` so that it can use the enhanced protocol and its 5-byte record
@@ -391,7 +391,7 @@ REQUEST rule are in RFC 2355, sections 4 and 7.1.
 `DEVICE-TYPE IS … CONNECT …` before the FUNCTIONS exchange; test against a
 recorded negotiation.
 
-### LEXTER-DRAFT-data-structures-1e-critique-O8 — Model operations that move or clear cells leave wide flags behind
+### LEXTER-O26 — Model operations that move or clear cells leave wide flags behind
 
 **Rationale:** The screen keeps no continuation array; the right half of a wide
 character is implied by glyph 0 next to a set `wide-flags` bit, which saves a
@@ -405,7 +405,7 @@ the glyph and its continuation but not the flag. Erasing the display blanks the
 glyph but keeps the flag. `put-char` with `:wide` in the last column writes a
 wide character that has no right half. `resize-grid` drops the grid's wide and
 continuation flags. These are hidden today only because of
-LEXTER-DRAFT-data-structures-1e-critique-O1; fixing that exposes them all.
+LEXTER-O19; fixing that exposes them all.
 
 **Evidence:** Reproduced. After `(write-char-at s 0 1 100 :wide t)` and
 `(scroll-up s)`, row 0 holds glyph 100 with flag 0 and row 1 holds the blank
@@ -423,7 +423,7 @@ gives glyphs `#(5 100 0 5)` and flags `#*1000`
 copies or clears a cell's glyph, swatch, attributes, wide flag, and layered
 entry together.
 
-### LEXTER-DRAFT-data-structures-1e-critique-O9 — Layered cells diverge between the model and the grid
+### LEXTER-O27 — Layered cells diverge between the model and the grid
 
 **Rationale:** The three-layer overprinting system keeps layered cells sparse,
 in a hash table, so an all-simple grid pays nothing for them, and the model
@@ -451,7 +451,7 @@ the model reports it layered and the grid does not.
 included, and draw the cursor as an overlay layer rather than by rewriting the
 cell.
 
-### LEXTER-DRAFT-data-structures-1e-critique-O10 — Glyph index 0 and codepoint 32 are both overloaded
+### LEXTER-O28 — Glyph index 0 and codepoint 32 are both overloaded
 
 **Rationale:** Glyph 0 in a screen means "blank" or "continuation", which lets
 a cleared cell and a wide character's right half share one cheap sentinel that
@@ -479,7 +479,7 @@ packed.
 sentinel and the atlas agree, and make every writer take its blank from the
 atlas.
 
-### LEXTER-DRAFT-data-structures-1e-critique-O11 — The rule that the active buffer is read through the handler is not carried through
+### LEXTER-O29 — The rule that the active buffer is read through the handler is not carried through
 
 **Rationale:** LEXTER-D28 has the handler own both buffers
 and requires readers to poll `vt-handler-screen`; the terminal's own `screen`
@@ -505,7 +505,7 @@ is the default red (`src/vt-handler.lisp:%ensure-alt-screen@2d4d743`).
 **Seed:** Remove the cached slot or make it a function of the handler, and
 build the alternate buffer from a copy of the primary's palette.
 
-### LEXTER-DRAFT-data-structures-1e-critique-O12 — The scrollback viewport moves the scroll bar but not the picture
+### LEXTER-O30 — The scrollback viewport moves the scroll bar but not the picture
 
 **Rationale:** The screen records a scrollback ring and a viewport offset, and
 `scroll-state` reports them so that chrome can draw a scroll bar whose thumb
@@ -530,7 +530,7 @@ showing the live line, not the history line
 **Seed:** Either draw the viewport in the flush or stop exposing it; in either
 case invert the thumb so offset 0 is at the bottom.
 
-### LEXTER-DRAFT-data-structures-1e-critique-O13 — The TN3270 screen and record framing assume a fixed size and clean byte boundaries
+### LEXTER-O31 — The TN3270 screen and record framing assume a fixed size and clean byte boundaries
 
 **Rationale:** The 3270 screen is a set of flat per-cell arrays plus two
 addresses, separated so the host's paint pointer cannot move the operator's
@@ -557,7 +557,7 @@ buffer has room.
 **Seed:** Allocate the arrays from `cols` and `rows` in a constructor, and
 frame records with a small IAC state machine like the telnet client's.
 
-### LEXTER-DRAFT-data-structures-1e-critique-O14 — Switching workspace clears the grid without scheduling a repaint
+### LEXTER-O32 — Switching workspace clears the grid without scheduling a repaint
 
 **Rationale:** One grid serves every workspace, so `switch-workspace` clears it
 before the new workspace draws, as its comment says, "for full redraw".
@@ -579,7 +579,7 @@ only while `workspace-decorations-dirty` is set.
 LEXTER-D33: mark every screen and the decorations dirty at
 the switch.
 
-### LEXTER-DRAFT-data-structures-1e-critique-O15 — Autowrap ignores the scrolling region
+### LEXTER-O33 — Autowrap ignores the scrolling region
 
 **Rationale:** The screen holds an inclusive scrolling region, and line feed
 scrolls within it.
@@ -599,7 +599,7 @@ outside the region (`src/vt-handler.lisp:%print-codepoint@2d4d743`).
 **Seed:** Wrap through the same path as line feed, so one function owns the
 region rule.
 
-### LEXTER-DRAFT-data-structures-1e-critique-O16 — The telnet client mangles code 255 and does not track option state
+### LEXTER-O34 — The telnet client mangles code 255 and does not track option state
 
 **Rationale:** In telnet mode the client doubles IAC on output, and it answers
 the server's option requests so that common BBS servers connect without
@@ -620,7 +620,7 @@ stream sends `7F FF`
 
 **Seed:** Encode before escaping, and keep a per-option state table.
 
-### LEXTER-DRAFT-data-structures-1e-critique-O17 — The headless and teardown paths dereference a missing PTY
+### LEXTER-O35 — The headless and teardown paths dereference a missing PTY
 
 **Rationale:** A `no-pty` terminal reuses the whole live render path, so replay
 tests exactly what the live terminal draws
@@ -643,7 +643,7 @@ end of file, so the descriptor is never closed and the child is never reaped
 
 **Seed:** Separate "the child is alive" from "the descriptor is open".
 
-### LEXTER-DRAFT-data-structures-1e-critique-O18 — Constants, defaults, and names are defined more than once
+### LEXTER-O36 — Constants, defaults, and names are defined more than once
 
 **Rationale:** Each package keeps its own small set of constants so that it
 loads without the others; the renderer marks its copy of the layered stride
@@ -672,7 +672,7 @@ its constructor's NIL.
 
 **Seed:** One constants package that every layer uses; one default palette.
 
-### LEXTER-DRAFT-data-structures-1e-critique-O19 — Package exports and package boundaries disagree with the code
+### LEXTER-O37 — Package exports and package boundaries disagree with the code
 
 **Rationale:** Each subsystem is its own package with an export list, so that
 other subsystems depend only on what is exported.
@@ -695,7 +695,7 @@ handler. The boundaries document a design the code does not follow (C7).
 **Seed:** Export what is used and remove what is not; let a load-time check
 fail on undefined exports.
 
-### LEXTER-DRAFT-data-structures-1e-critique-O20 — Backends are told the pane's size, not its content size
+### LEXTER-O38 — Backends are told the pane's size, not its content size
 
 **Rationale:** `vt-pane-init-screen` sizes the screen from `content-width` and
 `content-height` so that chrome can reserve a column or rows.
@@ -713,7 +713,7 @@ uses the content size, so the disagreement lasts only until the first resize.
 
 **Seed:** Size the backend from the screen the handler just made.
 
-### LEXTER-DRAFT-data-structures-1e-critique-O21 — Descriptions of the data model have drifted from it
+### LEXTER-O39 — Descriptions of the data model have drifted from it
 
 **Rationale:** README.md, docstrings, and file headers are how a newcomer
 learns the data model before reading the Spec.
@@ -737,7 +737,7 @@ state comment lists states it does not have.
 **Seed:** Compile the README's architecture section from the Spec, as
 LEXTER-O3 contemplates.
 
-### LEXTER-DRAFT-data-structures-1e-critique-O22 — The grid's dirty bits are maintained but never consulted
+### LEXTER-O40 — The grid's dirty bits are maintained but never consulted
 
 **Rationale:** Per-row dirty tracking lets each stage skip unchanged rows, and
 `build-render-data` documents a `force-full` flag and incremental rebuilds.
@@ -765,11 +765,11 @@ delete the dirty bits and the docstring's claim.
   the vertex array setup, and the shaders mask bit 15 off before indexing.
 - **The three identifier spaces.** Codepoints, font glyph indices, and atlas
   positions are kept apart everywhere the VT path touches them; the confusions
-  in LEXTER-DRAFT-data-structures-1e-critique-O10 are at the edges.
+  in LEXTER-O28 are at the edges.
 - **The palette's placement.** Keeping the palette on the screen and sending
   it straight to the renderer (LEXTER-D12, -D4) made
   the alternate-screen and OSC work simple; the faults in
-  LEXTER-DRAFT-data-structures-1e-critique-O5 are in the generation protocol,
+  LEXTER-O23 are in the generation protocol,
   not the placement.
 - **The alternate-screen pointer swap.** Entering and leaving are guarded and
   idempotent, the save slots are separate, and the swap forces a repaint, as
@@ -786,35 +786,35 @@ delete the dirty bits and the docstring's claim.
 
 1. *Copies without an owner.* The model, the grid, and the GPU hold copies of
    the same swatch and layer data, synchronised by bare integers that carry no
-   identity (LEXTER-DRAFT-data-structures-1e-critique-O2, -O4, -O5, -O9). Each
+   identity (LEXTER-O20, -O4, -O5, -O9). Each
    copy was added for a good local reason, but no structure owns the swatch
    namespace or the definition of "changed". The second edition should name
    one owner per namespace and one meaning per counter.
 2. *Invariants kept by one writer and broken by the rest.* `write-char-at`
    honours the wide-character and layer rules; the flush, the cursor, the row
    operations, and resize do not
-   (LEXTER-DRAFT-data-structures-1e-critique-O1, -O8, -O9). The Spec's
+   (LEXTER-O19, -O8, -O9). The Spec's
    invariants are stated per structure, but the code enforces them per
    function. A per-cell helper that every operation goes through would make
    them hold by construction.
 
 Robustness at the boundary is the third theme. Host input reaches typed slots
 and fixed arrays without validation
-(LEXTER-DRAFT-data-structures-1e-critique-O3, -O6, -O13), and the external
+(LEXTER-O21, -O6, -O13), and the external
 protocols were implemented without checking against their texts
-(LEXTER-DRAFT-data-structures-1e-critique-O7, -O16).
+(LEXTER-O25, -O16).
 
 **Seeds worth a Plan or Survey.**
 
 - A Plan to fix the high-severity findings, with a regression fixture for
-  each, in the order of LEXTER-DRAFT-data-structures-1e-critique-O1 to -O7: a
+  each, in the order of LEXTER-O19 to -O7: a
   CJK line; a new colour after idle frames; malformed SGR and a tab after a
   resize; two panes with different colours; two fixtures replayed in either
   order; 2049 colour pairs; and a recorded TN3270E negotiation. Most can run
   headlessly, as this critique's probes did.
 - A Survey of how other terminals own colour and glyph data across panes and
   the GPU, to inform the second edition's answer to the first theme.
-- The test rig cannot detect LEXTER-DRAFT-data-structures-1e-critique-O2 or
+- The test rig cannot detect LEXTER-O20 or
   -O5, because both depend on what the renderer recorded before the capture. A
   check that compares the GPU's swatch table with the grid's would make such
   faults visible.
@@ -827,6 +827,6 @@ critique did not examine.
 
 **Not examined.** The items listed under Method, and the Spec's own text
 beyond the places where it codifies a defect
-(LEXTER-DRAFT-data-structures-1e-critique-O2) or overstates ownership
-(LEXTER-DRAFT-data-structures-1e-critique-O4): the critic wrote the Spec and
+(LEXTER-O20) or overstates ownership
+(LEXTER-O22): the critic wrote the Spec and
 is a poor judge of it.

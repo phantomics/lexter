@@ -6,7 +6,11 @@ subtype:       critique
 scope:         project
 project:       Lexter
 language:      en
-status:        Draft
+status:        Accepted
+authors:
+  - Andrew Sengul
+approved-by:   Andrew Sengul
+reviewed:      2026-11-05
 provenance:
   assistant:   opencode
   session:     "Data-structures critique, Phase 2 (2026-10-26)"

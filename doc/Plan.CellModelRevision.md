@@ -417,8 +417,9 @@ cell's background slot is in the header word (LEXTER-DRAFT-cell-model-D6).
 from its left cell, with a continuation cell that must never be written on
 its own. A broken pair corrupts flags.
 
-**Decision:** Store the glyph in both cells, with the header's wide bit in
-both and the right-half bit in the second, and let each cell draw its own
+**Decision:** Store the glyph in both cells, with the wide bit in both and
+the right-half bit in the second, kept in the record's format word
+(LEXTER-DRAFT-cell-model-D1), and let each cell draw its own
 half. Every quad is one cell, continuation flags go away, and a broken pair
 shows half a glyph instead of corrupting state. Writers still write and
 erase both halves together, as a terminal must. The atlas keeps each wide
@@ -461,7 +462,10 @@ overlay list a model of ephemeral, sparse, and moving things, and the two
 are addressed and scaled independently. Each overlay instance carries a
 glyph, up to two masks with the record's mask code, a colour from a swatch
 table's range, and a position in cells or pixels, and the list is drawn by
-one instanced draw after the grid, in list order.
+one instanced draw after the grid, in list order. The cell-model
+architecture makes each instance a full record followed by its position and
+flags, so that an instance carries whatever a cell can, and the grid's
+decoder reads it (LEXTER-DRAFT-cell-model-D13).
 
 **Alternatives:**
 - A stamped mask. Rejected because it writes ephemeral state into the stable
@@ -666,16 +670,18 @@ checksum that holds across implementations, and the comparison of the GPU
 with the CPU renderer (LEXTER-DRAFT-cell-model-revision-D17), need every
 implementation to write the same bytes.
 
-**Decision:** From Phase 3, the grid's shader decides for each pixel, by
-the coverage rule of LEXTER-DRAFT-cell-model-revision-D7 with integer tests,
-which layer is the topmost to cover it after its masks, or that the cell's
+**Decision:** From Phase 3, the grid's shader decides for each pixel, by the
+coverage rule of LEXTER-DRAFT-cell-model-revision-D7 with integer tests, which
+layer is the topmost to cover it after its masks, or that the cell's
 background shows. It reads that one palette entry from the integer store
 (LEXTER-DRAFT-cell-model-revision-D14) and writes it divided by 255, with no
-blending, which every conformant implementation stores as the original
-bytes. The overlay pass of Phase 4 writes the entry of a covered pixel in the
-same way and discards an uncovered one. Blending that a surface or effect
-adds later lies outside this guarantee, and outside the fixtures that rely
-on it.
+blending, which every conformant implementation stores as the original bytes.
+The overlay pass of Phase 4 writes the entry of a covered pixel in the same
+way; an uncovered pixel takes the instance's background slot when its flags
+say it draws its background, as the block cursor's does, and is discarded
+otherwise (LEXTER-DRAFT-cell-model-D13). Blending that a surface or effect
+adds later lies outside this guarantee, and outside the fixtures that rely on
+it.
 
 **Alternatives:**
 - Composite the layers with premultiplied floats. Rejected: with coverage of
@@ -927,8 +933,9 @@ cells, the instance packer, and the per-layer draws are removed.
 Phase 4 adds the overlay list of LEXTER-DRAFT-cell-model-revision-D10, with
 cursors as its first use.
 
-- **A pass of its own.** One instanced draw after the grid, with its own
-  instance layout and the same coverage function as the record.
+- **A pass of its own.** One instanced draw after the grid, whose instances
+  are records followed by a position and flags, decoded as the grid's records
+  are (LEXTER-DRAFT-cell-model-D13).
 - **Positions in cells or pixels**, so an overlay can move smoothly and is not
   bound to the grid.
 - **Colours** from the swatch table and range of the pane or chrome it

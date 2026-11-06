@@ -6,7 +6,11 @@ scope:         component
 project:       Lexter
 component:     renderer
 language:      en
-status:        Draft
+status:        Accepted
+authors:
+  - Andrew Sengul
+approved-by:   Andrew Sengul
+reviewed:      2026-11-05
 provenance:
   assistant:   opencode
 relates-to:

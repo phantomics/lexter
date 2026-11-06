@@ -5,7 +5,11 @@ genre:         Spec
 scope:         project
 project:       Lexter
 language:      en
-status:        Draft
+status:        Deprecated
+authors:
+  - Andrew Sengul
+approved-by:   Andrew Sengul
+reviewed:      2026-11-05
 schema-version: "0.1.0"
 provenance:
   assistant:   opencode

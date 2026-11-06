@@ -6,7 +6,11 @@ scope:         component
 project:       Lexter
 component:     panes
 language:      en
-status:        Draft
+status:        Accepted
+authors:
+  - Andrew Sengul
+approved-by:   Andrew Sengul
+reviewed:      2026-11-05
 provenance:
   assistant:   opencode
 relates-to:
@@ -125,7 +129,7 @@ three patterns that the obvious designs would repeat:
 
 ### LEXTER-DRAFT-pane-profiles-D1 — Settings live in pane-profile objects
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** Wheel lines is the first per-pane setting, and more will follow.
 The wheel handler runs inside a GLFW callback, outside any scope a caller
@@ -148,7 +152,7 @@ set here; inherit".
 
 ### LEXTER-DRAFT-pane-profiles-D2 — Resolution walks parent links, then containment
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** Profiles are inherited in two ways. A profile may be derived
 from another so that panes can share settings. A pane also sits in a
@@ -177,7 +181,7 @@ settings that base profiles do not have.
 
 ### LEXTER-DRAFT-pane-profiles-D3 — Each object owns a private profile; writers write it
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** If a pane were given a shared profile directly, a write made
 through that pane would change every pane sharing it.
@@ -196,7 +200,7 @@ restores inheritance.
 
 ### LEXTER-DRAFT-pane-profiles-D4 — One generic reader per setting, defined by one macro
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** The steward chose a generic function per setting over a single
 keyword accessor such as `(pane-option pane :wheel-scroll-lines)`, so that a
@@ -220,7 +224,7 @@ and the APL layer defines a subclass the same way.
 
 ### LEXTER-DRAFT-pane-profiles-D5 — The history is drawn by flush-to-display
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** The display grid is filled from the screen in
 `flush-to-display`, the one loop that copies cells. Drawing the history
@@ -239,7 +243,7 @@ of history and live rows, and does not draw the cursor.
 
 ### LEXTER-DRAFT-pane-profiles-D6 — Typing returns the view to live; output does not
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** The steward wants typing to return to the live screen and output
 not to, so that output can be read while it continues. xterm makes both
@@ -257,7 +261,7 @@ to 0.
 
 ### LEXTER-DRAFT-pane-profiles-D7 — The wheel factor applies to local scrolling only
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** The wheel takes one of three paths
 (LEXTER-DRAFT-mouse-reporting-D6): a report to the application when it has
@@ -274,7 +278,7 @@ event per notch, as xterm sends it.
 
 ### LEXTER-DRAFT-pane-profiles-D8 — Unseen output is pane state, polled by the decorator
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** A flashing border is a state that lasts while output is unseen,
 and the decorator that draws it already runs on every flush. The critique
@@ -292,7 +296,7 @@ line count is LEXTER-DRAFT-pane-profiles-O1.
 
 ### LEXTER-DRAFT-pane-profiles-D9 — Terminal events reach the APL layer through a generic function
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** The APL layer needs discrete events (output, unseen output, the
 bell, a title change, a viewport change) as well as the state of

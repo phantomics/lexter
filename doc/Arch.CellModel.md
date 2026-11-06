@@ -12,7 +12,7 @@ provenance:
 relates-to:
   - LEXTER-DRAFT-cell-model-revision
   - LEXTER-DRAFT-cell-field-format
-  - LEXTER-DRAFT-layer-mechanics
+  - LEXTER-0013
   - LEXTER-DRAFT-data-structures-1e
   - LEXTER-DRAFT-data-structures-1e-critique
   - LEXTER-0004
@@ -92,7 +92,7 @@ Table: Terms used in this design, with their definitions.
 | Format | The arrangement of a record's words, selected by the record's first byte |
 | Format word | Word 0: the format in bits 0–7, the wide bits in bits 16–17, and fields the format defines |
 | Header word | Word 1: the swatch index, the palette slot, and the background slot, read the same way in every format |
-| Glyph format | A format whose cells hold glyph words: plain, void, and inline colours |
+| Glyph format | A format whose cells hold glyph words: plain, void, inline colours, and tiles |
 | Glyph word | A word holding a 24-bit glyph and a settings byte, as a layer or as a mask |
 | Glyph count, type bits | In a glyph format, the number of glyph words in use and, for glyphs 1–5, whether each is a layer or a mask |
 | Layer | A display glyph with a selector and an ink slot; the pixels it covers take the ink slot, and the rest are transparent |
@@ -105,6 +105,8 @@ Table: Terms used in this design, with their definitions.
 | Payload | The words after a cell's glyph words that its format defines, such as inline colours |
 | Generated glyph | A glyph that Lexter draws itself into a reserved atlas position, such as a line or a cursor |
 | Line glyph | A generated glyph holding one combination of underline, strikethrough, and overline |
+| Tile | A cell-sized picture of colour values 0–15, kept in the tile texture; a tile cell draws two beneath its glyphs |
+| Transparency index, colour offset | In a tile cell, the value that is transparent in both tiles, and for each tile the number of swatches by which its other values are moved |
 | Overlay instance | A record with a position and flags, drawn by the overlay pass over the grid |
 | Void | A cell of the void format, which references a surface and leaves its uncovered pixels undrawn |
 
@@ -159,9 +161,9 @@ taken from it.
 | Influence | Contributes | Not taken |
 |---|---|---|
 | [LEXTER-DRAFT-cell-field-format](Survey.CellFieldFormat.md) | A 32-byte record of control words, glyphs, and a tail; inline colours, surfaces, and tile mode; keeping what only the CPU reads beside the grid | The fixed three layers and three masks, a fill for each layer, the layer count and the cursor and line bits in the header, the tail type, payloads growing backwards into absent layers, and the fill rule |
-| [LEXTER-DRAFT-layer-mechanics](Survey.LayerMechanics.md) | Layers and masks in one dense record, and the mask code | — |
+| [LEXTER-0013](Survey.LayerMechanics.md) | Layers and masks in one dense record, and the mask code | — |
 | [LEXTER-DRAFT-cell-model-revision](Plan.CellModelRevision.md) | Masks with an operation and a selector (LEXTER-DRAFT-cell-model-revision-D7), halves (-D8), the overlay list (-D10), one composed grid (-D12), integer colour stores (-D14), selection without blending (-D15) | The fixed layout of word 1 and the mask targets that LEXTER-DRAFT-cell-model-revision-D7 gives, with the tail type folded into unused masks |
-| Clipping masks and masks (*Clipping masks and masks in image editors and vector formats*) | A mask attached by position to what it cuts, as Photoshop clips a layer by the one beneath it and SVG and PDF apply a mask to the object it is given | Masks with alpha: here a mask's pixels are inked or not |
+| Clipping masks and masks (*Clipping masks and masks in image editors and vector formats*) | A mask attached by position to what it cuts, as Photoshop clips a layer by the one beneath it and SVG and PDF apply a mask to the object it is given; here the mask follows what it cuts | Masks with alpha: here a mask's pixels are inked or not |
 | VGA and MDA text attributes | A cell as a fixed record that the display reads directly | Underline as an attribute bit, which only the display hardware can draw |
 | kitty | Underline and strikethrough drawn as generated sprites in its sprite map (*kitty decorations*) | — |
 | XLFD font properties | The position and thickness of the underline and the strikeout, which BDF and PCF fonts may carry (*X Logical Font Description Conventions*) | — |
@@ -224,13 +226,14 @@ Table: Formats.
 | 0 | Plain | Words 2–7, up to six | Nothing |
 | 1 | Void | Words 2–4, up to three | A reference to a surface in words 5–7; uncovered pixels are not drawn |
 | 2 | Inline colours | Words 2–4, up to three | The colours of slots 0–3, three bytes each, in bytes 20–31 |
-| 3 | Effect | — | Reserved for the effects of LEXTER-DRAFT-layer-mechanics-O8 |
-| 4 | Tiles | — | LEXTER-DRAFT-cell-model-D11 |
+| 3 | Effect | — | Reserved for the effects of LEXTER-O11 |
+| 4 | Tiles | Words 2–4, up to three | Two tiles and four swatches, beneath the glyphs (LEXTER-DRAFT-cell-model-D11) |
 | 5–255 | Reserved | — | — |
 
 A renderer that meets a format it does not know draws the cell as blank, in
-the header's background slot. Only the format byte and the wide bits are
-common to every format, so a renderer cannot read an unknown format's glyphs;
+the header's background slot. Only the format word's fixed fields and the
+header word are common to every format, so a renderer cannot read an unknown
+format's glyphs;
 this ends the cell-field-format survey's fallback, in which a renderer that
 met an unknown tail type still drew the cell's layers. Renderers and writers
 ship together, so an unknown format means a fault, not an older renderer. In
@@ -271,12 +274,12 @@ Table: Bits of the format word in a glyph format.
 
 | Bits | Width | Field | Values |
 |---|---|---|---|
-| 0–7 | 8 | Format | 0 plain, 1 void, 2 inline colours |
-| 8–10 | 3 | Glyph count | 0–6 in the plain format, 0–3 in the void and inline-colour formats |
-| 11–15 | 5 | Type bits | For glyphs 1–5: 0 layer, 1 mask |
+| 0–7 | 8 | Format | 0 plain, 1 void, 2 inline colours, 4 tiles |
+| 8–10 | 3 | Glyph count | 0–6 in the plain format, 0–3 in the others |
+| 11–15 | 5 | Type bits | For glyphs 1–5: 0 layer, 1 mask; bits past the format's glyph words are zero |
 | 16 | 1 | Wide | 1 = the cell holds half of a double-width glyph |
 | 17 | 1 | Right half | With wide set: 0 = left half, 1 = right half |
-| 18–31 | 14 | Reserved | Zero |
+| 18–31 | 14 | Defined by the format | Zero, except in tiles (LEXTER-DRAFT-cell-model-D11) |
 
 A record of zeros is a plain cell with no glyphs and a background slot of 0:
 every pixel takes slot 0 of global swatch 0 in palette slot 0
@@ -602,7 +605,7 @@ under Drawing a Pixel, and both renderers follow it.
   then have no background of its own, and the grid's output would depend on
   what was drawn before it.
 
-### LEXTER-DRAFT-cell-model-D11 — Tiles are format 4, with a texture of their own
+### LEXTER-DRAFT-cell-model-D11 — Tiles are a glyph format, with cell-sized tiles of sixteen colours beneath the glyphs
 
 **Status:** Proposed
 
@@ -610,51 +613,71 @@ under Drawing a Pixel, and both renderers follow it.
 pixels are colour indices 0–15, read through four swatches, for tile-based
 games, boards, and cards. Indexed glyphs cannot share the font's atlas,
 since a one-bit glyph read as indices, or an indexed glyph read as ink,
-draws wrongly. A tile set may want palettes of its own.
+draws wrongly. A tile drawn over another needs a value that lets the one
+beneath show, and two tiles in one cell may want different colours from the
+same four swatches. Games want text written over their tiles.
 
-**Decision:** A tile cell is format 4, which has no glyph count or type bits.
+**Decision:** A tile cell is format 4, a glyph format with up to three glyph
+words, drawn over two tiles.
 
 Table: The record of a tile cell.
 
 | Word | Contents |
 |---|---|
-| 0 | Bits 0–7 the format, 4; bits 8–9 the mode; bits 16–17 the wide bits; the rest reserved |
-| 1 | The header word: the swatch for a glyph layer, the palette slot, and the background slot |
-| 2 | Bits 0–23: the tile of layer 0, an index into the tile texture; bits 24–31 reserved |
-| 3 | Bits 0–23: layer 1, a glyph or a tile as the mode says; bits 24–31 its settings as a layer's when it is a glyph |
-| 4 | Reserved |
-| 5 | Swatch A, colours 0–3 (bits 0–15); swatch B, colours 4–7 (bits 16–31) |
-| 6 | Swatch C, colours 8–11; swatch D, colours 12–15 |
-| 7 | Reserved |
+| 0 | Format 4; bits 8–10 the glyph count, 0–3; bits 11–12 the type bits of glyphs 1–2; bits 16–17 the wide bits, for the glyphs; bits 18–21 the transparency index; bits 22–23 the bottom tile's colour offset; bits 24–25 the top tile's colour offset; the rest reserved |
+| 1 | The header word: the swatch for the glyph layers, the palette slot, and the background slot |
+| 2–4 | Glyph words, as in any glyph format |
+| 5 | The bottom tile (bits 0–15) and the top tile (bits 16–31), indices into the tile texture |
+| 6 | Swatch A, colours 0–3 (bits 0–15); swatch B, colours 4–7 (bits 16–31) |
+| 7 | Swatch C, colours 8–11; swatch D, colours 12–15 |
 
-Table: Tile modes.
-
-| Mode | Layer 0 | Layer 1 |
-|---|---|---|
-| 0 Unified | Indices 0–15 through swatches A–D | A glyph in the header's swatch, with a layer's settings; glyph 0 draws nothing |
-| 1 Split | Indices 0–7 through swatches C–D | Indices 0–7 through swatches A–B, over layer 0 |
-| 2–3 | Reserved | |
-
-- **Colours.** A pixel's index *i* selects swatch *i* div 4 of the mode's
-  swatches and its slot *i* mod 4, in the header's palette slot, as any
-  cell's colours are found. A tile set that wants palettes of its own is
-  allocated slots as a terminal is (LEXTER-DRAFT-cell-model-D12).
+- **Cell-sized tiles.** A tile is the size of one cell. A larger picture is
+  an array of tiles in neighbouring cells, as text is: a 16-by-16 picture is
+  two tiles side by side in cells of 8 by 16, or four in cells of 8 by 8. Tile
+  0 is no tile. The wide bits apply only to the glyphs, so any writing, of
+  either width, can be drawn over tiles.
+- **Sixteen colours, a transparency index, and offsets.** A tile's pixel
+  holds a value *v*, 0–15. A value equal to the transparency index is
+  transparent. Any other is moved by the tile's colour offset, a number of
+  whole swatches, to *c* = (*v* + 4 × offset) mod 16, which selects slot *c*
+  mod 4 of swatch *c* div 4 among A–D, in the header's palette slot. The
+  transparency index is compared before the offset, so one index serves both
+  tiles.
+- **Order.** The bottom tile is drawn first, the top tile over it, and the
+  glyph layers over both, with their masks. A pixel that none of them covers
+  takes the background slot, as in every cell (LEXTER-DRAFT-cell-model-D10).
+- **A common arrangement.** Tiles made to lie on top use colours 0–7 with 8
+  as the transparency index and an offset of 0, in swatches A and B; tiles
+  made to lie beneath use colours 0–7 with an offset of 2, in swatches C and
+  D.
+- **Masks cut glyph layers only.** A mask's reach is clamped to the glyph
+  layers before it. Masks that cut tiles are a possibility left open: the
+  format would need only to let a reach run one or two past the glyph layers,
+  to the top tile and then the bottom one (LEXTER-DRAFT-cell-model-O7).
 - **The tile texture.** Tiles are kept in a texture of their own with the
-  internal format `R8UI`, one index to a texel, apart from the font's atlas.
-  Tile 0 is the empty tile, which covers nothing. OpenGL 3.3 guarantees a
-  two-dimensional texture of 1024 by 1024 texels, which holds 4096 tiles of
-  16 by 16.
-- **Drawing.** The procedure is given under Drawing a Pixel. Split mode
-  cannot be drawn until it is settled which index of layer 1 is transparent,
-  since without one layer 1 hides layer 0 entirely
-  (LEXTER-DRAFT-cell-model-O7).
-- **Wide tiles.** A 16-by-16 tile in cells of 8 by 16 is a double-width pair:
-  both cells hold the tile, with the wide bits set, and each draws its half,
-  as glyphs do (LEXTER-DRAFT-cell-model-revision-D8).
-- **Two layers, no masks, no lines.** The cursor over a tile is
-  LEXTER-DRAFT-cell-model-O1.
+  internal format `R8UI`, one value to a texel, apart from the font's atlas.
+  Sixteen bits address 65,536 tiles. The 1024-by-1024 texture that OpenGL 3.3
+  guarantees holds 8192 tiles in cells of 8 by 16, or 16,384 in cells of 8
+  by 8; on hardware with larger textures the index, not the texture, is the
+  limit.
+- **Palettes.** A tile set that wants palettes of its own is allocated slots
+  as a terminal is (LEXTER-DRAFT-cell-model-D12).
 
 **Alternatives:**
+- Tiles as a format without glyph words, with unified and split modes, as an
+  earlier draft of this document had them. Rejected: the modes divided
+  sixteen colours in fixed ways that offsets and a transparency index make
+  free, and they left no room for writing over the tiles.
+- Tiles twice a cell wide, addressed with the wide bits. Rejected: a picture
+  larger than two cells would need a position within it, and the wide bits
+  could not then serve the glyphs drawn over the tiles.
+- The transparency index and offsets in the header word. Not chosen by the
+  steward: they say how a tile's values are read, not which colours a cell
+  draws in, and the header word, common to every format, has only six bits
+  spare.
+- Offsets in slots, four bits each. Not chosen by the steward: offsets in
+  whole swatches keep each tile's colours in whole swatches, and two bits
+  each suffice to begin with.
 - Indexed glyphs in the font's atlas. Rejected: the atlas would hold two
   readings of a glyph, told apart only by the cell, and its packing would
   depend on the tile set.
@@ -742,7 +765,11 @@ Table: The overlay instance, by word.
   word's background slot and the first layer's ink slot. Other layers keep
   their colours, so a red SGR 58 underline stays red under the cursor. A cell
   with no layers takes slot 1 as its background in the copy if its own was
-  slot 0, and slot 0 otherwise. The flush copies the record again whenever
+  slot 0, and slot 0 otherwise. The exchange assumes the text is the first
+  layer, as it is in the cells the terminal writes; a cell arranged
+  otherwise, such as one with a spelling checker's line beneath its text, is
+  inverted by the same exchange, with the colours that result. The flush
+  copies the record again whenever
   the cursor moves or its row changes. A cursor on a double-width glyph is
   two instances, one for each half.
 - **The other styles** are instances that do not draw their background, of
@@ -765,14 +792,14 @@ LEXTER-DRAFT-cell-model-revision-O5.
 
 ## The Record
 
-Table: The record, by word, for each format.
+Table: The record, by word, for each glyph format.
 
-| Word | Glyph formats (plain, void, inline colours) | Tiles |
-|---|---|---|
-| 0 | Format word: format, glyph count, type bits, wide bits | Format word: format, mode, wide bits |
-| 1 | Header word: swatch, palette slot, background slot | Header word |
-| 2–4 | Glyph words: each layer followed by its masks | Layer 0's tile, layer 1, reserved |
-| 5–7 | More glyph words in a plain cell; the payload in a void or a cell with inline colours | Swatches A–D, reserved |
+| Word | Plain | Void, inline colours | Tiles |
+|---|---|---|---|
+| 0 | Format word: format, glyph count, type bits, wide bits | The same | The same, with the transparency index and colour offsets |
+| 1 | Header word: swatch, palette slot, background slot | The same | The same |
+| 2–4 | Glyph words: each layer followed by its masks | Glyph words | Glyph words |
+| 5–7 | More glyph words | The payload: a surface reference, or four colours | Two tiles; swatches A–D |
 
 Records are stored row by row in the grid's array, which is the upload
 buffer. On the GPU a record is two `uvec4` attributes of an instance, passed
@@ -798,15 +825,12 @@ the records they handle.
 Both renderers follow this procedure for each pixel of a cell. Every test is
 on integers, and the result is one colour, or no pixel.
 
-### Glyph formats
-
 ```
 // word(n) is word n of the record; for glyph i, w(i) is word(2 + i),
 // glyph(i) is w(i) & 0xFFFFFF, and its settings are w(i) >> 24
 f  = word(0) & 0xFF
 bg = (word(1) >> 24) & 3                         // the background slot
-if f == TILES: draw by the tile procedure, below
-if f not in (PLAIN, VOID, INLINE): slot = bg; go to colour
+if f not in (PLAIN, VOID, INLINE, TILES): slot = bg; go to colour
 n     = min((word(0) >> 8) & 7, (f == PLAIN) ? 6 : 3)
 types = (word(0) >> 11) & 0x1F                   // bit i-1: glyph i is a mask
 cov = 0; k = 0                                   // coverage bits; layers so far
@@ -819,6 +843,12 @@ for i in 0 .. n-1:
         R = ((1 << r) - 1) << (k - r)            // the r layers before it
         m = p ? R : 0
         cov = (cov & ~R) | (op(i, cov, m) & R)
+if cov == 0 and f == TILES:                      // no glyph covers: the tiles
+    index = tile_index(word(5) >> 16, (word(0) >> 24) & 3)       // top
+    if index is none:
+        index = tile_index(word(5) & 0xFFFF, (word(0) >> 22) & 3) // bottom
+    if index is not none:
+        colour = palette[palette_slot * 256 + index]; done
 slot = (f == VOID or not draws_background) ? NOTHING : bg
 l = 0
 for i in 0 .. n-1:                               // the topmost layer wins
@@ -829,22 +859,35 @@ if slot == NOTHING: discard
 colour:
 colour = (f == INLINE) ? payload_colour(slot)
        : palette[palette_slot * 256 + swatch[swatch_index][slot]]
+
+tile_index(t, offset):                           // a palette index, or none
+    if t == 0: return none                       // no tile
+    v = tile_pixel(t)                            // 0-15
+    if v == (word(0) >> 18) & 15: return none    // the transparency index
+    c  = (v + 4 * offset) mod 16
+    s  = c div 4                                 // swatch A, B, C, or D
+    sw = (word(6 + s div 2) >> (16 * (s mod 2))) & 0xFFFF
+    return swatch[sw][c mod 4]
 ```
 
 Description: The procedure reads the format from the first byte and the
-background slot from the header word. Tiles have a procedure of their own,
-and an unknown format is drawn in the background slot. For a glyph format it
-reads the glyph count, clamped to the format's glyph words, and the type
-bits, and keeps one coverage bit for each layer. A glyph that is a layer sets
-its bit to whether its glyph covers the pixel under its selector. A glyph
-that is a mask finds whether its own glyph covers the pixel, and combines
-that, by its operation, with the bits of the layers it reaches: the most
-recent layer and as many before it as its reach gives. A second loop then
-visits the layers in order and takes the ink slot of the topmost layer whose
-bit is set. A pixel that no layer covers keeps the background slot, or, in a
-void or an overlay instance that does not draw its background, is discarded.
-The slot is then looked up in the inline colours or in the swatch and the
-palette. In the grid, `draws_background` is always true.
+background slot from the header word; an unknown format is drawn in the
+background slot. For a glyph format it reads the glyph count, clamped to the
+format's glyph words, and the type bits, and keeps one coverage bit for each
+layer. A glyph that is a layer sets its bit to whether its glyph covers the
+pixel under its selector. A glyph that is a mask finds whether its own glyph
+covers the pixel, and combines that, by its operation, with the bits of the
+layers it reaches: the most recent layer and as many before it as its reach
+gives. In a tile cell, a pixel that no glyph layer covers is then given to
+the top tile, or, where the top tile is absent or transparent, to the bottom
+tile: the tile's value, unless it is the transparency index, is moved by the
+tile's colour offset and selects a slot of one of swatches A–D. Otherwise a
+second loop visits the layers in order and takes the ink slot of the topmost
+layer whose bit is set. A pixel that nothing covers keeps the background
+slot, or, in a void or an overlay instance that does not draw its
+background, is discarded. The slot is then looked up in the inline colours
+or in the swatch and the palette. In the grid, `draws_background` is always
+true.
 
 Table: Mask operations, applied to the bits the mask reaches.
 
@@ -856,38 +899,9 @@ Table: Mask operations, applied to the bits the mask reaches.
 | 3 Mask less coverage | The mask's pixel and not the coverage |
 
 The right half of a double-width glyph samples the second of the glyph's two
-atlas columns. The colour is written as bytes, divided by 255 on the GPU,
-without blending (LEXTER-DRAFT-cell-model-revision-D15).
-
-### Tiles
-
-```
-mode = (word(0) >> 8) & 3
-index = none
-t = tile_pixel(word(2) & 0xFFFFFF)               // 0-15, or none in tile 0
-if t is not none:
-    index = (mode == UNIFIED) ? tile_colour(t, A, B, C, D)
-                              : tile_colour(t, C, D)
-if mode == UNIFIED:
-    if layer 1's glyph covers the pixel under its selector:
-        index = swatch[swatch_index][ink(layer 1)]
-else:                                            // split
-    u = tile_pixel(word(3) & 0xFFFFFF)
-    if u is not none and u is not transparent:   // LEXTER-DRAFT-cell-model-O7
-        index = tile_colour(u, A, B)
-if index is none: index = swatch[swatch_index][bg]
-colour = palette[palette_slot * 256 + index]
-// tile_colour(i, S0, S1, ...): slot i mod 4 of swatch i div 4 of those given
-```
-
-Description: A tile cell draws its layer 0 tile, whose pixel value selects a
-swatch among A–D in unified mode, or among C–D in split mode, and a slot
-within it, giving a palette index. Layer 1 is drawn over it: in unified mode
-an ordinary glyph, whose covered pixels take its ink slot in the header's
-swatch, and in split mode a second tile whose values select among swatches A
-and B, except where they are transparent. A pixel that neither layer gives an
-index takes the background slot of the header's swatch. Every index is looked
-up in the header's palette slot.
+atlas columns; tiles are cell-sized and have no halves. The colour is written
+as bytes, divided by 255 on the GPU, without blending
+(LEXTER-DRAFT-cell-model-revision-D15).
 
 ## Palettes and Swatches
 
@@ -924,12 +938,13 @@ Table: Where each cursor and pointer effect is drawn.
 
 ## Open Questions
 
-### LEXTER-DRAFT-cell-model-O1 — How is the cursor drawn over a tile, or a format without layers?
+### LEXTER-DRAFT-cell-model-O1 — How is the block cursor drawn over a tile cell?
 
-Exchanging the background slot with an ink slot means little for a tile,
-whose layer 0 takes its colours from four swatches. The cursor could be the
-outlined block glyph over such a cell, or each format could define how its
-copy is transformed.
+Exchanging the background slot with the first layer's ink slot inverts a tile
+cell's glyphs and its background, but not its tiles, whose colours come from
+swatches A–D. The cursor could be the outlined block glyph over such a cell,
+or the tile format could define how its copy is transformed, such as by
+exchanging swatches or offsets.
 
 ### LEXTER-DRAFT-cell-model-O2 — May a font supply its own line glyphs?
 
@@ -954,8 +969,9 @@ generator chooses a period for each cell width is open.
 
 ### LEXTER-DRAFT-cell-model-O5 — What do the reserved bits hold?
 
-The header word has six reserved bits, a glyph format's format word
-fourteen, a layer's settings byte five, and a mask's two. The candidates are
+The header word has six reserved bits; the format word fourteen in the
+plain, void, and inline-colour formats and six in tiles; a layer's settings
+byte five; and a mask's two. The candidates are
 effects for each layer, which need no payload and so could stand beside
 masks. The bits stay reserved until a use is chosen; state that only the CPU
 reads, such as the protected-cell bit of DECSCA
@@ -969,13 +985,15 @@ default palette or a slot already in use, and a tile set could be refused or
 given fewer palettes than it asks for. Whether the store can grow while
 running, up to the 256 slots the record addresses, is open too.
 
-### LEXTER-DRAFT-cell-model-O7 — Which tile index is transparent, and which cell sizes do tiles support?
+### LEXTER-DRAFT-cell-model-O7 — How are tile sets fitted to the cell size, and may masks cut tiles?
 
-These are LEXTER-DRAFT-cell-field-format-O1 and -O2, carried here for tile
-cells. Split mode needs an answer to the first before it can be drawn. One
-candidate is the arcade convention: colour 0 of a tile is transparent, so
-that layer 1 shows layer 0 beneath it and layer 0 shows the cell's background
-slot. The second asks how tiles fit cells other than 8 by 16.
+LEXTER-DRAFT-cell-model-D11 answers LEXTER-DRAFT-cell-field-format-O1 with a
+transparency index in each tile cell, and much of -O2 with tiles the size of
+a cell. What remains of -O2 is how a tile set drawn at another size is
+fitted: sliced into cells, scaled by an integer, bordered, or refused. Masks
+that cut tiles are also open: a mask's reach could run one past the glyph
+layers to cut the top tile, or two to cut the bottom tile as well, which
+needs no new field, only a wider clamp and a coverage bit for each tile.
 
 ### LEXTER-DRAFT-cell-model-O8 — How does a mask apply to a wide display glyph?
 
@@ -988,7 +1006,7 @@ let a narrow mask apply to one half.
 The cell-field-format survey's surface tile, a surface id and a column and
 row within the surface, is the candidate for the void's payload, and it may
 need fewer than three words, which would leave the void more glyph words.
-The effect's contents are LEXTER-DRAFT-layer-mechanics-O8. Both are left to
+The effect's contents are LEXTER-O11. Both are left to
 the survey of surfaces and effects that LEXTER-DRAFT-cell-model-revision-D12
 calls for.
 
@@ -1010,10 +1028,10 @@ calls for.
 4. **With the plan's Phase 4.** The overlay instance and the block cursor's
    transformed copy (LEXTER-DRAFT-cell-model-D13).
 5. **With the plan's Phase 5.** The CPU renderer follows the same procedure.
-6. **Later.** The inline-colour format; tiles, after
-   LEXTER-DRAFT-cell-model-O1, -O6, and -O7; the void and effects, after the
-   survey of surfaces; further underline styles, after
-   LEXTER-DRAFT-cell-model-O4.
+6. **Later.** The inline-colour format; tiles and their texture, after
+   LEXTER-DRAFT-cell-model-O1 and -O6, and the fitting of tile sets of
+   LEXTER-DRAFT-cell-model-O7; the void and effects, after the survey of
+   surfaces; further underline styles, after LEXTER-DRAFT-cell-model-O4.
 7. **The second edition specified.** Spec.DataStructures2e takes its record
    from this document.
 
@@ -1106,12 +1124,15 @@ Table: A block cursor over the underlined g.
 | 9 | Unit 0 (cells), draws background |
 | Result | The foreground colour behind the g and its underline, drawn in the background colour |
 
-Table: The left half of a 16-by-16 tile in cells of 8 by 16.
+Table: A chess piece on a board square, with a half-width label, in one tile
+cell.
 
 | Word | Value |
 |---|---|
-| 0 | Tiles, mode 0, wide 1, right half 0 |
-| 1 | Swatch for the glyph layer, a palette slot allocated to the tile set, background slot 0 |
-| 2 | The tile's index in the tile texture |
-| 3 | 0, no glyph over the tile |
-| 5–6 | Swatches A–D |
+| 0 | Tiles, glyph count 1; transparency index 8; bottom offset 2, top offset 0 |
+| 1 | Swatch *s* for the label, a palette slot allocated to the tile set, background slot 0 |
+| 2 | The atlas position of the label's letter; ink slot 1 |
+| 5 | The square's tile (bits 0–15), drawn in colours 0–7; the piece's tile (bits 16–31), in colours 0–7 with 8 where the square shows through |
+| 6 | Swatches A and B, the piece's eight colours |
+| 7 | Swatches C and D, the square's eight colours, reached through the offset of 2 |
+| Result | The square, the piece over it, and the letter over both |

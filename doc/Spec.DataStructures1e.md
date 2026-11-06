@@ -26,7 +26,7 @@ relates-to:
   - LEXTER-0001
   - LEXTER-0008
   - LEXTER-0010
-  - LEXTER-DRAFT-data-structures-1e-critique
+  - LEXTER-0014
 cites:
   - title:    "Key words for use in RFCs to Indicate Requirement Levels"
     locator:  "RFC 2119"
@@ -910,7 +910,7 @@ may lift them:
 
 At commit `2d4d743` the code departs from this contract in the places below.
 This list only locates them. Each is examined, with evidence and a severity,
-in [LEXTER-DRAFT-data-structures-1e-critique](Eval.Critique.DataStructures1e.md),
+in [LEXTER-0014](Eval.Critique.DataStructures1e.md),
 which reproduces most of them and records further departures; the table after
 the list gives the finding for each item.
 
@@ -977,25 +977,25 @@ Table: The critique finding that examines each item.
 
 | Item | Finding |
 |---|---|
-| 1 | LEXTER-DRAFT-data-structures-1e-critique-O1 |
-| 2 | LEXTER-DRAFT-data-structures-1e-critique-O8 |
-| 3 | LEXTER-DRAFT-data-structures-1e-critique-O10 |
-| 4 | LEXTER-DRAFT-data-structures-1e-critique-O10 |
-| 5 | LEXTER-DRAFT-data-structures-1e-critique-O6 |
-| 6 | LEXTER-DRAFT-data-structures-1e-critique-O2 |
-| 7 | LEXTER-DRAFT-data-structures-1e-critique-O5 |
-| 8 | LEXTER-DRAFT-data-structures-1e-critique-O4 |
-| 9 | LEXTER-DRAFT-data-structures-1e-critique-O18 |
-| 10 | LEXTER-DRAFT-data-structures-1e-critique-O9 |
-| 11 | LEXTER-DRAFT-data-structures-1e-critique-O3 |
-| 12 | LEXTER-DRAFT-data-structures-1e-critique-O11 |
-| 13 | LEXTER-DRAFT-data-structures-1e-critique-O20 |
-| 14 | LEXTER-DRAFT-data-structures-1e-critique-O13 |
-| 15 | LEXTER-DRAFT-data-structures-1e-critique-O16 |
-| 16 | LEXTER-DRAFT-data-structures-1e-critique-O21, -O18 |
+| 1 | LEXTER-O19 |
+| 2 | LEXTER-O26 |
+| 3 | LEXTER-O28 |
+| 4 | LEXTER-O28 |
+| 5 | LEXTER-O24 |
+| 6 | LEXTER-O20 |
+| 7 | LEXTER-O23 |
+| 8 | LEXTER-O22 |
+| 9 | LEXTER-O36 |
+| 10 | LEXTER-O27 |
+| 11 | LEXTER-O21 |
+| 12 | LEXTER-O29 |
+| 13 | LEXTER-O38 |
+| 14 | LEXTER-O31 |
+| 15 | LEXTER-O34 |
+| 16 | LEXTER-O39, -O18 |
 
 The critique also records departures this list does not name:
-LEXTER-DRAFT-data-structures-1e-critique-O7 (TN3270E negotiation), -O12 (the scrollback viewport and scroll bar),
+LEXTER-O25 (TN3270E negotiation), -O12 (the scrollback viewport and scroll bar),
 -O14 (workspace switching), -O15 (autowrap and the scrolling region), -O17
 (the headless and teardown paths), -O19 (package exports), and -O22 (the grid's
 unused dirty bits).

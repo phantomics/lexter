@@ -14,7 +14,7 @@ reviewed:      2026-11-05
 provenance:
   assistant:   opencode
 relates-to:
-  - LEXTER-DRAFT-data-structures-1e-critique
+  - LEXTER-0014
   - LEXTER-DRAFT-mouse-reporting
   - LEXTER-0002
   - LEXTER-0006
@@ -61,7 +61,7 @@ the primary screen. The event arrives: `pane-handle-scroll` passes it to
 `src/panes/vt-pane.lisp:%vt-pane-scroll-local@a9efdfc`, which changes the
 screen's scrollback viewport. Two things are missing, and a third is
 wrong; the data-structures critique records all three as
-LEXTER-DRAFT-data-structures-1e-critique-O12.
+LEXTER-O30.
 
 - **Nothing draws the history.**
   `src/model.lisp:flush-to-display@a9efdfc` always copies the live screen
@@ -425,8 +425,8 @@ Table: Terminal events raised through pane-terminal-event.
   their current form; moving `prefix-key` into the compositor's profile and
   binding the blink state around the flush instead of setting it are left for
   later, at the steward's direction. *Update:* the steward has since placed
-  the globals in [LEXTER-DRAFT-terminal-fixes-1e](Plan.TerminalFixes1e.md),
-  whose LEXTER-DRAFT-terminal-fixes-1e-D12 moves them into instances.
+  the globals in [LEXTER-0015](Plan.TerminalFixes1e.md),
+  whose LEXTER-D77 moves them into instances.
 - **The redirect protocol is unchanged.** Its interception by method
   combination stays as it is. Its keyword-dispatched payload, which the mouse
   work extended (LEXTER-DRAFT-mouse-reporting-D7), could become event objects
@@ -441,7 +441,7 @@ Table: Terminal events raised through pane-terminal-event.
   here.
 - **The single-terminal path is excluded.** `unix-term` has no panes and no
   mouse handling; it gains neither profiles nor wheel scrolling. *Update:*
-  LEXTER-DRAFT-terminal-fixes-1e-D2 makes the standalone terminal a
+  LEXTER-D67 makes the standalone terminal a
   compositor with one pane, after which it gains both.
 
 ## Open Questions

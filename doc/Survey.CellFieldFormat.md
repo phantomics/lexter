@@ -6,13 +6,13 @@ scope:         component
 project:       Lexter
 component:     renderer
 language:      en
-status:        Draft
+status:        Deprecated
 provenance:
   assistant:   opencode
 relates-to:
-  - LEXTER-DRAFT-layer-mechanics
+  - LEXTER-0013
   - LEXTER-DRAFT-data-structures-1e
-  - LEXTER-DRAFT-data-structures-1e-critique
+  - LEXTER-0014
   - LEXTER-DRAFT-mouse-reporting
   - LEXTER-0004
   - LEXTER-0007
@@ -45,7 +45,7 @@ open-questions:
 # Cell Field Format: Survey
 
 This survey sets out a proposed bit layout for the 32-byte cell record that
-[LEXTER-DRAFT-layer-mechanics](Survey.LayerMechanics.md) explores. That survey
+[LEXTER-0013](Survey.LayerMechanics.md) explores. That survey
 asks whether Lexter should store every cell as one fixed-size record with
 three display glyphs and three mask glyphs; this one asks how the fields of
 such a record would be arranged, what the space left over when masks and
@@ -194,7 +194,7 @@ meaningful only for a layer below the layer count. Because absence is
 recorded by the count, not by glyph 0, an absent layer's word is free to
 carry data, and atlas position 0 can be reserved for an empty glyph or used
 as an ordinary one as the atlas's owner decides
-(LEXTER-DRAFT-data-structures-1e-critique-O10).
+(LEXTER-O28).
 
 ### Words 5–7: the tail
 
@@ -245,12 +245,12 @@ Table: Tail type 2, inline colours.
 Four 24-bit colours fill the tail exactly. A cell with inline colours does
 not consult the swatch store or the palette, so truecolour output, which
 today is mapped to 256 colours and drives growth of the swatch table
-(LEXTER-DRAFT-data-structures-1e-critique-O6), could be drawn exactly. Such
+(LEXTER-O24), could be drawn exactly. Such
 a cell gives up masks.
 
 Type 3 is held for the effects the layer-mechanics survey lists, such as
 sub-cell offsets, opacity, and an alternate glyph for blinking; its
-contents are LEXTER-DRAFT-layer-mechanics-O8.
+contents are LEXTER-O11.
 
 ### Bit budget
 
@@ -276,7 +276,7 @@ considered, a marker in the first cell of each row with a run length, keeps
 the region's description in one cell per row, and every operation that
 moves or clears cells would have to preserve it; that is the kind of
 invariant the data-structures critique found broken for wide characters
-(LEXTER-DRAFT-data-structures-1e-critique-O8). With a reference in every
+(LEXTER-O26). With a reference in every
 cell:
 
 - the shader computes the texture coordinate from the cell's own fields,
@@ -342,7 +342,7 @@ texels in OpenGL 3.3, exactly the range of a 16-bit index. The store would
 move to one.
 
 A larger address space does not settle who allocates in it. Which owner the
-swatch namespace has is LEXTER-DRAFT-layer-mechanics-O5, and it remains a
+swatch namespace has is LEXTER-O8, and it remains a
 prerequisite of the dense record.
 
 ## A Possible Evolution: Tile Mode
@@ -465,13 +465,13 @@ cell would need anyway.
 
 Within Lexter:
 
-- [LEXTER-DRAFT-layer-mechanics](Survey.LayerMechanics.md) argues for the
+- [LEXTER-0013](Survey.LayerMechanics.md) argues for the
   dense record and the mask code; this survey proposes the record's layout.
   Its earlier field table, with the layers' glyphs interleaved, is
   superseded by the order given here.
 - [LEXTER-DRAFT-data-structures-1e](Spec.DataStructures1e.md) specifies the
   present instance layouts this record would replace, and
-  [LEXTER-DRAFT-data-structures-1e-critique](Eval.Critique.DataStructures1e.md)
+  [LEXTER-0014](Eval.Critique.DataStructures1e.md)
   records the faults several of its properties address.
 - [LEXTER-0007](Log.EnhancedDualWidth.md) defines wide glyphs, which the
   record stores as halves and which tile references would generalise.
@@ -541,7 +541,7 @@ separate tests, whose form is open.
 
 Animating a swatch's contents needs swatches that interning never hands out.
 The division belongs to whoever owns the swatch namespace
-(LEXTER-DRAFT-layer-mechanics-O5).
+(LEXTER-O8).
 
 ### LEXTER-DRAFT-cell-field-format-O7 — What do the spare bits hold?
 
@@ -580,7 +580,7 @@ unchanged, and nothing here is authoritative.
 In the layout above, mask *k* belongs to layer *k*, so a layer takes at most
 one mask. A thumb that starts and ends inside one cell needs the bar and two
 bounds on the same layer, which one mask cannot give; the layer-mechanics
-survey left this as LEXTER-DRAFT-layer-mechanics-O3, and its worked example
+survey left this as LEXTER-O6, and its worked example
 fell back on a minimum thumb length of one cell. The number of masks need not
 change to lift the limit, only their assignment.
 

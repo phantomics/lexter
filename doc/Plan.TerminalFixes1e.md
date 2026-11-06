@@ -124,7 +124,7 @@ encoded through babel's internal functions.
 
 ### LEXTER-D66 — The plan covers the first edition's fixes outside the cell model
 
-**Status:** Implemented
+**Status:** Accepted
 
 **Context:** The development sequence of
 [LEXTER-0013](Survey.LayerMechanics.md) begins with fixes
@@ -153,7 +153,7 @@ or keep its own path.
 
 ### LEXTER-D67 — The standalone terminal becomes a compositor with one pane, and this comes first
 
-**Status:** Implemented
+**Status:** Accepted
 
 **Context:** `unix-term` and the compositor each have their own tick, key
 encoding (`*key-sequences*` and its encoder), cursor blink, resize handling,
@@ -193,7 +193,7 @@ excluded for the single-terminal path.
 
 ### LEXTER-D68 — Host input is checked at the boundary, never trusted against a slot's type
 
-**Status:** Implemented
+**Status:** Accepted
 
 **Context:** `rgb-to-256` returns 256 for the grey (248, 248, 248), SGR
 `38;5;n` stores any n, and `tab-stops` keeps its original length when the
@@ -218,7 +218,7 @@ built.
 
 ### LEXTER-D69 — Autowrap and line feed share one path, which owns the scrolling region
 
-**Status:** Implemented
+**Status:** Accepted
 
 **Context:** Line feed scrolls within the scrolling region, but autowrap
 tests the screen's last row, so wrapping inside a region that ends above it
@@ -234,7 +234,7 @@ line feed, which alone applies the region's rule.
 
 ### LEXTER-D70 — Every reader of a terminal's screen goes through the handler
 
-**Status:** Implemented
+**Status:** Accepted
 
 **Context:** LEXTER-D28 has the handler own both buffers and requires
 readers to poll `vt-handler-screen`, but the Origin integration reads and
@@ -257,7 +257,7 @@ the cell plan's LEXTER-DRAFT-cell-model-revision-O3.
 
 ### LEXTER-D71 — A workspace switch marks every screen and its decorations dirty
 
-**Status:** Implemented
+**Status:** Accepted
 
 **Context:** `switch-workspace` clears the grid but marks nothing dirty, so
 the new workspace stays blank until its panes produce output, and its
@@ -276,7 +276,7 @@ of the cell plan's Phase 3.
 
 ### LEXTER-D72 — The TN3270 client follows RFC 2355, and its screen is sized from its geometry
 
-**Status:** Implemented
+**Status:** Accepted
 
 **Context:** The client tests for `DEVICE-TYPE SEND` where RFC 2355 has the
 server send `SEND DEVICE-TYPE`, and answers with `IS`, which only the server
@@ -307,7 +307,7 @@ than the receive buffer does is LEXTER-O43.
 
 ### LEXTER-D73 — The telnet client encodes before escaping, and keeps option state by the Q method
 
-**Status:** Implemented
+**Status:** Accepted
 
 **Context:** `telnet-write-string` masks each character to seven bits before
 testing it for 255, so code 255 goes out as `7F FF`, and the client answers
@@ -332,7 +332,7 @@ request that changes it.
 
 ### LEXTER-D74 — The PTY separates the child's life from the descriptor's
 
-**Status:** Implemented
+**Status:** Accepted
 
 **Context:** `pty-close` does nothing once `alive-p` is false, which
 `pty-read` sets at end of file, so the descriptor is never closed and the
@@ -354,7 +354,7 @@ that is the pane's backend methods, which already do.
 
 ### LEXTER-D75 — Backends are sized from the screen the handler made
 
-**Status:** Implemented
+**Status:** Accepted
 
 **Context:** `vt-pane-init-screen` sizes the screen from the content area,
 but the PTY and the telnet client are opened at the pane's full size
@@ -370,7 +370,7 @@ but the PTY and the telnet client are opened at the pane's full size
 
 ### LEXTER-D76 — Exports name only what exists, and packages read each other through them
 
-**Status:** Implemented
+**Status:** Accepted
 
 **Context:** Seven exported symbols name nothing, and the model and the VT
 handler read other packages' internals with `::`
@@ -391,7 +391,7 @@ use as keywords in a protocol.
 
 ### LEXTER-D77 — Instance state leaves the globals
 
-**Status:** Implemented
+**Status:** Accepted
 
 **Context:** The compositor copies its `prefix-key` slot into `*prefix-key*`
 and its blink state into `*cursor-blink-on*` on every tick, and the VT
@@ -417,7 +417,7 @@ LEXTER-O42.
 
 ### LEXTER-D78 — Mode state has one home, the handler
 
-**Status:** Implemented
+**Status:** Accepted
 
 **Context:** The screen has a `mode-flags` slot with `set-mode` and
 `get-mode` stubs, while the VT handler keeps the real modes in its own slots
@@ -434,7 +434,7 @@ LEXTER-O42.
 
 ### LEXTER-D79 — Keystrokes are encoded without babel's internals
 
-**Status:** Implemented
+**Status:** Accepted
 
 **Context:** The key path encodes each character through
 `babel::lookup-mapping`, `babel::*string-vector-mappings*`, and
@@ -450,7 +450,7 @@ into the pane's write buffer. It needs no allocation and no library.
 
 ### LEXTER-D80 — Every fix gets a headless regression test
 
-**Status:** Implemented
+**Status:** Accepted
 
 **Context:** The critique reproduced its findings in SBCL with no display,
 and the cell plan's LEXTER-DRAFT-cell-model-revision-D11 makes the same rule

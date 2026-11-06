@@ -15,7 +15,7 @@ provenance:
   assistant:   opencode
 relates-to:
   - LEXTER-0008
-  - LEXTER-DRAFT-data-structures-1e-critique
+  - LEXTER-0014
 decisions:
   - LEXTER-D45
   - LEXTER-D46
@@ -247,7 +247,7 @@ This reuses the entire real render path -- crucially the existing
 *Note (2026-10-26):* the guards stop at `gui-initialize` and `gui-tick`. The
 input handlers were not guarded, so a key, character, or resize event on a
 `no-pty` terminal applies `pty-alive-p` or `pty-set-size` to NIL and signals
-a type error (LEXTER-DRAFT-data-structures-1e-critique-O17). A hidden replay
+a type error (LEXTER-O35). A hidden replay
 window rarely receives such events, but nothing prevents it.
 
 `terminal-reset` (`src/unix-term.lisp:terminal-reset@1f07ee8`) rebuilds a blank
@@ -264,7 +264,7 @@ drawn with the first fixture's colours; palettes have the same flaw, since
 every screen's palette generation starts at 1. A fixture's checksum
 therefore depends on which fixtures ran before it, against the determinism
 LEXTER-D47 rests on
-(LEXTER-DRAFT-data-structures-1e-critique-O5). `terminal-config-plist`
+(LEXTER-O23). `terminal-config-plist`
 (`src/unix-term.lisp:terminal-config-plist@1f07ee8`) returns the durable config
 plist.
 `terminal-start-recording` / `terminal-stop-recording`
@@ -395,11 +395,11 @@ Its items are gathered, in the Log's own words, from the work it defers.
   frame after a reset uploads both. The general fix, recording the identity
   of the producer with its generation or drawing generations from one global
   counter, belongs to the swatch work the critique proposes
-  (LEXTER-DRAFT-data-structures-1e-critique-O5). A regression test replays
+  (LEXTER-O23). A regression test replays
   two fixtures with different colours in both orders.
 - **Unguarded handlers on a `no-pty` terminal.** `handle-key-press`,
   `handle-char-input`, and `handle-resize` should do nothing to the PTY when
-  there is none (LEXTER-DRAFT-data-structures-1e-critique-O17). The same
+  there is none (LEXTER-O35). The same
   finding's other half, that `pty-close` never closes the descriptor once
   the child has exited, belongs to the PTY code rather than to this rig.
 - **A check the rig cannot make.** Both faults above depend on what the

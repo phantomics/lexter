@@ -10,13 +10,13 @@ provenance:
   assistant:   opencode
   session:     "Cell model revision plan (2026-11-02)"
 relates-to:
-  - LEXTER-DRAFT-cell-model
-  - LEXTER-DRAFT-terminal-fixes-1e
+  - LEXTER-0016
+  - LEXTER-0015
   - LEXTER-DRAFT-pane-profiles
-  - LEXTER-DRAFT-layer-mechanics
+  - LEXTER-0013
   - LEXTER-DRAFT-cell-field-format
   - LEXTER-DRAFT-data-structures-1e
-  - LEXTER-DRAFT-data-structures-1e-critique
+  - LEXTER-0014
   - LEXTER-0003
   - LEXTER-0004
   - LEXTER-0007
@@ -81,15 +81,15 @@ terminal. It first repairs the present data model, specified in
 [LEXTER-DRAFT-data-structures-1e](Spec.DataStructures1e.md), so that it meets
 its own contract; it then gives each screen's swatch table a range of one GPU
 store, replaces the present cells with the dense 32-byte record explored in
-[LEXTER-DRAFT-layer-mechanics](Survey.LayerMechanics.md) and laid out in
+[LEXTER-0013](Survey.LayerMechanics.md) and laid out in
 [LEXTER-DRAFT-cell-field-format](Survey.CellFieldFormat.md), using that
 survey's alternative encoding of mask targets, draws cursors and other
 moving glyphs from an overlay list, and adds a renderer on the CPU that draws
 the same pixels as the GPU. It answers the cell-model findings of
-[LEXTER-DRAFT-data-structures-1e-critique](Eval.Critique.DataStructures1e.md)
+[LEXTER-0014](Eval.Critique.DataStructures1e.md)
 and of the earlier review cited above, and follows the development sequence
 of the layer-mechanics survey. The record itself, bit by bit, is specified by
-the cell-model architecture, [LEXTER-DRAFT-cell-model](Arch.CellModel.md),
+the cell-model architecture, [LEXTER-0016](Arch.CellModel.md),
 which refines the layout this plan first adopted. The two divide the work:
 the architecture says what the record is and how a renderer draws it, and
 this plan says in what order Lexter gets there, and what the first edition
@@ -103,27 +103,27 @@ structures that hold cells.
 
 - **Invariants kept by one writer and broken by the others.** Wide characters
   never reach the GPU from a screen
-  (LEXTER-DRAFT-data-structures-1e-critique-O1), and the operations that move
+  (LEXTER-O19), and the operations that move
   or clear cells leave wide flags behind
-  (LEXTER-DRAFT-data-structures-1e-critique-O8). Layered cells drift apart
+  (LEXTER-O26). Layered cells drift apart
   between the model and the grid, and vanish under the cursor
-  (LEXTER-DRAFT-data-structures-1e-critique-O9). Glyph 0 and codepoint 32 are
-  each used for two things (LEXTER-DRAFT-data-structures-1e-critique-O10).
+  (LEXTER-O27). Glyph 0 and codepoint 32 are
+  each used for two things (LEXTER-O28).
   Each cell rule is honoured in one function and broken in several others.
 - **Copies of the same data with no owner.** Swatches live in each screen's
   table, in the display grid, and on the GPU, kept in step by counters that
   carry no identity. The GPU's table can stay stale for good
-  (LEXTER-DRAFT-data-structures-1e-critique-O2), panes overwrite each other's
-  colours (LEXTER-DRAFT-data-structures-1e-critique-O4), replays depend on the
-  order of fixtures (LEXTER-DRAFT-data-structures-1e-critique-O5), and the
+  (LEXTER-O20), panes overwrite each other's
+  colours (LEXTER-O22), replays depend on the
+  order of fixtures (LEXTER-O23), and the
   table can outgrow the grid and the GPU
-  (LEXTER-DRAFT-data-structures-1e-critique-O6).
+  (LEXTER-O24).
 
 Lesser faults sit beside them: constants defined twice
-(LEXTER-DRAFT-data-structures-1e-critique-O18), dirty bits maintained and
-never read (LEXTER-DRAFT-data-structures-1e-critique-O22), and descriptions
+(LEXTER-O36), dirty bits maintained and
+never read (LEXTER-O40), and descriptions
 that no longer match the code
-(LEXTER-DRAFT-data-structures-1e-critique-O21).
+(LEXTER-O39).
 
 Beyond the faults, the present format has limits that the steward's plans
 outrun. A cell is either one glyph or a sparse stack of up to three layers in
@@ -183,7 +183,7 @@ write.
 **Context:** The layer-mechanics survey's development sequence begins with
 fixes needed under any design. Some concern the cell model; others concern
 the VT handler's state, the protocols, and the terminal paths: host input
-(LEXTER-DRAFT-data-structures-1e-critique-O3), TN3270E negotiation (-O7), the
+(LEXTER-O21), TN3270E negotiation (-O7), the
 cached screen (-O11), the scroll-bar thumb's inversion (-O12), the TN3270
 screen's size (-O13), the workspace switch (-O14), autowrap (-O15), the
 telnet client (-O16), the headless PTY paths (-O17), package exports (-O19),
@@ -192,13 +192,13 @@ and backend sizing (-O20).
 **Decision:** This plan covers the cell model: the cells, their swatches,
 how they are drawn, and the VT handler's writing of double-width characters,
 which is part of how cells are made. The other fixes go in
-[LEXTER-DRAFT-terminal-fixes-1e](Plan.TerminalFixes1e.md), except the
+[LEXTER-0015](Plan.TerminalFixes1e.md), except the
 scroll-bar thumb and the scrollback viewport, which
 [LEXTER-DRAFT-pane-profiles](Plan.PaneProfiles.md) already plans. Two of the
 companion plan's fixes are prerequisites here and are named in the Roadmap:
 the consolidation of the two terminal stacks
-(LEXTER-DRAFT-terminal-fixes-1e-D2) before Phase 1, and the workspace-switch
-repaint (LEXTER-DRAFT-terminal-fixes-1e-D6) before Phase 3. The review's
+(LEXTER-D67) before Phase 1, and the workspace-switch
+repaint (LEXTER-D71) before Phase 3. The review's
 finding that the 3270 pane bypasses the model belongs to this plan
 (LEXTER-DRAFT-cell-model-revision-O11).
 
@@ -212,14 +212,14 @@ finding that the 3270 pane bypasses the model belongs to this plan
 **Status:** Proposed
 
 **Context:** The layer-mechanics survey's
-LEXTER-DRAFT-layer-mechanics-O11 sorts the cell-model findings into those
+LEXTER-O14 sorts the cell-model findings into those
 needed whichever course is taken and those the dense record would make
 unnecessary, and asks whether to repair the second group in place or leave
 it for the second edition. Double-width text is wrong today, and the
 second edition is a large change that will take time.
 
 **Decision:** Repair the first edition fully, in place, for the critique's
-findings LEXTER-DRAFT-data-structures-1e-critique-O1, -O8, -O9, -O10, -O18,
+findings LEXTER-O19, -O8, -O9, -O10, -O18,
 and -O22: wide pairs in every operation, layer synchronisation, the glyph
 sentinels, constants, and dirty bits, together with a cursor that writes no
 swatches. The second edition starts from a first edition that meets its
@@ -273,10 +273,10 @@ dirty row before copying it and blanks any left half without its right half.
 
 **Context:** Each screen numbers its swatches from 0, and every pane copies
 its table into the grid's single table, so panes overwrite each other's
-colours (LEXTER-DRAFT-data-structures-1e-critique-O4). The grid's counter is
+colours (LEXTER-O22). The grid's counter is
 both incremented and assigned, so the GPU's table can stay stale
-(LEXTER-DRAFT-data-structures-1e-critique-O2), and upload records carry no
-identity (LEXTER-DRAFT-data-structures-1e-critique-O5). The layer-mechanics
+(LEXTER-O20), and upload records carry no
+identity (LEXTER-O23). The layer-mechanics
 survey weighs a window-wide table against per-screen ranges under Swatch
 Ownership, and the review recommended a single authoritative table.
 
@@ -340,7 +340,7 @@ scrollback, so ranges are fixed in place
 
 **Context:** The flush draws the cursor by interning a reversed swatch into
 the screen's table and writing it into the grid, which triggers
-LEXTER-DRAFT-data-structures-1e-critique-O2, adds to -O6, and, through
+LEXTER-O20, adds to -O6, and, through
 rewriting the cell, breaks wide pairs (-O1) and drops layers (-O9).
 
 **Decision:** Until the overlay list exists, the flush draws the cursor's
@@ -352,7 +352,7 @@ layer 0.
 
 **Alternatives:**
 - Keep the reversed swatch until the overlay list. Rejected: it is the
-  trigger of LEXTER-DRAFT-data-structures-1e-critique-O2 and the cause of the
+  trigger of LEXTER-O20 and the cause of the
   cursor's part of -O1 and -O9, which LEXTER-DRAFT-cell-model-revision-D2
   repairs.
 
@@ -389,15 +389,15 @@ tail-type value means that the tail holds nothing. Operation 3 removes the
 running coverage from the mask's pixels, a function no other value
 expresses. The tail types and the use of the six bits are refined after this
 plan (LEXTER-DRAFT-cell-model-revision-O7). *Update:* the steward has since
-refined the encoding in [LEXTER-DRAFT-cell-model](Arch.CellModel.md): each
+refined the encoding in [LEXTER-0016](Arch.CellModel.md): each
 layer's and mask's settings move into the top byte of its own glyph word,
 masks keep their operations and selector, and layers and masks are
 interleaved, each mask cutting the layers before it as far as its reach, so
 that no mask needs a target. Word 0 becomes a format word that gives the
-number of glyphs and which of them are masks (LEXTER-DRAFT-cell-model-D1,
+number of glyphs and which of them are masks (LEXTER-D81,
 -D3, -D4, -D5), in place of word 1's fixed fields and the tail type folded
 into unused masks. Layers have no fill, and the fill rule is withdrawn: the
-cell's background slot is in the header word (LEXTER-DRAFT-cell-model-D6).
+cell's background slot is in the header word (LEXTER-D86).
 
 **Alternatives:**
 - Four operations and no selector. Rejected: the two operations it drops can
@@ -419,7 +419,7 @@ its own. A broken pair corrupts flags.
 
 **Decision:** Store the glyph in both cells, with the wide bit in both and
 the right-half bit in the second, kept in the record's format word
-(LEXTER-DRAFT-cell-model-D1), and let each cell draw its own
+(LEXTER-D81), and let each cell draw its own
 half. Every quad is one cell, continuation flags go away, and a broken pair
 shows half a glyph instead of corrupting state. Writers still write and
 erase both halves together, as a terminal must. The atlas keeps each wide
@@ -437,7 +437,7 @@ packs them, and the right half samples the second.
 
 **Context:** The present instance format is written out three times, in the
 packer, the attribute setup, and the shader, and its stride is defined twice
-(LEXTER-DRAFT-data-structures-1e-critique-O18).
+(LEXTER-O36).
 
 **Decision:** A single descriptor, a macro such as `define-cell-layout`,
 generates the record's Lisp accessors, the GLSL that decodes it, and the
@@ -465,7 +465,7 @@ table's range, and a position in cells or pixels, and the list is drawn by
 one instanced draw after the grid, in list order. The cell-model
 architecture makes each instance a full record followed by its position and
 flags, so that an instance carries whatever a cell can, and the grid's
-decoder reads it (LEXTER-DRAFT-cell-model-D13).
+decoder reads it (LEXTER-D93).
 
 **Alternatives:**
 - A stamped mask. Rejected because it writes ephemeral state into the stable
@@ -487,7 +487,7 @@ decoder reads it (LEXTER-DRAFT-cell-model-D13).
 **Context:** The critique reproduced most of its findings headlessly in SBCL,
 with no display, and the screenshot test rig
 ([LEXTER-0010](Log.ScreenshotTestRig.md)) cannot detect
-LEXTER-DRAFT-data-structures-1e-critique-O2 or -O5, which depend on what the
+LEXTER-O20 or -O5, which depend on what the
 renderer recorded before a capture.
 
 **Decision:** Before each finding is repaired, a test that reproduces it is
@@ -634,8 +634,8 @@ internal format `GL_RGBA8UI`, read in the shaders as `usamplerBuffer` with
   LEXTER-D17, which belonged to the float uniform buffer; how many slots a
   record can name is not changed by this decision. *Update:* the record's
   palette slot is widened to eight bits, and the store's size set by the
-  configuration, in LEXTER-DRAFT-cell-model-D7 and -D12 of
-  [LEXTER-DRAFT-cell-model](Arch.CellModel.md).
+  configuration, in LEXTER-D87 and -D12 of
+  [LEXTER-0016](Arch.CellModel.md).
 - **Bytes on the CPU.** The model keeps palette entries as bytes, so that the
   upload copies them unchanged and the CPU renderer
   (LEXTER-DRAFT-cell-model-revision-D16) reads the values the GPU reads.
@@ -679,7 +679,7 @@ blending, which every conformant implementation stores as the original bytes.
 The overlay pass of Phase 4 writes the entry of a covered pixel in the same
 way; an uncovered pixel takes the instance's background slot when its flags
 say it draws its background, as the block cursor's does, and is discarded
-otherwise (LEXTER-DRAFT-cell-model-D13). Blending that a surface or effect
+otherwise (LEXTER-D93). Blending that a surface or effect
 adds later lies outside this guarantee, and outside the fixtures that rely on
 it.
 
@@ -721,7 +721,7 @@ renderer, written in Lisp, that runs on the CPU and needs no GL.
 - **Exclusions at first.** Surfaces and effects, which are left to a later
   survey (LEXTER-DRAFT-cell-model-revision-D12). A cell of a format it does
   not draw is drawn blank, in its background slot, as both renderers do
-  (LEXTER-DRAFT-cell-model-D2).
+  (LEXTER-D82).
 - **Uses.** It is the second renderer against which the GPU is tested
   (LEXTER-DRAFT-cell-model-revision-D17). Its first use outside the tests is
   the font selector: a popup window with its own rendering pipeline,
@@ -796,15 +796,15 @@ Table: First-edition repairs by finding.
 
 | Finding | Repair |
 |---|---|
-| LEXTER-DRAFT-data-structures-1e-critique-O1 | The VT handler writes pairs and advances by two; the flush writes each pair once; the cursor keeps the wide flag (LEXTER-DRAFT-cell-model-revision-D3, -D6) |
-| LEXTER-DRAFT-data-structures-1e-critique-O8 | Per-cell helpers in every row and range operation, edge repair, `resize-grid` copying both flag vectors, and the row check (LEXTER-DRAFT-cell-model-revision-D3) |
-| LEXTER-DRAFT-data-structures-1e-critique-O9 | The flush writes a layered cell's whole record, empty layers included; `write-char-at` on a layered cell honours its swatch and attributes; the cursor no longer rewrites the cell (LEXTER-DRAFT-cell-model-revision-D6) |
-| LEXTER-DRAFT-data-structures-1e-critique-O10 | Atlas positions 0–63 are reserved at build time, position 0 for an empty glyph and the rest for generated glyphs, which the atlas names from 0x110000 instead of private-use codepoints, so the cursor glyphs move to positions 1–4 (LEXTER-DRAFT-cell-model-D9); every writer takes its blank from the atlas instead of writing codepoint 32 |
-| LEXTER-DRAFT-data-structures-1e-critique-O18 | One home for the cell constants that the model, grid, and renderer share, one `+layered-stride+`, one default palette, one `setup-default-swatches`, and one name for each layer slot |
-| LEXTER-DRAFT-data-structures-1e-critique-O22 | The grid's description is made true: `build-render-data` loses the unused `force-full` and its claim of incremental rebuilds, and the dirty bits stay for the second edition to upload by |
+| LEXTER-O19 | The VT handler writes pairs and advances by two; the flush writes each pair once; the cursor keeps the wide flag (LEXTER-DRAFT-cell-model-revision-D3, -D6) |
+| LEXTER-O26 | Per-cell helpers in every row and range operation, edge repair, `resize-grid` copying both flag vectors, and the row check (LEXTER-DRAFT-cell-model-revision-D3) |
+| LEXTER-O27 | The flush writes a layered cell's whole record, empty layers included; `write-char-at` on a layered cell honours its swatch and attributes; the cursor no longer rewrites the cell (LEXTER-DRAFT-cell-model-revision-D6) |
+| LEXTER-O28 | Atlas positions 0–63 are reserved at build time, position 0 for an empty glyph and the rest for generated glyphs, which the atlas names from 0x110000 instead of private-use codepoints, so the cursor glyphs move to positions 1–4 (LEXTER-D89); every writer takes its blank from the atlas instead of writing codepoint 32 |
+| LEXTER-O36 | One home for the cell constants that the model, grid, and renderer share, one `+layered-stride+`, one default palette, one `setup-default-swatches`, and one name for each layer slot |
+| LEXTER-O40 | The grid's description is made true: `build-render-data` loses the unused `force-full` and its claim of incremental rebuilds, and the dirty bits stay for the second edition to upload by |
 | Review: the cursor writes into the model during the flush | The cursor exchanges slots (LEXTER-DRAFT-cell-model-revision-D6) |
 
-The repair of LEXTER-DRAFT-data-structures-1e-critique-O22 makes the first
+The repair of LEXTER-O40 makes the first
 edition honest rather than incremental. Rebuilding only dirty rows would need
 instances laid out by row, which the first edition's compact packing does not
 have and the second edition provides.
@@ -844,7 +844,7 @@ edition, as LEXTER-DRAFT-cell-model-revision-D5 describes.
   padding bytes would lift the limit sooner, at the cost of changing the
   first edition's shaders and attribute setup once more.
 
-When the phase is done, LEXTER-DRAFT-data-structures-1e-critique-O2, -O4, and
+When the phase is done, LEXTER-O20, -O4, and
 -O5 are resolved, and -O6 is a limit per table with a policy for a full table.
 
 **Phase 2 is a precondition of every later phase.** It is complete when every
@@ -867,7 +867,7 @@ Table: What each later phase needs from swatch ownership.
 Phase 3 replaces the present cells with the record of
 LEXTER-DRAFT-cell-model-revision-D7, laid out as the cell-field-format survey
 proposes, with mask targets. *Update:* the record's layout is now specified
-by [LEXTER-DRAFT-cell-model](Arch.CellModel.md), which supersedes the table
+by [LEXTER-0016](Arch.CellModel.md), which supersedes the table
 below: word 0 is a format word with the format, the number of glyphs, which
 of them are masks, and the wide bits; word 1 is a header word with the
 swatch index, the palette slot, and the background slot; and words 2–7 are
@@ -935,7 +935,7 @@ cursors as its first use.
 
 - **A pass of its own.** One instanced draw after the grid, whose instances
   are records followed by a position and flags, decoded as the grid's records
-  are (LEXTER-DRAFT-cell-model-D13).
+  are (LEXTER-D93).
 - **Positions in cells or pixels**, so an overlay can move smoothly and is not
   bound to the grid.
 - **Colours** from the swatch table and range of the pane or chrome it
@@ -999,11 +999,11 @@ free the rest, and bump the table's version.
   records laid from the start of an array split cache lines
   (LEXTER-DRAFT-cell-model-revision-O10).
 - **Dependence on the other plans.** Phase 1 waits for the consolidation of
-  the two terminal stacks (LEXTER-DRAFT-terminal-fixes-1e-D2), so that its
+  the two terminal stacks (LEXTER-D67), so that its
   repairs land once. Dirty-row uploads would leave a stale workspace on screen
   until the workspace switch schedules a repaint
-  (LEXTER-DRAFT-data-structures-1e-critique-O14), which
-  LEXTER-DRAFT-terminal-fixes-1e-D6 fixes before Phase 3. The pane-profiles
+  (LEXTER-O32), which
+  LEXTER-D71 fixes before Phase 3. The pane-profiles
   plan also changes `flush-to-display`, to draw the history, so its order with
   Phase 1 is settled when the phases are scheduled.
 - **A larger model.** A screen of 80×24 records is 61 KB, three times today's
@@ -1027,7 +1027,7 @@ its own array, and gives each pane its palette slot by a uniform, freeing the
 header's palette-slot bits, at the cost of a draw call per pane and a home
 for chrome. One composed grid keeps one draw call, but its copy translates
 every swatch index, and palettes travel in each cell's bits. It is
-LEXTER-DRAFT-layer-mechanics-O14, and it is settled before Phase 3.
+LEXTER-O17, and it is settled before Phase 3.
 
 **Resolution:** 2026-11-03 — accepted, recorded at the steward's direction:
 one composed grid, with global swatch indices so that composing needs no
@@ -1038,7 +1038,7 @@ own (LEXTER-DRAFT-cell-model-revision-D12, -D5).
 
 Storing the record makes the flush a copy and makes scrollback compact; it
 triples the model's size, and the model's attributes need a place. It is
-LEXTER-DRAFT-layer-mechanics-O4. The decisions for one composed grid and
+LEXTER-O7. The decisions for one composed grid and
 global indices (LEXTER-DRAFT-cell-model-revision-D12, -D5) make it more
 attractive: a screen whose cells are records, with their global swatch indices
 and palette slot already set, composes into the grid by a plain copy of row
@@ -1057,25 +1057,25 @@ Ranges are fixed in place, so those allocated in Phase 2 carry into Phase 3
 unchanged, and Phase 3 opens the rest of the store. Also open: whether the
 primary and alternate screens share one table, and whether a full table
 evicts unused swatches (Phase 7) or falls back to the nearest existing one.
-It is LEXTER-DRAFT-layer-mechanics-O12.
+It is LEXTER-O15.
 
 ### LEXTER-DRAFT-cell-model-revision-O4 — Where do the swatches of writers without a screen live?
 
 Chrome, decorators, the overlay list, and the 3270 pane need tables: one
 chrome table with a range of its own, or the table of the pane each belongs
-to. It is LEXTER-DRAFT-layer-mechanics-O13.
+to. It is LEXTER-O16.
 
 ### LEXTER-DRAFT-cell-model-revision-O5 — How does the block cursor learn the cell beneath it?
 
 The CPU copies layer 0's glyph and settings into the cursor's overlay
 instance and refreshes them when the row changes, or the block style keeps
 cursor bits in the header and is drawn in the grid's pass. It is
-LEXTER-DRAFT-layer-mechanics-O15.
+LEXTER-O18.
 
 **Resolution:** 2026-11-03 — accepted, recorded at the steward's direction:
 the block cursor's overlay instance carries a full copy of the record
 beneath it, and the header has no cursor bits
-(LEXTER-DRAFT-cell-model-D13 in [LEXTER-DRAFT-cell-model](Arch.CellModel.md)).
+(LEXTER-D93 in [LEXTER-0016](Arch.CellModel.md)).
 The steward has since settled that the copy is inverted by exchanging its
 background slot with its first layer's ink slot, and that the instance draws
 its background.
@@ -1104,9 +1104,9 @@ over, so that the surface can take an effect of its own; glyph layers may sit
 over a void, as captions over a video. The details of surfaces and effects are
 left to a later survey. *Update:* tail types and escape cells are now one
 namespace of formats, named by the first byte of the record
-(LEXTER-DRAFT-cell-model-D2 in [LEXTER-DRAFT-cell-model](Arch.CellModel.md)):
+(LEXTER-D82 in [LEXTER-0016](Arch.CellModel.md)):
 plain, void, inline colours, effect, and tiles. What the void and the effect
-carry remains open there, as LEXTER-DRAFT-cell-model-O9.
+carry remains open there, as LEXTER-O53.
 
 ### LEXTER-DRAFT-cell-model-revision-O8 — What does the text array hold?
 
@@ -1125,7 +1125,7 @@ but depend on the platform and are reached outside GLFW's portable API.
 
 The Lisp heap with records offset by 16 bytes, foreign memory, or mapped GPU
 memory; and custom VOPs, sb-simd, or typed Lisp. It is
-LEXTER-DRAFT-layer-mechanics-O7.
+LEXTER-O10.
 
 ### LEXTER-DRAFT-cell-model-revision-O11 — Is the 3270 pane rewritten to the record, or does it keep its own path?
 
@@ -1175,7 +1175,7 @@ Table: Prior systems and what this plan draws from each.
    (LEXTER-DRAFT-cell-model-revision-D11).
 2. **Phase 1: the first edition repaired.** It starts after the companion
    plan's consolidation of the two terminal stacks
-   (LEXTER-DRAFT-terminal-fixes-1e-D2). The repairs of The First Edition
+   (LEXTER-D67). The repairs of The First Edition
    Repaired, finding by finding, each turning its test green. Double-width
    text renders through the VT path. A Log records the phase.
 3. **Phase 2: swatch ranges.** The store, the allocator, interning by every
@@ -1188,7 +1188,7 @@ Table: Prior systems and what this plan draws from each.
 4. **Gate.** Phase 2 is complete, as Swatch Ranges defines;
    LEXTER-DRAFT-cell-model-revision-O2, -O6, -O8, and -O11 are settled, with
    the half of -O10 that decides where the grid lives; and the companion
-   plan's workspace-switch repaint (LEXTER-DRAFT-terminal-fixes-1e-D6) has
+   plan's workspace-switch repaint (LEXTER-D71) has
    landed. The formats other than the plain format (-O7) may wait until
    after Phase 3.
 5. **Phase 3: the dense cell model.** The descriptor
@@ -1216,10 +1216,10 @@ Table: Prior systems and what this plan draws from each.
     model, Spec.DataStructures2e, superseding
     [LEXTER-DRAFT-data-structures-1e](Spec.DataStructures1e.md), and
     README.md brought up to date
-    (LEXTER-DRAFT-data-structures-1e-critique-O21).
+    (LEXTER-O39).
 
 Three plans work in this area: this one,
-[LEXTER-DRAFT-terminal-fixes-1e](Plan.TerminalFixes1e.md), and
+[LEXTER-0015](Plan.TerminalFixes1e.md), and
 [LEXTER-DRAFT-pane-profiles](Plan.PaneProfiles.md). Their steps interleave as
 follows.
 
@@ -1229,10 +1229,10 @@ Table: The order of work across the three plans.
 |---|---|---|
 | 1 | This plan's Phase 0: the regression suite | — |
 | 2 | The terminal-fixes plan's tests, in that suite | 1 |
-| 3 | The terminal-fixes plan's consolidation of the two stacks (LEXTER-DRAFT-terminal-fixes-1e-D2) | 2 |
+| 3 | The terminal-fixes plan's consolidation of the two stacks (LEXTER-D67) | 2 |
 | 4 | This plan's Phase 1: the first edition repaired | 3 |
 | 5 | This plan's Phase 2: swatch ranges | 4 |
-| 6 | The terminal-fixes plan's workspace-switch repaint (LEXTER-DRAFT-terminal-fixes-1e-D6) | 3 |
+| 6 | The terminal-fixes plan's workspace-switch repaint (LEXTER-D71) | 3 |
 | 7 | This plan's Phase 3 and later | 5, 6, and the gate's questions |
 | — | The pane-profiles plan's history drawing in `flush-to-display` | Its order relative to step 4 is settled when the phases are scheduled |
-| — | The terminal-fixes plan's protocol fixes (LEXTER-DRAFT-terminal-fixes-1e-D7, -D8) | Nothing; at any time |
+| — | The terminal-fixes plan's protocol fixes (LEXTER-D72, -D8) | Nothing; at any time |

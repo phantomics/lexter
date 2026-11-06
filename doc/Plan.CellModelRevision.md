@@ -53,6 +53,7 @@ open-questions:
   - LEXTER-DRAFT-cell-model-revision-O10
   - LEXTER-DRAFT-cell-model-revision-O11
   - LEXTER-DRAFT-cell-model-revision-O12
+  - LEXTER-DRAFT-cell-model-revision-O13
 cites:
   - title:    "Session transcript ses_febe-LexterCritique"
     locator:  "session-ses_febe-LexterCritique.md, the closing review"
@@ -375,7 +376,8 @@ whole record in the cell-model architecture,
 plan does not restate its bits:
 
 - **A format word and a header word.** The first byte names the cell's
-  format, and the wide bits sit at fixed places (LEXTER-D81, LEXTER-D82); the
+  format, and the drawing flags, wide and blink, sit at fixed places
+  (LEXTER-D81, LEXTER-D82, LEXTER-DRAFT-cell-model-D14); the
   header word holds the swatch index, an eight-bit palette slot, and the
   cell's background slot (LEXTER-D87).
 - **Glyph words.** Each holds a 24-bit glyph and its own settings byte
@@ -470,9 +472,9 @@ decoder reads it (LEXTER-D93).
 - A uniform cursor. Rejected because it puts the cursor into the work of
   every pixel rather than into a model of its own: every pixel compares its
   cell with every entry, so it does not scale past a few cursors.
-- Cursor bits in the record's header. Rejected for the styles that can be
-  overlays; whether the block style keeps them is
-  LEXTER-DRAFT-cell-model-revision-O5.
+- Cursor bits in the record's header. Rejected for every style: the block
+  cursor, too, is an overlay, a transformed copy of the cell beneath it, as
+  the resolution of LEXTER-DRAFT-cell-model-revision-O5 records.
 
 ### LEXTER-DRAFT-cell-model-revision-D11 — Every repaired finding gets a headless regression test
 
@@ -657,7 +659,7 @@ internal format `GL_RGBA8UI`, read in the shaders as `usamplerBuffer` with
 are placed on whole pixels and textures sampled at the nearest texel at
 integer scale. The room left for implementations to differ is arithmetic on
 colours: converting floats to bytes, and blending. The Dense Cell Model
-section had planned to composite layers with premultiplied colour. A pixel
+plan had first planned to composite layers with premultiplied colour. A pixel
 checksum that holds across implementations, and the comparison of the GPU
 with the CPU renderer (LEXTER-DRAFT-cell-model-revision-D17), need every
 implementation to write the same bytes.
@@ -790,7 +792,7 @@ Table: First-edition repairs by finding.
 | LEXTER-O19 | The VT handler writes pairs and advances by two; the flush writes each pair once; the cursor keeps the wide flag (LEXTER-DRAFT-cell-model-revision-D3, LEXTER-DRAFT-cell-model-revision-D6) |
 | LEXTER-O26 | Per-cell helpers in every row and range operation, edge repair, `resize-grid` copying both flag vectors, and the row check (LEXTER-DRAFT-cell-model-revision-D3) |
 | LEXTER-O27 | The flush writes a layered cell's whole record, empty layers included; `write-char-at` on a layered cell honours its swatch and attributes; the cursor no longer rewrites the cell (LEXTER-DRAFT-cell-model-revision-D6) |
-| LEXTER-O28 | Atlas positions 0–63 are reserved at build time, position 0 for an empty glyph and the rest for generated glyphs, which the atlas names from 0x110000 instead of private-use codepoints, so the cursor glyphs move to positions 1–4 (LEXTER-D89); every writer takes its blank from the atlas instead of writing codepoint 32 |
+| LEXTER-O28 | Atlas positions 0–63 are reserved at build time, position 0 for an empty glyph and the rest for generated glyphs, which the atlas names from 0x110000 instead of private-use codepoints, so the cursor glyphs move to positions 1–3, with 4–7 kept for later cursor glyphs (LEXTER-D89); every writer takes its blank from the atlas instead of writing codepoint 32 |
 | LEXTER-O36 | One home for the cell constants that the model, grid, and renderer share, one `+layered-stride+`, one default palette, one `setup-default-swatches`, and one name for each layer slot |
 | LEXTER-O40 | The grid's description is made true: `build-render-data` loses the unused `force-full` and its claim of incremental rebuilds, and the dirty bits stay for the second edition to upload by |
 | Review: the cursor writes into the model during the flush | The cursor exchanges slots (LEXTER-DRAFT-cell-model-revision-D6) |
@@ -874,7 +876,8 @@ Table: What Phase 3 builds from the architecture.
 | The record | The format word, the header word, and glyph words with their settings, generated from one descriptor | LEXTER-D81, LEXTER-D84, LEXTER-D87 |
 | The plain format | The glyph count and type bits, layers interleaved with masks, each mask cutting the layers before it as far as its reach | LEXTER-D83, LEXTER-D85 |
 | Backgrounds | The cell's background slot in place of fills; reverse video through the background slot, so the handler no longer interns a reversed swatch | LEXTER-D86, LEXTER-D90 |
-| Lines | The single underline, strikethrough, and overline as generated glyphs: the text's last mask in its colour, or the last layer for an SGR 58 underline | LEXTER-D88, LEXTER-D89 |
+| Lines | The single underline as a generated glyph, the text's last mask in its colour; the handler already records it, though the first edition never draws it. The other line styles are Later Formats | LEXTER-D88, LEXTER-D89 |
+| Invisible and blinking text | An invisible cell (SGR 8) is written with a glyph count of 0, its characters kept in the text grid. A blinking cell (SGR 5) carries the blink flag, and both renderers hide its topmost layer, the text, while the blink phase is off; the phase is set by the configuration and shares the cursor's clock, and nothing in the record changes as the cell blinks | LEXTER-D83, LEXTER-DRAFT-cell-model-D14 |
 | Palette slots | An allocator that gives each terminal a palette slot and records each upload by owner, replacing slots chosen by hand and generations compared by slot | LEXTER-D92 |
 | The shader | The procedure of Drawing a Pixel, with selection and no blending | LEXTER-0016, Drawing a Pixel |
 
@@ -893,7 +896,7 @@ Table: What Phase 3 builds from the architecture.
 - **One composed grid, one draw** (LEXTER-DRAFT-cell-model-revision-D12). The
   shader computes a cell's position from its instance number, and for each
   pixel selects the palette entry of the topmost layer that covers it after
-  its masks, or of the background, writing it without blending
+  its masks, or the cell's background slot, writing it without blending
   (LEXTER-DRAFT-cell-model-revision-D15), so there are no passes per layer.
 - **Halves.** Double-width glyphs are stored as halves
   (LEXTER-DRAFT-cell-model-revision-D8). How a mask applies to a half is
@@ -936,7 +939,7 @@ cursors as its first use.
 - **Colours** from the swatch table and range of the pane or chrome it
   belongs to, which Phase 2 provides (LEXTER-DRAFT-cell-model-revision-O4).
 - **The block cursor** is a copy of the cell beneath it, with its background
-  slot and its first layer's ink slot exchanged, in an instance that draws
+  slot and its topmost layer's ink slot exchanged, in an instance that draws
   its background; the flush copies it again when the cursor moves or its row
   changes (LEXTER-D93). The underline and bar cursors, and a hyperlink lit
   by the pointer, are instances that do not draw their background.
@@ -983,10 +986,11 @@ Table: The later additions and what each waits for.
 
 | Addition | Waits for |
 |---|---|
-| Inline colours (LEXTER-D82) | Nothing beyond Phase 5 |
+| Inline colours (LEXTER-D82) | Nothing beyond Phase 5; the handler then writes inline-colour cells for truecolour SGR (38;2 and 48;2) instead of mapping them to the 256-colour palette |
+| Strikethrough, overline, and coloured underlines (LEXTER-D88) | Nothing beyond Phase 5; the handler gains SGR 9 and 29, 53 and 55, and 58 and 59, and the model the attributes that hold them. A coloured underline is a layer beneath the text, as CSS paints underlines |
 | Tiles and their texture (LEXTER-D91) | The cursor over a tile cell (LEXTER-O45), palette slots running out (LEXTER-O50), and the fitting of tile sets (LEXTER-O51) |
 | The void and effects (LEXTER-D82) | The survey of surfaces and effects, and what they carry (LEXTER-O53) |
-| Further underline styles (LEXTER-D89) | How their patterns meet from cell to cell (LEXTER-O48) |
+| Further underline styles (LEXTER-D89) | How their patterns meet from cell to cell (LEXTER-O48), and whether SGR 21, which the handler now reads as resetting bold, is the double underline that xterm and ECMA-48 make it |
 
 ## Partial Redraw and Eviction
 
@@ -996,6 +1000,14 @@ to the first row, since OpenGL 3.3 has no base instance. It needs either the
 offscreen target kept on, which overturns LEXTER-D39 and leaves one
 full-window blit per presented frame, or the buffer-age extensions cited
 above (LEXTER-DRAFT-cell-model-revision-O9).
+
+Blinking cells change on screen at each change of the blink phase without
+any row becoming dirty, so partial redraw keeps a mask of the rows that hold
+a blinking cell and redraws them at each change of phase. The mask is not
+maintained by writers: the renderer recomputes a row's bit whenever it
+uploads the row, from the blink flags of its records, so it cannot drift
+from the grid. The rows under the cursor, which shares the clock, are marked
+as moving or animating an instance marks them.
 
 Phase 7, conditional, evicts unused swatches within a range, if
 LEXTER-DRAFT-cell-model-revision-O3 chooses eviction over a large range and a
@@ -1096,7 +1108,7 @@ the block cursor's overlay instance carries a full copy of the record
 beneath it, and the header has no cursor bits
 (LEXTER-D93 in [LEXTER-0016](Arch.CellModel.md)).
 The steward has since settled that the copy is inverted by exchanging its
-background slot with its first layer's ink slot, and that the instance draws
+background slot with its topmost layer's ink slot, and that the instance draws
 its background.
 
 ### LEXTER-DRAFT-cell-model-revision-O6 — How does a mask apply to a wide display glyph?
@@ -1174,6 +1186,47 @@ whether the gain, for the tests and the font selector, is worth the
 dependence and the snapshot. It need not be settled before Phase 5: a
 renderer on one thread is correct, and bands can be added after it.
 
+### LEXTER-DRAFT-cell-model-revision-O13 — How does a blinking cell keep its glyphs while it is blanked?
+
+The steward directs that blink belongs to the grid, not to the overlay list:
+unlike a cursor, it is a property of the text, and lasts until the text
+changes. A blinking cell is blanked at intervals by an animation function
+that makes it read as having no glyphs, without storing its layers
+elsewhere. The cell-model architecture requires the glyph words beyond a
+cell's glyph count to be zero, and the cell checksum relies on it
+(LEXTER-D83), so setting the count to 0 while the words stay would break
+that invariant, and the count to restore would itself need a place. Three
+ways fit the architecture:
+
+- **A blanking bit.** A bit of the format word, from those the plain format
+  reserves, that renderers read as a glyph count of 0 while it is set. The
+  animation toggles it in every blinking cell, and the rows are uploaded
+  again. A second bit marks the cell as blinking, so that the animation
+  finds its cells by a kernel pass, and an invisible cell is never revealed
+  by the blink.
+- **A blinking bit and a phase.** Only the bit that marks the cell as
+  blinking is stored; the shader, and the CPU renderer, read the blink phase
+  as a uniform, as overlays read the time, and draw a blinking cell with no
+  glyphs in the off phase. Nothing is rewritten or uploaded as the cell
+  blinks.
+- **The count itself.** The count is set to 0 and restored from the text
+  grid and the cell's attributes, which rebuilds the record each time.
+
+Either bit is an addition to the architecture, which the steward makes there.
+The test rig fixes the phase, as it fixes the time uniform, so that blinking
+cells have one checksum. It is settled before Phase 3.
+
+**Resolution:** 2026-11-06 — accepted, recorded at the steward's direction:
+a blink flag and a phase. Bit 18 of the format word marks a blinking cell,
+at the same place in every format, and both renderers hide its topmost
+layer, the text, while the blink phase is off; the layers beneath and the
+background stay. The phase is set by the configuration and shares the
+cursor's clock. Nothing in the record changes as a cell blinks, and the
+glyph words keep their place within the glyph count
+(LEXTER-DRAFT-cell-model-D14 in [LEXTER-0016](Arch.CellModel.md)).
+Partial redraw finds the rows to redraw at a change of phase from a mask it
+derives as rows are uploaded (see Partial Redraw and Eviction).
+
 ## Prior Art
 
 Table: Prior systems and what this plan draws from each.
@@ -1211,8 +1264,8 @@ Table: Prior systems and what this plan draws from each.
    the phase. Every later phase waits for it.
 4. **Gate.** Phase 2 is complete, as Swatch Ranges defines;
    LEXTER-DRAFT-cell-model-revision-O2, LEXTER-DRAFT-cell-model-revision-O6,
-   LEXTER-DRAFT-cell-model-revision-O8, and
-   LEXTER-DRAFT-cell-model-revision-O11 are settled, with the half of
+   LEXTER-DRAFT-cell-model-revision-O8, LEXTER-DRAFT-cell-model-revision-O11,
+   and LEXTER-DRAFT-cell-model-revision-O13 are settled, with the half of
    LEXTER-DRAFT-cell-model-revision-O10 that decides where the grid lives; and
    the companion plan's workspace-switch repaint (LEXTER-D71) has landed. The
    formats other than the plain format (LEXTER-DRAFT-cell-model-revision-O7)
@@ -1221,8 +1274,9 @@ Table: Prior systems and what this plan draws from each.
    (LEXTER-DRAFT-cell-model-revision-D9); the record of
    [LEXTER-0016](Arch.CellModel.md) in its plain format
    (LEXTER-DRAFT-cell-model-revision-D7), with halves
-   (LEXTER-DRAFT-cell-model-revision-D8), backgrounds, lines as glyphs, and
-   palette slots allocated to terminals; the text array; scrollback of
+   (LEXTER-DRAFT-cell-model-revision-D8), backgrounds, the single underline
+   as a line glyph, invisible and blinking text, and palette slots allocated
+   to terminals; the text array; scrollback of
    records; one composed grid drawn in one call
    (LEXTER-DRAFT-cell-model-revision-D12) by a shader that selects without
    blending (LEXTER-DRAFT-cell-model-revision-D15); and dirty-row uploads.
@@ -1238,8 +1292,8 @@ Table: Prior systems and what this plan draws from each.
    (LEXTER-DRAFT-cell-model-revision-D16), and every fixture checked against
    both renderers (LEXTER-DRAFT-cell-model-revision-D17). A Log records the
    phase.
-8. **Later formats.** Inline colours, tiles, the void and effects, and further
-   underline styles, each as its own step when what it waits for is settled
+8. **Later formats.** Inline colours, the other line styles, tiles, and the
+   void and effects, each as its own step when what it waits for is settled
    (see Later Formats). A Log records each.
 9. **Phase 6, optional: partial redraw**, after
    LEXTER-DRAFT-cell-model-revision-O9 is settled.

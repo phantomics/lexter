@@ -35,6 +35,7 @@ decisions:
   - LEXTER-D91
   - LEXTER-D92
   - LEXTER-D93
+  - LEXTER-DRAFT-cell-model-D14
 open-questions:
   - LEXTER-O45
   - LEXTER-O46
@@ -61,6 +62,9 @@ cites:
   - title:    "OpenGL Shading Language 3.30 specification"
     locator:  "Section 8.7, texture lookup functions: implicit derivatives are undefined in non-uniform control flow; texelFetch takes no derivatives"
     external: true
+  - title:    "CSS Text Decoration Module"
+    locator:  "CSS Text Decoration Module Level 3, section 5.1, painting order of text decorations: underlines and overlines beneath the text, line-through over it"
+    external: true
   - title:    "Clipping masks and masks in image editors and vector formats"
     locator:  "Adobe Photoshop clipping masks (a layer clipped by the layer beneath it); SVG 1.1 section 14, clipping, masking and compositing; PDF 1.7 section 11.6.5, soft masks"
     external: true
@@ -75,16 +79,16 @@ built from it. It refines the layout that
 [LEXTER-DRAFT-cell-field-format](Survey.CellFieldFormat.md) proposed, as
 [LEXTER-DRAFT-cell-model-revision](Plan.CellModelRevision.md) left it to be
 refined. A record begins with a format word, which says how its other words
-are arranged and whether the cell is half of a double-width glyph, and a
-header word, which holds the cell's colours and which every format reads the
-same way. Cells of the glyph formats hold up to six glyph words, each
-carrying its glyph and its settings, in which layers and masks are
-interleaved and each mask cuts one or more of the layers before it. A layer
-inks some of its pixels and leaves the rest transparent, and what no layer
-inks takes the cell's background slot. The cursor and line attributes leave
-the header, the cursor for the overlay list and the lines for generated
-glyphs, and the palette slot widens to eight bits. Nothing here is built.
-Each part is placed in the plan's phases under Roadmap.
+are arranged, whether the cell is half of a double-width glyph, and whether
+its text blinks, and a header word, which holds the cell's colours and which
+every format reads the same way. Cells of the glyph formats hold up to six
+glyph words, each carrying its glyph and its settings, in which layers and
+masks are interleaved and each mask cuts one or more of the layers before it.
+A layer inks some of its pixels and leaves the rest transparent, and what no
+layer inks takes the cell's background slot. The cursor and line attributes
+leave the header, the cursor for the overlay list and the lines for generated
+glyphs, and the palette slot widens to eight bits. Nothing here is built. Each
+part is placed in the plan's phases under Roadmap.
 
 ## Canonical Terms
 
@@ -94,7 +98,8 @@ Table: Terms used in this design, with their definitions.
 |---|---|
 | Record | The 32 bytes, eight 32-bit words, that describe one cell |
 | Format | The arrangement of a record's words, selected by the record's first byte |
-| Format word | Word 0: the format in bits 0–7, the wide bits in bits 16–17, and fields the format defines |
+| Format word | Word 0: the format in byte 0, the format's structure in byte 1, flags common to every format in byte 2, and the format's parameters in byte 3 |
+| Drawing flags | Bits 16–18 of the format word, at the same place in every format: wide, right half, and blink |
 | Header word | Word 1: the swatch index, the palette slot, and the background slot, read the same way in every format |
 | Glyph format | A format whose cells hold glyph words: plain, void, inline colours, and tiles |
 | Glyph word | A word holding a 24-bit glyph and a settings byte, as a layer or as a mask |
@@ -111,6 +116,7 @@ Table: Terms used in this design, with their definitions.
 | Line glyph | A generated glyph holding one combination of underline, strikethrough, and overline |
 | Tile | A cell-sized picture of colour values 0–15, kept in the tile texture; a tile cell draws two beneath its glyphs |
 | Transparency index, colour offset | In a tile cell, the value that is transparent in both tiles, and for each tile the number of swatches by which its other values are moved |
+| Blink, blink phase | A flag that makes a cell's topmost layer disappear while the window's blink phase is off, and the phase itself, a clock shared with the cursor |
 | Overlay instance | A record with a position and flags, drawn by the overlay pass over the grid |
 | Void | A cell of the void format, which references a surface and leaves its uncovered pixels undrawn |
 
@@ -146,9 +152,9 @@ The design serves these concerns:
   compose, layers that differ only in their settings, and settings that
   travel with their glyph, so that writers and readers handle no special
   structures.
-- **Fixed offsets.** The format, the wide bits, and the header sit at fixed
-  places, so a reader learns a cell's shape and colours from its first eight
-  bytes.
+- **Fixed offsets.** The format, the drawing flags, and the header sit at
+  fixed places, so a reader learns a cell's shape and colours from its first
+  eight bytes.
 - **Normalisation.** The cell checksum
   (LEXTER-DRAFT-cell-model-revision-D13) takes unused and reserved fields as
   zero; here they are zero by rule, and each picture has one encoding.
@@ -168,6 +174,7 @@ taken from it.
 | [LEXTER-0013](Survey.LayerMechanics.md) | Layers and masks in one dense record, and the mask code | — |
 | [LEXTER-DRAFT-cell-model-revision](Plan.CellModelRevision.md) | Masks with an operation and a selector (LEXTER-DRAFT-cell-model-revision-D7), halves (LEXTER-DRAFT-cell-model-revision-D8), the overlay list (LEXTER-DRAFT-cell-model-revision-D10), one composed grid (LEXTER-DRAFT-cell-model-revision-D12), integer colour stores (LEXTER-DRAFT-cell-model-revision-D14), selection without blending (LEXTER-DRAFT-cell-model-revision-D15) | The fixed layout of word 1 and the mask targets that LEXTER-DRAFT-cell-model-revision-D7 gives, with the tail type folded into unused masks |
 | Clipping masks and masks (*Clipping masks and masks in image editors and vector formats*) | A mask attached by position to what it cuts, as Photoshop clips a layer by the one beneath it and SVG and PDF apply a mask to the object it is given; here the mask follows what it cuts | Masks with alpha: here a mask's pixels are inked or not |
+| CSS text decoration (*CSS Text Decoration Module*) | Underlines and overlines painted beneath the text, line-through over it, which places a coloured underline beneath the text | The deprecated `blink` value, which blinks the text with its decorations; here a coloured underline beneath the text stays |
 | VGA and MDA text attributes | A cell as a fixed record that the display reads directly | Underline as an attribute bit, which only the display hardware can draw |
 | kitty | Underline and strikethrough drawn as generated sprites in its sprite map (*kitty decorations*) | — |
 | XLFD font properties | The position and thickness of the underline and the strikeout, which BDF and PCF fonts may carry (*X Logical Font Description Conventions*) | — |
@@ -176,7 +183,7 @@ taken from it.
 
 ## Settled Decisions
 
-### LEXTER-D81 — The format word comes first, with the format and the wide bits at fixed places
+### LEXTER-D81 — The format word comes first, with one job for each of its bytes
 
 **Status:** Proposed
 
@@ -188,16 +195,28 @@ to say how the cell is arranged. Whether a cell is half of a double-width
 glyph describes its shape, as its format does, and the wide-pair helpers,
 edge repair, and resizing read it in every cell.
 
-**Decision:** Word 0 is the format word. Bits 0–7 are the format, bit 16 is
-the wide bit (1 = the cell holds half of a double-width glyph), and bit 17
-the right-half bit (with wide set, 0 = left half, 1 = right half). These are
-at the same places in every format, and the wide bits are zero where a
-format has no halves. Bits 8–15 and 18–31 are defined by the format, and are
-zero where it defines nothing. Word 1 is the header word
-(LEXTER-D87), read the same way in every record; no format
-may redefine it. The first eight bytes therefore say what a cell is, its
-shape, and what colours it draws in, and a kernel reads or changes them with
-one 64-bit operation.
+**Decision:** Word 0 is the format word, and each of its bytes has one job.
+
+Table: The bytes of the format word.
+
+| Byte | Bits | Job |
+|---|---|---|
+| 0 | 0–7 | The format (LEXTER-D82) |
+| 1 | 8–15 | The format's structure: in a glyph format, the glyph count and type bits (LEXTER-D83) |
+| 2 | 16–23 | Drawing flags common to every format: wide (16), right half (17), and blink (18, LEXTER-DRAFT-cell-model-D14); 19–23 reserved |
+| 3 | 24–31 | The format's parameters, zero where it defines none |
+
+Byte 0 and bits 16–18 are at the same places in every format. The wide bit
+is 1 when the cell holds half of a double-width glyph, and the right-half bit,
+with wide set, is 0 for the left half and 1 for the right; both are zero
+where a format has no halves. Bits 19–23 are reserved: flags common to every
+format are allocated from bit 19 upwards, and a format whose parameters
+outgrow byte 3 may claim bits from 23 downwards, so that a reader always
+finds the common flags at the bottom of byte 2. Word 1 is the header word
+(LEXTER-D87), read the same way in every record; no format may redefine it.
+The first eight bytes therefore say what a cell is, its shape, and what
+colours it draws in, and a kernel reads or changes them with one 64-bit
+operation, or one flag with a byte store.
 
 **Alternatives:**
 - The header first and the format second. Not chosen by the steward: the
@@ -206,6 +225,9 @@ one 64-bit operation.
   the GPU or SIMD anything, since a record is fetched whole.
 - The wide bits in the header word. Not chosen by the steward: they describe
   the cell's shape, like its format, and the header word is left to colours.
+- A subtype value in byte 1 for blinking cells. Not chosen: blink is
+  independent of the format, so each subtype would need a blinking variant,
+  where a flag at a fixed place serves every format.
 - The wide bits placed by each format. Rejected: the wide-pair helpers would
   first have to ask which format a cell has.
 - Formats that may redefine the header word. Rejected: it is read by the row
@@ -283,7 +305,9 @@ Table: Bits of the format word in a glyph format.
 | 11–15 | 5 | Type bits | For glyphs 1–5: 0 layer, 1 mask; bits past the format's glyph words are zero |
 | 16 | 1 | Wide | 1 = the cell holds half of a double-width glyph |
 | 17 | 1 | Right half | With wide set: 0 = left half, 1 = right half |
-| 18–31 | 14 | Defined by the format | Zero, except in tiles (LEXTER-D91) |
+| 18 | 1 | Blink | 1 = the topmost layer blinks (LEXTER-DRAFT-cell-model-D14) |
+| 19–23 | 5 | Reserved | Common flags from bit 19 upwards (LEXTER-D81) |
+| 24–31 | 8 | The format's parameters | Zero, except in tiles (LEXTER-D91) |
 
 A record of zeros is a plain cell with no glyphs and a background slot of 0:
 every pixel takes slot 0 of global swatch 0 in palette slot 0
@@ -491,7 +515,7 @@ the same way.
 - Keep the line bits, drawn by the shader as rules. Rejected for the reasons
   LEXTER-D88 gives.
 
-### LEXTER-D88 — Lines are glyphs: a mask after the text in the text's colour, or the last layer in their own
+### LEXTER-D88 — Lines are glyphs: a mask on the text in the text's colour, or a layer beneath the text in their own
 
 **Status:** Proposed
 
@@ -499,43 +523,54 @@ the same way.
 a moment, so they belong in the grid. As header bits they cost five bits with
 their colour slot, need both renderers to draw rules from the font's
 metrics, and leave no room for the further underline styles terminals now
-support. Heavy use of layers is expected to be rare in text cells.
+support. Heavy use of layers is expected to be rare in text cells. CSS paints
+underlines and overlines beneath the text they decorate and line-through
+over it (*CSS Text Decoration Module*, painting order); ECMA-48 and the DEC
+documents define the attributes but not the order they are painted in.
 
 **Decision:** A line is drawn by a line glyph (LEXTER-D89)
 holding the cell's combination of lines. In a cell that the terminal writes,
-the text is the first layer, and lines take one of two places:
+the text is the topmost layer, and lines take one of two places:
 
-- **In the text's colour, as the text's last mask.** Lines that take the
-  colour of the text are a mask placed after the text's other masks, before
-  any later layer, with a reach of one layer. When the text's selector is 0,
-  the operation is union with the mask's inked pixels; when it is 1, the
+- **In the text's colour, as the cell's last mask.** Lines that take the
+  colour of the text are a mask placed after the text's other masks, with a
+  reach of one layer, so that it cuts the text. When the text's selector is
+  0, the operation is union with the mask's inked pixels; when it is 1, the
   operation is intersection with the mask's uninked pixels, so that the line
-  shows in the colour the glyph's strokes show in. The line costs a mask and
-  no layer.
-- **In a colour of its own, as the last layer.** An underline given a colour
-  by SGR 58 is the last glyph word, a layer, so that it is drawn over the
-  others, with the line glyph for underline alone and its ink slot holding
-  the colour. Strikethrough and overline stay in the text's colour, as the
-  text's last mask, so a cell may use both places.
-- **Reading back.** The coloured underline is the last glyph word when it is
-  a layer other than the first and holds a line glyph. The lines in the
-  text's colour are the word before the second layer, or the last word when
-  there is one layer, when it is a mask holding a line glyph. The second
-  layer is found as the first 0 among the type bits, so no words are
-  scanned. DECCARA, DECRARA, attribute reports, and copying with formatting
-  read lines this way.
-- **Other arrangements** are drawn as any layer or mask is, and are not read
-  back as the text's lines. A spelling checker's red underline drawn beneath
-  the text is a line layer placed before the text's layer.
+  shows in the colour the glyph's strokes show in. The line merges with the
+  glyph's pixels, so whether it lies over or under the text makes no
+  difference. The line costs a mask and no layer.
+- **In a colour of its own, as the layer beneath the text.** An underline
+  given a colour by SGR 58 is a layer directly beneath the text's layer,
+  with the line glyph for underline alone and its ink slot holding the
+  colour, so that the text's descenders cross over it, as CSS paints an
+  underline. Strikethrough and overline stay in the text's colour, as the
+  cell's last mask, so a cell may use both places. Adding a coloured
+  underline inserts a layer word before the text's layer, moving the text
+  and its masks along by one word and inserting a type bit.
+- **Reading back.** The lines in the text's colour are the last glyph word,
+  when it is a mask holding a line glyph. The coloured underline is the layer
+  directly beneath the topmost, when it holds a line glyph of a style the
+  terminal writes; it is found from the type bits, so no words are scanned.
+  DECCARA, DECRARA, attribute reports, and copying with formatting read
+  lines this way.
+- **Other arrangements** are drawn as any layer or mask is. A spelling
+  checker's red wavy underline beneath the text has the shape of a coloured
+  underline, so it is drawn in a line style the terminal does not write
+  (LEXTER-O48), and reading back passes it over.
 - **Ephemeral lines** are not lines in this sense. A hyperlink underlined
   while the pointer is over it is an overlay instance.
 
-Inserting a line mask before a coloured underline moves the later words
-along by one and inserts a type bit. Only the single underline style is
-defined at first. A cell whose glyph words are all in use has no room for a
-line (LEXTER-O47).
+Only the single underline style is defined at first. A cell whose glyph
+words are all in use has no room for a line (LEXTER-O47). A blinking cell's
+text blinks with the lines in its colour, and its coloured underline, which
+lies beneath, stays (LEXTER-DRAFT-cell-model-D14).
 
 **Alternatives:**
+- A coloured underline as the last layer, over the text. Rejected: it was
+  first chosen by default, and CSS paints underlines beneath the text. It
+  would also leave the text beneath another layer, so that blink and the
+  block cursor could not find it as the topmost layer.
 - Header bits drawn as rules, as the cell-field-format survey proposed.
   Rejected: they spend five header bits, need drawing code in both renderers,
   and have no room for styles.
@@ -628,7 +663,7 @@ Table: The record of a tile cell.
 
 | Word | Contents |
 |---|---|
-| 0 | Format 4; bits 8–10 the glyph count, 0–3; bits 11–12 the type bits of glyphs 1–2; bits 16–17 the wide bits, for the glyphs; bits 18–21 the transparency index; bits 22–23 the bottom tile's colour offset; bits 24–25 the top tile's colour offset; the rest reserved |
+| 0 | Format 4; bits 8–10 the glyph count, 0–3; bits 11–12 the type bits of glyphs 1–2; bits 16–18 the drawing flags, for the glyphs; bits 24–27 the transparency index; bits 28–29 the bottom tile's colour offset; bits 30–31 the top tile's colour offset; the rest reserved |
 | 1 | The header word: the swatch for the glyph layers, the palette slot, and the background slot |
 | 2–4 | Glyph words, as in any glyph format |
 | 5 | The bottom tile (bits 0–15) and the top tile (bits 16–31), indices into the tile texture |
@@ -675,6 +710,9 @@ Table: The record of a tile cell.
 - Tiles twice a cell wide, addressed with the wide bits. Rejected: a picture
   larger than two cells would need a position within it, and the wide bits
   could not then serve the glyphs drawn over the tiles.
+- Tile parameters across bits 18–25, as an earlier draft placed them. Not
+  chosen: byte 3 holds them exactly, and byte 2 is left to the drawing flags
+  common to every format (LEXTER-D81).
 - The transparency index and offsets in the header word. Not chosen by the
   steward: they say how a tile's values are read, not which colours a cell
   draws in, and the header word, common to every format, has only six bits
@@ -766,16 +804,16 @@ Table: The overlay instance, by word.
   slot when the instance draws its background, and is discarded otherwise.
 - **The block cursor** is an instance that draws its background, whose record
   is a copy of the cell beneath it with two fields exchanged: the header
-  word's background slot and the first layer's ink slot. Other layers keep
-  their colours, so a red SGR 58 underline stays red under the cursor. A cell
-  with no layers takes slot 1 as its background in the copy if its own was
-  slot 0, and slot 0 otherwise. The exchange assumes the text is the first
-  layer, as it is in the cells the terminal writes; a cell arranged
-  otherwise, such as one with a spelling checker's line beneath its text, is
-  inverted by the same exchange, with the colours that result. The flush
-  copies the record again whenever
-  the cursor moves or its row changes. A cursor on a double-width glyph is
-  two instances, one for each half.
+  word's background slot and the topmost layer's ink slot. The text is the
+  topmost layer in the cells the terminal writes, and in the arrangements
+  that lay a line beneath it (LEXTER-D88), so the exchange inverts the text
+  and its background, and other layers keep their colours: a red SGR 58
+  underline stays red under the cursor. A cell with no layers takes slot 1
+  as its background in the copy if its own was slot 0, and slot 0 otherwise.
+  The copy keeps the cell's blink flag, so text under the cursor blinks with
+  its neighbours. The flush copies the record again whenever the cursor
+  moves or its row changes. A cursor on a double-width glyph is two
+  instances, one for each half.
 - **The other styles** are instances that do not draw their background, of
   plain cells whose one glyph is a cursor glyph (LEXTER-D89)
   in the cursor's colour.
@@ -788,11 +826,64 @@ LEXTER-DRAFT-cell-model-revision-O5.
 - An inverted flag, with the pass exchanging slots as it draws. Rejected: it
   is a special case in both renderers for what a change to the record does,
   and it left the cursor's background undrawn.
-- Copy only the first layer's glyph and settings. Rejected: the cursor would
+- Copy only the topmost layer's glyph and settings. Rejected: the cursor would
   drop the cell's other layers, its masks, and its lines.
 - Keep cursor bits in the header for the block style. Rejected: it writes an
   ephemeral state into the static grid, which
   LEXTER-DRAFT-cell-model-revision-D10 keeps apart.
+
+### LEXTER-DRAFT-cell-model-D14 — A blink flag hides the topmost layer while the blink phase is off
+
+**Status:** Proposed
+
+**Context:** The first edition stores a blink attribute (SGR 5) and draws
+nothing for it (`src/model.lisp:+attr-blink+@2d4d743`). Blink is not
+ephemeral in the way a cursor is: it is a property of the text, and lasts
+until the text changes, so it belongs in the grid. Blanking a cell by
+setting its glyph count to 0 would leave glyph words beyond the count,
+which writers treat as free and debugging builds reject (LEXTER-D83), and
+would lose the count to restore; rewriting blinking cells at each interval
+would make every blinking row an upload. In the 3270 data stream a blinking
+field has one layer, so hiding a cell's text is hiding that layer.
+
+**Decision:** Bit 18 of the format word is the blink flag, at the same place
+in every format (LEXTER-D81).
+
+- **What blinks.** While the window's blink phase is off, a blinking cell is
+  drawn without its topmost layer: the layers beneath, and the background,
+  stay present. The text is the topmost layer in the cells the terminal
+  writes (LEXTER-D88), so the text blinks, with the lines drawn in its
+  colour; a coloured underline, beneath the text, stays. In a tile cell, the
+  topmost glyph layer blinks and the tiles stay.
+- **The phase.** The phase is a value the renderer gives both renderers, as
+  overlays are given the time: a uniform for the shader and a parameter for
+  the CPU renderer. Its interval is set by the configuration, and it shares
+  the cursor's blink clock; the two can be separated later if that proves
+  useful. The test rig fixes it, so a blinking cell has one checksum, and the
+  checksum sees the glyphs of blinking cells whatever the phase.
+- **Nothing is rewritten.** The record does not change as the cell blinks;
+  no kernel passes over the grid, and no row is uploaded at a phase change.
+  Redrawing only the rows that hold blinking cells is a matter for partial
+  redraw, which marks them from the records as rows are uploaded.
+- **Invisible text** (SGR 8) is not a flag: an invisible cell is written
+  with a glyph count of 0, and its characters stay in the text grid. Blink
+  has no effect on it.
+
+**Alternatives:**
+- Setting the glyph count to 0 at intervals. Rejected: it leaves glyph words
+  beyond the count, loses the count to restore, and rewrites and uploads
+  every blinking row at each interval.
+- A blanking bit toggled in every blinking cell. Rejected: it rewrites and
+  uploads the rows at each interval, where a phase given to the renderers
+  changes nothing in the record.
+- A subtype value in byte 1 of the format word. Rejected: blink is
+  independent of the format (LEXTER-D81).
+- Blink hiding every layer. Not chosen: the steward keeps the layers beneath
+  the text present, as backgrounds. Text that should blink together with a
+  coloured underline is a rare case, which a function that rewrites those
+  cells can serve.
+- Blink as an overlay. Rejected: overlays are for what moves or lasts a
+  moment, and blink lasts as long as the text.
 
 ## The Record
 
@@ -800,7 +891,7 @@ Table: The record, by word, for each glyph format.
 
 | Word | Plain | Void, inline colours | Tiles |
 |---|---|---|---|
-| 0 | Format word: format, glyph count, type bits, wide bits | The same | The same, with the transparency index and colour offsets |
+| 0 | Format word: format, glyph count, type bits, drawing flags | The same | The same, with the transparency index and colour offsets in byte 3 |
 | 1 | Header word: swatch, palette slot, background slot | The same | The same |
 | 2–4 | Glyph words: each layer followed by its masks | Glyph words | Glyph words |
 | 5–7 | More glyph words | The payload: a surface reference, or four colours | Two tiles; swatches A–D |
@@ -847,10 +938,12 @@ for i in 0 .. n-1:
         R = ((1 << r) - 1) << (k - r)            // the r layers before it
         m = p ? R : 0
         cov = (cov & ~R) | (op(i, cov, m) & R)
+if (word(0) >> 18) & 1 and blink_off and k > 0: // the topmost layer blinks
+    cov &= ~(1 << (k - 1))
 if cov == 0 and f == TILES:                      // no glyph covers: the tiles
-    index = tile_index(word(5) >> 16, (word(0) >> 24) & 3)       // top
+    index = tile_index(word(5) >> 16, (word(0) >> 30) & 3)       // top
     if index is none:
-        index = tile_index(word(5) & 0xFFFF, (word(0) >> 22) & 3) // bottom
+        index = tile_index(word(5) & 0xFFFF, (word(0) >> 28) & 3) // bottom
     if index is not none:
         colour = palette[palette_slot * 256 + index]; done
 slot = (f == VOID or not draws_background) ? NOTHING : bg
@@ -867,7 +960,7 @@ colour = (f == INLINE) ? payload_colour(slot)
 tile_index(t, offset):                           // a palette index, or none
     if t == 0: return none                       // no tile
     v = tile_pixel(t)                            // 0-15
-    if v == (word(0) >> 18) & 15: return none    // the transparency index
+    if v == (word(0) >> 24) & 15: return none    // the transparency index
     c  = (v + 4 * offset) mod 16
     s  = c div 4                                 // swatch A, B, C, or D
     sw = (word(6 + s div 2) >> (16 * (s mod 2))) & 0xFFFF
@@ -882,7 +975,9 @@ layer. A glyph that is a layer sets its bit to whether its glyph covers the
 pixel under its selector. A glyph that is a mask finds whether its own glyph
 covers the pixel, and combines that, by its operation, with the bits of the
 layers it reaches: the most recent layer and as many before it as its reach
-gives. In a tile cell, a pixel that no glyph layer covers is then given to
+gives. If the cell blinks and the blink phase is off, the topmost layer's bit
+is then cleared, so that the layers beneath, or the background, show. In a
+tile cell, a pixel that no glyph layer covers is then given to
 the top tile, or, where the top tile is absent or transparent, to the bottom
 tile: the tile's value, unless it is the transparency index, is moved by the
 tile's colour offset and selects a slot of one of swatches A–D. Otherwise a
@@ -891,7 +986,8 @@ layer whose bit is set. A pixel that nothing covers keeps the background
 slot, or, in a void or an overlay instance that does not draw its
 background, is discarded. The slot is then looked up in the inline colours
 or in the swatch and the palette. In the grid, `draws_background` is always
-true.
+true; `blink_off` is the blink phase, which both renderers are given
+(LEXTER-DRAFT-cell-model-D14).
 
 Table: Mask operations, applied to the bits the mask reaches.
 
@@ -928,15 +1024,15 @@ Table: How a cell's lines are placed, when the terminal writes them.
 
 | Lines | Place | Glyph |
 |---|---|---|
-| Any combination in the text's colour | The text's last mask, before any later layer, reaching one layer | The combination's line glyph |
-| An underline with an SGR 58 colour | The last glyph word, a layer whose ink slot holds the colour | The underline alone |
-| Strikethrough or overline beside a coloured underline | The text's last mask | Their combination, without the underline |
+| Any combination in the text's colour | The cell's last glyph word, a mask on the text, reaching one layer | The combination's line glyph |
+| An underline with an SGR 58 colour | The layer directly beneath the text, whose ink slot holds the colour | The underline alone |
+| Strikethrough or overline beside a coloured underline | The cell's last glyph word, a mask on the text | Their combination, without the underline |
 
 Table: Where each cursor and pointer effect is drawn.
 
 | Effect | Drawn by |
 |---|---|
-| Block cursor | An overlay instance that draws its background, copying the cell with its background slot and first ink slot exchanged (LEXTER-D93) |
+| Block cursor | An overlay instance that draws its background, copying the cell with its background slot and topmost layer's ink slot exchanged (LEXTER-D93) |
 | Underline and bar cursors | An overlay instance with a cursor glyph, not drawing its background |
 | A hyperlink lit by the pointer | An overlay instance with an underline glyph, not drawing its background |
 
@@ -969,13 +1065,16 @@ displace another glyph, or be dropped. Such cells are expected to be rare.
 Double, curly, dotted, and dashed underlines (SGR 4:2–4:5, and 21) fit
 styles 1–6. A curly or dashed pattern must line up from cell to cell, so its
 period must divide the cell's width, or each boundary shows a seam. How the
-generator chooses a period for each cell width is open.
+generator chooses a period for each cell width is open, and so is which
+style a spelling checker's mark takes: one the terminal never writes, so that
+reading lines back passes it over (LEXTER-D88).
 
 ### LEXTER-O49 — What do the reserved bits hold?
 
-The header word has six reserved bits; the format word fourteen in the
-plain, void, and inline-colour formats and six in tiles; a layer's settings
-byte five; and a mask's two. The candidates are
+The header word has six reserved bits; the format word thirteen in the
+plain, void, and inline-colour formats, five common flags in byte 2 and all
+of byte 3, and five in tiles; a layer's settings byte five; and a mask's
+two. The candidates are
 effects for each layer, which need no payload and so could stand beside
 masks. The bits stay reserved until a use is chosen; state that only the CPU
 reads, such as the protected-cell bit of DECSCA
@@ -1024,10 +1123,11 @@ calls for.
    configuration (LEXTER-D92), with the integer stores of
    LEXTER-DRAFT-cell-model-revision-D14.
 3. **With the plan's Phase 3.** The record as specified here: the format
-   word, the header word with its background slot, glyph words with their
-   settings, the plain format with its glyph count and type bits, masks with
-   their reach, lines as glyphs with the single underline, the procedure of
-   Drawing a Pixel in the shader, and palette slots allocated to terminals.
+   word with its drawing flags, the header word with its background slot,
+   glyph words with their settings, the plain format with its glyph count and
+   type bits, masks with their reach, lines as glyphs with the single
+   underline, blinking text and the blink phase, the procedure of Drawing a
+   Pixel in the shader, and palette slots allocated to terminals.
    The descriptor of LEXTER-DRAFT-cell-model-revision-D9 is written from
    these tables.
 4. **With the plan's Phase 4.** The overlay instance and the block cursor's
@@ -1079,11 +1179,12 @@ Table: The letter g with an SGR 58 red underline and a strikethrough.
 
 | Word | Value |
 |---|---|
-| 0 | Plain, glyph count 3, type bits 00001 (glyph 1 a mask, glyph 2 a layer) |
+| 0 | Plain, glyph count 3, type bits 00010 (glyph 1 a layer, glyph 2 a mask) |
 | 1 | A swatch whose slot 2 holds red, palette slot *p*, background slot 0 |
-| 2 | The atlas position of g; ink slot 1 |
-| 3 | 10, the strikethrough (8 + 0 + 2); selector 0, union |
-| 4 | 9, the underline; ink slot 2 |
+| 2 | 9, the underline; ink slot 2 |
+| 3 | The atlas position of g; ink slot 1 |
+| 4 | 10, the strikethrough (8 + 0 + 2); selector 0, union |
+| Result | The red underline beneath the g, with the g's descender crossing it, and the strikethrough in the g's colour |
 
 Table: A spelling checker's red underline beneath the letter g.
 
@@ -1091,9 +1192,9 @@ Table: A spelling checker's red underline beneath the letter g.
 |---|---|
 | 0 | Plain, glyph count 2, type bits 00000 (both layers) |
 | 1 | A swatch whose slot 2 holds red, palette slot *p*, background slot 0 |
-| 2 | 9, the underline; ink slot 2 |
+| 2 | The line glyph of the spelling checker's style, which the terminal never writes (LEXTER-O48); ink slot 2 |
 | 3 | The atlas position of g; ink slot 1 |
-| Result | The g drawn over the line; not read back as an SGR underline |
+| Result | The g drawn over the line; not read back as an SGR underline, by its style |
 
 Table: A scroll bar's thumb as a band from two-eighths to six-eighths down
 one cell.
@@ -1112,10 +1213,20 @@ of the cell by one mask.
 |---|---|
 | 0 | Plain, glyph count 3, type bits 00010 (glyph 2 a mask) |
 | 1 | A swatch whose slot 2 holds red, palette slot *p*, background slot 0 |
-| 2 | The atlas position of g; ink slot 1 |
-| 3 | 9, the underline; ink slot 2 |
+| 2 | 9, the underline; ink slot 2 |
+| 3 | The atlas position of g; ink slot 1 |
 | 4 | ▌, the left half; selector 0, intersection, reach field 1 (two layers) |
 | Result | The g and its underline in the left half; the background in the right |
+
+Table: The letter g, blinking, with an SGR 58 red underline.
+
+| Word | Value |
+|---|---|
+| 0 | Plain, glyph count 2, type bits 00000 (both layers), blink 1 |
+| 1 | A swatch whose slot 2 holds red, palette slot *p*, background slot 0 |
+| 2 | 9, the underline; ink slot 2 |
+| 3 | The atlas position of g; ink slot 1 |
+| Result | In the on phase, the g over its red underline; in the off phase, the underline alone on the background |
 
 Table: A block cursor over the underlined g.
 

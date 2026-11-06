@@ -1,44 +1,48 @@
 ---
-id:            LEXTER-DRAFT-terminal-fixes-1e
+id:            LEXTER-0015
 title:         "Terminal Fixes, First Edition: Development Plan"
 genre:         Plan
 scope:         project
 project:       Lexter
 language:      en
-status:        Draft
+status:        Accepted
+authors:
+  - Andrew Sengul
+approved-by:   Andrew Sengul
+reviewed:      2026-11-05
 provenance:
   assistant:   opencode
   session:     "Terminal fixes plan (2026-11-02)"
 relates-to:
-  - LEXTER-DRAFT-data-structures-1e-critique
+  - LEXTER-0014
   - LEXTER-DRAFT-data-structures-1e
   - LEXTER-DRAFT-cell-model-revision
   - LEXTER-DRAFT-pane-profiles
-  - LEXTER-DRAFT-layer-mechanics
+  - LEXTER-0013
   - LEXTER-0005
   - LEXTER-0006
   - LEXTER-0010
 decisions:
-  - LEXTER-DRAFT-terminal-fixes-1e-D1
-  - LEXTER-DRAFT-terminal-fixes-1e-D2
-  - LEXTER-DRAFT-terminal-fixes-1e-D3
-  - LEXTER-DRAFT-terminal-fixes-1e-D4
-  - LEXTER-DRAFT-terminal-fixes-1e-D5
-  - LEXTER-DRAFT-terminal-fixes-1e-D6
-  - LEXTER-DRAFT-terminal-fixes-1e-D7
-  - LEXTER-DRAFT-terminal-fixes-1e-D8
-  - LEXTER-DRAFT-terminal-fixes-1e-D9
-  - LEXTER-DRAFT-terminal-fixes-1e-D10
-  - LEXTER-DRAFT-terminal-fixes-1e-D11
-  - LEXTER-DRAFT-terminal-fixes-1e-D12
-  - LEXTER-DRAFT-terminal-fixes-1e-D13
-  - LEXTER-DRAFT-terminal-fixes-1e-D14
-  - LEXTER-DRAFT-terminal-fixes-1e-D15
+  - LEXTER-D66
+  - LEXTER-D67
+  - LEXTER-D68
+  - LEXTER-D69
+  - LEXTER-D70
+  - LEXTER-D71
+  - LEXTER-D72
+  - LEXTER-D73
+  - LEXTER-D74
+  - LEXTER-D75
+  - LEXTER-D76
+  - LEXTER-D77
+  - LEXTER-D78
+  - LEXTER-D79
+  - LEXTER-D80
 open-questions:
-  - LEXTER-DRAFT-terminal-fixes-1e-O1
-  - LEXTER-DRAFT-terminal-fixes-1e-O2
-  - LEXTER-DRAFT-terminal-fixes-1e-O3
-  - LEXTER-DRAFT-terminal-fixes-1e-O4
+  - LEXTER-O41
+  - LEXTER-O42
+  - LEXTER-O43
+  - LEXTER-O44
 cites:
   - title:    "Session transcript ses_febe-LexterCritique"
     locator:  "session-ses_febe-LexterCritique.md, the closing review"
@@ -67,7 +71,7 @@ stacks, global state in place of instance state, mode state kept in two
 places, and reliance on babel's internals. It is the companion of
 [LEXTER-DRAFT-cell-model-revision](Plan.CellModelRevision.md), which repairs
 and then replaces the cells, and it answers the findings of
-[LEXTER-DRAFT-data-structures-1e-critique](Eval.Critique.DataStructures1e.md)
+[LEXTER-0014](Eval.Critique.DataStructures1e.md)
 that the cell plan leaves to it. It is the first of a series of plans for
 fixes; later ones take the suffixes 2e, 3e, and so on.
 
@@ -79,25 +83,25 @@ has to work around.
 
 - **Host input escapes its types.** Ordinary SGR sequences and a tab after a
   resize signal errors in the middle of a parse
-  (LEXTER-DRAFT-data-structures-1e-critique-O3), and autowrap ignores the
-  scrolling region (LEXTER-DRAFT-data-structures-1e-critique-O15).
+  (LEXTER-O21), and autowrap ignores the
+  scrolling region (LEXTER-O33).
 - **Buffers and views disagree.** The Origin integration reads a cached
   screen instead of the active one, and a lazily created alternate screen
-  loses OSC colour changes (LEXTER-DRAFT-data-structures-1e-critique-O11). A
+  loses OSC colour changes (LEXTER-O29). A
   workspace switch clears the grid without scheduling a repaint
-  (LEXTER-DRAFT-data-structures-1e-critique-O14).
+  (LEXTER-O32).
 - **The protocols diverge from their standards.** TN3270E negotiation cannot
   complete with a server that follows RFC 2355
-  (LEXTER-DRAFT-data-structures-1e-critique-O7); the TN3270 screen assumes
+  (LEXTER-O25); the TN3270 screen assumes
   80×24 and its record framing ignores escaping
-  (LEXTER-DRAFT-data-structures-1e-critique-O13); the telnet client mangles
+  (LEXTER-O31); the telnet client mangles
   code 255 and keeps no option state
-  (LEXTER-DRAFT-data-structures-1e-critique-O16).
+  (LEXTER-O34).
 - **The terminal paths are fragile.** The headless and teardown paths
-  dereference a missing PTY (LEXTER-DRAFT-data-structures-1e-critique-O17),
+  dereference a missing PTY (LEXTER-O35),
   backends are told the pane's size rather than its content's
-  (LEXTER-DRAFT-data-structures-1e-critique-O20), and the package exports
-  disagree with the code (LEXTER-DRAFT-data-structures-1e-critique-O19).
+  (LEXTER-O38), and the package exports
+  disagree with the code (LEXTER-O37).
 
 The review adds four structural findings. `unix-term` and the compositor
 duplicate each other, so "every fix lands twice or lands once". Instance
@@ -118,26 +122,26 @@ encoded through babel's internal functions.
 
 ## Settled Decisions
 
-### LEXTER-DRAFT-terminal-fixes-1e-D1 — The plan covers the first edition's fixes outside the cell model
+### LEXTER-D66 — The plan covers the first edition's fixes outside the cell model
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** The development sequence of
-[LEXTER-DRAFT-layer-mechanics](Survey.LayerMechanics.md) begins with fixes
+[LEXTER-0013](Survey.LayerMechanics.md) begins with fixes
 needed under any design. The cell plan's
 LEXTER-DRAFT-cell-model-revision-D1 keeps to the cell model and leaves the
 other fixes to a separate plan. One finding in
 that set, the scrollback viewport and the inverted scroll-bar thumb
-(LEXTER-DRAFT-data-structures-1e-critique-O12), is already planned in
+(LEXTER-O30), is already planned in
 [LEXTER-DRAFT-pane-profiles](Plan.PaneProfiles.md), whose
 LEXTER-DRAFT-pane-profiles-D5 draws the history and whose Scrollback Viewing
 section inverts the thumb.
 
 **Decision:** This plan covers the critique's
-LEXTER-DRAFT-data-structures-1e-critique-O3, -O7, -O11, -O13, -O14, -O15,
+LEXTER-O21, -O7, -O11, -O13, -O14, -O15,
 -O16, -O17, -O19, and -O20, and the review's findings on the parallel
 stacks, global state, mode state, and babel's internals.
-LEXTER-DRAFT-data-structures-1e-critique-O12 stays with the pane-profiles
+LEXTER-O30 stays with the pane-profiles
 plan. The review's finding that the 3270 pane bypasses the model belongs to
 the cell plan, whose dense model must either rewrite that pane to the record
 or keep its own path.
@@ -147,9 +151,9 @@ or keep its own path.
   plan inverts it together with the history it reports, and splitting them
   would leave a thumb that moves over a picture that does not.
 
-### LEXTER-DRAFT-terminal-fixes-1e-D2 — The standalone terminal becomes a compositor with one pane, and this comes first
+### LEXTER-D67 — The standalone terminal becomes a compositor with one pane, and this comes first
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** `unix-term` and the compositor each have their own tick, key
 encoding (`*key-sequences*` and its encoder), cursor blink, resize handling,
@@ -172,7 +176,7 @@ plan, and the cell plan's
 Phase 1 waits for it, so that its repairs land once. The headless mode keeps
 working: a pane with no PTY is fed by `process-output`, and how the
 compositor keeps such a terminal alive is
-LEXTER-DRAFT-terminal-fixes-1e-O1.
+LEXTER-O41.
 
 **Alternatives:**
 - Extract shared helpers and keep both loops. Rejected: two loops remain,
@@ -187,14 +191,14 @@ As a consequence, the standalone terminal gains what panes have, including
 the pane-profiles plan's wheel scrolling and profiles, which that plan had
 excluded for the single-terminal path.
 
-### LEXTER-DRAFT-terminal-fixes-1e-D3 — Host input is checked at the boundary, never trusted against a slot's type
+### LEXTER-D68 — Host input is checked at the boundary, never trusted against a slot's type
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** `rgb-to-256` returns 256 for the grey (248, 248, 248), SGR
 `38;5;n` stores any n, and `tab-stops` keeps its original length when the
 screen is resized; each signals an error inside `process-output`
-(LEXTER-DRAFT-data-structures-1e-critique-O3,
+(LEXTER-O21,
 `src/vt-handler.lisp:rgb-to-256@2d4d743`,
 `src/vt-handler.lisp:vt-handler-resize-all@2d4d743`).
 
@@ -212,13 +216,13 @@ built.
   buffer. Rejected as the fix, though worth keeping as a last defence: it
   loses output, and the state may already be corrupt.
 
-### LEXTER-DRAFT-terminal-fixes-1e-D4 — Autowrap and line feed share one path, which owns the scrolling region
+### LEXTER-D69 — Autowrap and line feed share one path, which owns the scrolling region
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** Line feed scrolls within the scrolling region, but autowrap
 tests the screen's last row, so wrapping inside a region that ends above it
-moves the cursor out (LEXTER-DRAFT-data-structures-1e-critique-O15,
+moves the cursor out (LEXTER-O33,
 `src/vt-handler.lisp:%print-codepoint@2d4d743`).
 
 **Decision:** Autowrap moves to the next line through the same function as
@@ -228,16 +232,16 @@ line feed, which alone applies the region's rule.
 - Patch the test in `%print-codepoint`. Rejected: two places would again
   have to agree on the region.
 
-### LEXTER-DRAFT-terminal-fixes-1e-D5 — Every reader of a terminal's screen goes through the handler
+### LEXTER-D70 — Every reader of a terminal's screen goes through the handler
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** LEXTER-D28 has the handler own both buffers and requires
 readers to poll `vt-handler-screen`, but the Origin integration reads and
 writes `unix-terminal-screen`, which keeps the initial buffer; and the
 alternate screen, created on first use, starts from the default palette, so
 OSC 4 changes made before it existed are lost inside it
-(LEXTER-DRAFT-data-structures-1e-critique-O11,
+(LEXTER-O29,
 `src/origin-impulse.lisp:%window-fields@2d4d743`,
 `src/vt-handler.lisp:%ensure-alt-screen@2d4d743`).
 
@@ -251,13 +255,13 @@ the cell plan's LEXTER-DRAFT-cell-model-revision-O3.
 - Keep the slot and update it on every swap. Rejected: it is a second copy
   of the handler's state, which the critique shows drifting.
 
-### LEXTER-DRAFT-terminal-fixes-1e-D6 — A workspace switch marks every screen and its decorations dirty
+### LEXTER-D71 — A workspace switch marks every screen and its decorations dirty
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** `switch-workspace` clears the grid but marks nothing dirty, so
 the new workspace stays blank until its panes produce output, and its
-decorations never return (LEXTER-DRAFT-data-structures-1e-critique-O14,
+decorations never return (LEXTER-O32,
 `src/panes/compositor.lisp:switch-workspace@2d4d743`). The cell plan's dense
 model uploads only dirty rows, which would make the fault worse.
 
@@ -270,18 +274,18 @@ of the cell plan's Phase 3.
 - Have the renderer detect a change of workspace. Rejected for the reason
   LEXTER-D33 gives: it spreads the concern into the render loop.
 
-### LEXTER-DRAFT-terminal-fixes-1e-D7 — The TN3270 client follows RFC 2355, and its screen is sized from its geometry
+### LEXTER-D72 — The TN3270 client follows RFC 2355, and its screen is sized from its geometry
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** The client tests for `DEVICE-TYPE SEND` where RFC 2355 has the
 server send `SEND DEVICE-TYPE`, and answers with `IS`, which only the server
 may send; the session stalls with a conforming server
-(LEXTER-DRAFT-data-structures-1e-critique-O7,
+(LEXTER-O25,
 `src/tn3270/client.lisp:process-subnegotiation@2d4d743`). The screen's
 arrays are always 1920 elements, and record framing scans for the byte pair
 `FF EF` without regard to escaping
-(LEXTER-DRAFT-data-structures-1e-critique-O13,
+(LEXTER-O31,
 `src/tn3270/screen.lisp:tn3270-screen@2d4d743`,
 `src/tn3270/client.lisp:extract-3270-record@2d4d743`).
 
@@ -294,22 +298,22 @@ client only answers a server's request with `FUNCTIONS IS`
 The screen is made by a constructor that sizes every array from its columns
 and rows. Records are framed by a small IAC state machine that undoubles
 `FF FF` and ends a record only at an unescaped IAC EOR. What a record larger
-than the receive buffer does is LEXTER-DRAFT-terminal-fixes-1e-O3.
+than the receive buffer does is LEXTER-O43.
 
 **Alternatives:**
 - Keep the order the client expects, if some servers use it. Rejected: the
   RFC is unambiguous, and a test against a recorded negotiation guards the
   fix.
 
-### LEXTER-DRAFT-terminal-fixes-1e-D8 — The telnet client encodes before escaping, and keeps option state by the Q method
+### LEXTER-D73 — The telnet client encodes before escaping, and keeps option state by the Q method
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** `telnet-write-string` masks each character to seven bits before
 testing it for 255, so code 255 goes out as `7F FF`, and the client answers
 every WILL and DO without recording which options are on, which RFC 854's
 rules against negotiation loops forbid
-(LEXTER-DRAFT-data-structures-1e-critique-O16,
+(LEXTER-O34,
 `src/telnet/client.lisp:telnet-write-string@2d4d743`,
 `src/telnet/client.lisp:%handle-will@2d4d743`).
 
@@ -326,35 +330,35 @@ request that changes it.
   already mangles every character above 127, and the pane knows its
   encoding.
 
-### LEXTER-DRAFT-terminal-fixes-1e-D9 — The PTY separates the child's life from the descriptor's
+### LEXTER-D74 — The PTY separates the child's life from the descriptor's
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** `pty-close` does nothing once `alive-p` is false, which
 `pty-read` sets at end of file, so the descriptor is never closed and the
 child never reaped; and the standalone terminal's input handlers apply
 `pty-alive-p` and `pty-set-size` to the missing PTY of a headless terminal
-(LEXTER-DRAFT-data-structures-1e-critique-O17,
+(LEXTER-O35,
 `src/pty.lisp:pty-close@2d4d743`,
 `src/unix-term.lisp:handle-key-press@2d4d743`).
 
 **Decision:** The PTY records separately whether the child is alive and
 whether the descriptor is open. Closing always closes an open descriptor and
 reaps the child, signalling it first if it is alive. Every path that writes to
-or resizes a backend tests for one; after LEXTER-DRAFT-terminal-fixes-1e-D2
+or resizes a backend tests for one; after LEXTER-D67
 that is the pane's backend methods, which already do.
 
 **Alternatives:**
 - Clear `alive-p` only in `pty-close`. Rejected: end of file is real
   information about the child, and the descriptor still needs closing.
 
-### LEXTER-DRAFT-terminal-fixes-1e-D10 — Backends are sized from the screen the handler made
+### LEXTER-D75 — Backends are sized from the screen the handler made
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** `vt-pane-init-screen` sizes the screen from the content area,
 but the PTY and the telnet client are opened at the pane's full size
-(LEXTER-DRAFT-data-structures-1e-critique-O20,
+(LEXTER-O38,
 `src/panes/uterm-pane.lisp:pane-initialize@2d4d743`).
 
 **Decision:** Each backend is opened at the size of the screen that
@@ -364,13 +368,13 @@ but the PTY and the telnet client are opened at the pane's full size
 - Size the screen to the full pane. Rejected: it would draw under the
   chrome.
 
-### LEXTER-DRAFT-terminal-fixes-1e-D11 — Exports name only what exists, and packages read each other through them
+### LEXTER-D76 — Exports name only what exists, and packages read each other through them
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** Seven exported symbols name nothing, and the model and the VT
 handler read other packages' internals with `::`
-(LEXTER-DRAFT-data-structures-1e-critique-O19,
+(LEXTER-O37,
 `src/packages-unix.lisp@2d4d743`, `src/tn3270/packages.lisp@2d4d743`).
 
 **Decision:** Undefined exports are removed or defined. Each `::` read across
@@ -385,9 +389,9 @@ use as keywords in a protocol.
 - Export the internals as they are. Rejected: it publishes slot accessors
   that the cell plan is about to replace.
 
-### LEXTER-DRAFT-terminal-fixes-1e-D12 — Instance state leaves the globals
+### LEXTER-D77 — Instance state leaves the globals
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** The compositor copies its `prefix-key` slot into `*prefix-key*`
 and its blink state into `*cursor-blink-on*` on every tick, and the VT
@@ -404,16 +408,16 @@ one. The blink state reaches the flush as an argument, or a binding around
 the flush, from the compositor that is drawing. A title change is applied to
 the window that owns the pane. The 3270 pane's global swatch cache is
 replaced by the cell plan's Phase 2. How a pane reaches its window is
-LEXTER-DRAFT-terminal-fixes-1e-O2.
+LEXTER-O42.
 
 **Alternatives:**
 - Keep the globals and bind them per compositor around each tick. Rejected
   for the prefix key and the title, which are read in callbacks outside the
   tick; kept as an option for the blink state.
 
-### LEXTER-DRAFT-terminal-fixes-1e-D13 — Mode state has one home, the handler
+### LEXTER-D78 — Mode state has one home, the handler
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** The screen has a `mode-flags` slot with `set-mode` and
 `get-mode` stubs, while the VT handler keeps the real modes in its own slots
@@ -428,9 +432,9 @@ LEXTER-DRAFT-terminal-fixes-1e-O2.
   LEXTER-DRAFT-data-structures-1e specifies, and the screen is already the
   review's god-struct.
 
-### LEXTER-DRAFT-terminal-fixes-1e-D14 — Keystrokes are encoded without babel's internals
+### LEXTER-D79 — Keystrokes are encoded without babel's internals
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** The key path encodes each character through
 `babel::lookup-mapping`, `babel::*string-vector-mappings*`, and
@@ -444,9 +448,9 @@ into the pane's write buffer. It needs no allocation and no library.
 - babel's public `string-to-octets`. Rejected: it allocates a vector for
   every keystroke, which the internal call was written to avoid.
 
-### LEXTER-DRAFT-terminal-fixes-1e-D15 — Every fix gets a headless regression test
+### LEXTER-D80 — Every fix gets a headless regression test
 
-**Status:** Proposed
+**Status:** Implemented
 
 **Context:** The critique reproduced its findings in SBCL with no display,
 and the cell plan's LEXTER-DRAFT-cell-model-revision-D11 makes the same rule
@@ -463,7 +467,7 @@ the telnet fixes against an in-memory stream.
 
 ## The Consolidated Stack
 
-After LEXTER-DRAFT-terminal-fixes-1e-D2, one compositor serves both uses. The
+After LEXTER-D67, one compositor serves both uses. The
 standalone terminal's constructor builds a compositor with one workspace and
 one `uterm-pane`, and its functions delegate:
 
@@ -480,28 +484,28 @@ Table: The standalone terminal's API after consolidation.
 | `unix-terminal-vt-handler`, used by the test rig's `replay-blob` | The pane's VT handler |
 | `unix-terminal-cols`, `-rows`, `-command`, `-pixel-scale`, `-title`, read by the Origin integration | The compositor's configuration and the pane's |
 | `unix-terminal-pty`, read by the Origin integration | The pane's PTY, or NIL for a headless terminal |
-| `unix-terminal-screen`, read by the Origin integration | Removed; readers ask the handler for the active screen (LEXTER-DRAFT-terminal-fixes-1e-D5) |
+| `unix-terminal-screen`, read by the Origin integration | Removed; readers ask the handler for the active screen (LEXTER-D70) |
 
 The Origin integration reads the accessors through `::`
 (`src/origin-impulse.lisp:%window-fields@2d4d743`); those it keeps are
-exported (LEXTER-DRAFT-terminal-fixes-1e-D11).
+exported (LEXTER-D76).
 
 Key encoding, cursor blink, resize, palette upload, and default swatches then
 exist once, in the pane and compositor code. The Origin integration keeps the
 names it uses, and reads screens through the handler
-(LEXTER-DRAFT-terminal-fixes-1e-D5).
+(LEXTER-D70).
 
 ## Interaction with the Other Plans
 
-- **The cell plan.** Its Phase 1 waits for LEXTER-DRAFT-terminal-fixes-1e-D2.
-  Its Phase 3 waits for LEXTER-DRAFT-terminal-fixes-1e-D6. It owns the 3270
+- **The cell plan.** Its Phase 1 waits for LEXTER-D67.
+  Its Phase 3 waits for LEXTER-D71. It owns the 3270
   pane's swatch cache and the review's finding that the 3270 pane bypasses the
   model.
 - **The pane-profiles plan.** It owns
-  LEXTER-DRAFT-data-structures-1e-critique-O12. Its workspace-to-compositor
+  LEXTER-O30. Its workspace-to-compositor
   reference (LEXTER-DRAFT-pane-profiles-O2) would answer this plan's
-  LEXTER-DRAFT-terminal-fixes-1e-O2, and its profiles would hold the prefix
-  key (LEXTER-DRAFT-terminal-fixes-1e-D12). Both it and the cell plan's Phase
+  LEXTER-O42, and its profiles would hold the prefix
+  key (LEXTER-D77). Both it and the cell plan's Phase
   1 change `flush-to-display`, so their order is settled when the phases are
   scheduled.
 
@@ -513,36 +517,36 @@ names it uses, and reads screens through the handler
   are run before and after.
 - **The headless terminal's life.** A compositor stops when no pane is
   alive, and a pane with no PTY reports its backend as dead
-  (LEXTER-DRAFT-terminal-fixes-1e-O1).
+  (LEXTER-O41).
 - **Three plans in one area.** This plan, the cell plan, and the
   pane-profiles plan all change the flush and the panes; each phase states
   what it waits for.
 - **Fixes outside Lexter.** An OSC sequence ended by BEL is not dispatched,
-  which the critique traced to cl-vt (LEXTER-DRAFT-terminal-fixes-1e-O4).
+  which the critique traced to cl-vt (LEXTER-O44).
 
 ## Open Questions
 
-### LEXTER-DRAFT-terminal-fixes-1e-O1 — How does a headless terminal stay alive?
+### LEXTER-O41 — How does a headless terminal stay alive?
 
 A pane with no PTY is fed by `process-output`, but its backend reports itself
 dead, and the compositor stops when every pane is. A headless flag on the
 compositor, or a pane that counts as alive when it was made without a
 command, are the candidates.
 
-### LEXTER-DRAFT-terminal-fixes-1e-O2 — How does a pane reach its window?
+### LEXTER-O42 — How does a pane reach its window?
 
 The title and the prefix key need the compositor that owns a pane. Panes
 refer to their workspace; the pane-profiles plan leans to a
 `workspace-compositor` slot (LEXTER-DRAFT-pane-profiles-O2), which would
 serve here too.
 
-### LEXTER-DRAFT-terminal-fixes-1e-O3 — What does an oversized TN3270 record do?
+### LEXTER-O43 — What does an oversized TN3270 record do?
 
 A record larger than the 8 KB receive buffer can never be framed. The buffer
 could grow to fit, up to a limit, or the record could be discarded with an
 error and the stream resynchronised at the next IAC EOR.
 
-### LEXTER-DRAFT-terminal-fixes-1e-O4 — Is the BEL terminator fixed in cl-vt or worked around?
+### LEXTER-O44 — Is the BEL terminator fixed in cl-vt or worked around?
 
 The critique observed that an OSC sequence ended by BEL is accumulated but
 never dispatched, so palette changes and window titles in that common form
@@ -562,26 +566,26 @@ Table: Prior systems and what this plan draws from each.
 
 ## Roadmap
 
-1. **Tests.** The regression tests of LEXTER-DRAFT-terminal-fixes-1e-D15 for
+1. **Tests.** The regression tests of LEXTER-D80 for
    every finding in scope, in the suite the cell plan's Phase 0 creates.
-2. **Consolidation (LEXTER-DRAFT-terminal-fixes-1e-D2).** One stack behind the
-   standalone terminal's API, after LEXTER-DRAFT-terminal-fixes-1e-O1 is
+2. **Consolidation (LEXTER-D67).** One stack behind the
+   standalone terminal's API, after LEXTER-O41 is
    settled. The cell plan's Phase 1 starts after this step. A Log records it.
-3. **The VT handler (LEXTER-DRAFT-terminal-fixes-1e-D3, -D4, -D5, -D13,
+3. **The VT handler (LEXTER-D68, -D4, -D5, -D13,
    -D14).** Host input at the boundary, autowrap through line feed, readers
    through the handler, one home for modes, and the keystroke encoder.
-4. **Panes and the compositor (LEXTER-DRAFT-terminal-fixes-1e-D6, -D10,
+4. **Panes and the compositor (LEXTER-D71, -D10,
    -D12).** The workspace-switch repaint, which the cell plan's Phase 3 waits
    for; backend sizing; and the globals, after
-   LEXTER-DRAFT-terminal-fixes-1e-O2 is settled.
-5. **Protocols (LEXTER-DRAFT-terminal-fixes-1e-D7, -D8).** TN3270E
+   LEXTER-O42 is settled.
+5. **Protocols (LEXTER-D72, -D8).** TN3270E
    negotiation, screen sizing, and framing, after
-   LEXTER-DRAFT-terminal-fixes-1e-O3 is settled; then telnet encoding and
+   LEXTER-O43 is settled; then telnet encoding and
    option state. These depend on nothing above and may proceed at any time.
-6. **The PTY and the packages (LEXTER-DRAFT-terminal-fixes-1e-D9, -D11).**
+6. **The PTY and the packages (LEXTER-D74, -D11).**
    Separate child and descriptor state, and exports that name what exists.
 7. **Outside Lexter.** The BEL terminator, as
-   LEXTER-DRAFT-terminal-fixes-1e-O4 decides.
+   LEXTER-O44 decides.
 8. **Records.** A Log for each group of steps, and the Known nonconformance
    list of [LEXTER-DRAFT-data-structures-1e](Spec.DataStructures1e.md) updated
    as its items are fixed.

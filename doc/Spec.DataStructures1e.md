@@ -196,7 +196,7 @@ glyph 0's metrics only when they are absent.
 **Rationale:** LEXTER-D34 separates storage width from
 cell width, because Unifont stores every glyph in a 16-pixel raster but draws
 ASCII in an 8-pixel cell (*Session transcript ses_1640-Lexter13*, lines
-5109-5116 and 5186). LEXTER-D35 and -D3 put the
+5109-5116 and 5186). LEXTER-D35 and LEXTER-D36 put the
 override first and auto-detection second. The accelerator rule fixes cells
 measured from glyph 0's ink extents, which made haxor-narrow-16 come out 9×13
 instead of 9×18 (*Session transcript ses_2263-Lexter8*, lines 1105-1131).
@@ -474,7 +474,8 @@ path from a `screen` to a grid. Given a column and row offset (for a pane, its
 `pane-col` and `content-row`), it MUST:
 
 1. copy the screen's swatch table into the grid's `swatch-data` whenever the
-   grid's copy may differ from it (see [Required Synchronisation](#required-synchronisation));
+   grid's copy may differ from it (see [Required
+   Synchronisation](#required-synchronisation));
 2. for every dirty row, write each cell that falls inside the grid: a layered
    cell as its swatch and its non-NIL layers, and a simple cell through
    `set-simple-cell` with glyph 0 replaced by the blank glyph and with the
@@ -522,7 +523,8 @@ Table: Layered instance, 16 bytes.
 | 12-13 | swatch index; bit 15 set for a wide character | uint16 | location 5, `uint i_swatch` |
 | 14-15 | padding | — | — |
 
-Location 0 is the unit-quad corner, per vertex; locations 1 and up have divisor 1.
+Location 0 is the unit-quad corner, per vertex; locations 1 and up have
+divisor 1.
 
 **Rationale:** the glyph index went from 16 to 32 bits with Unifont, and to 32
 rather than 24 bits for clean attribute types; the padding keeps every
@@ -596,10 +598,11 @@ MUST resize both buffers. Any code that renders or reads a VT terminal MUST
 find the screen through `vt-handler-screen`, or through
 `vt-pane-active-screen`, at the time of use, and MUST NOT cache it.
 
-**Rationale:** LEXTER-D28 (the handler owns the buffers and
-the renderer follows it), -D2 (one persistent buffer, created lazily), -D3
-(separate save slots), -D4 (resize both), -D5 (no scrollback on the alternate
-buffer), and -D6 (pointer swap, not snapshot and restore).
+**Rationale:** LEXTER-D28 (the handler owns the buffers and the renderer
+follows it), LEXTER-D29 (one persistent buffer, created lazily), LEXTER-D30
+(separate save slots), LEXTER-D31 (resize both), LEXTER-D32 (no scrollback on
+the alternate buffer), and LEXTER-D27 (pointer swap, not snapshot and
+restore).
 
 **Palette across buffers.** OSC 4, 10, 11, and 104 MUST change the palette of
 every buffer the handler owns, so a colour redefinition is shared by the normal
@@ -622,11 +625,11 @@ Table: Other `vt-handler` state.
 
 Mouse state belongs to the handler, not to a buffer, so it survives an
 alternate-screen swap, and RIS MUST clear it so an application that dies
-cannot leave the pointer grabbed ([LEXTER-DRAFT-mouse-reporting](Log.MouseReporting.md),
-"Mouse state + encoding"). Tracking and encoding are independent settings
-(LEXTER-DRAFT-mouse-reporting-D4).
-Every printed character's swatch is interned as (`current-bg`, effective
-foreground, effective foreground, 0).
+cannot leave the pointer grabbed
+([LEXTER-DRAFT-mouse-reporting](Log.MouseReporting.md), "Mouse state +
+encoding"). Tracking and encoding are independent settings
+(LEXTER-DRAFT-mouse-reporting-D4). Every printed character's swatch is
+interned as (`current-bg`, effective foreground, effective foreground, 0).
 
 
 ## Required Pane Protocol
@@ -652,7 +655,7 @@ passes an event on by calling a `pane-forward-*` function, which binds
 `*redirect-suppressed*` to true so the event reaches the normal handler
 without re-entering the redirect.
 
-**Rationale:** LEXTER-D6 to -D4: modality is one slot of
+**Rationale:** LEXTER-D6 to LEXTER-D9: modality is one slot of
 pane state, interception lives in method combination rather than the router,
 one function receives every kind of event, and passthrough uses a dynamic
 binding. LEXTER-DRAFT-mouse-reporting-D7 extends the redirect to the pointer.
@@ -660,7 +663,7 @@ binding. LEXTER-DRAFT-mouse-reporting-D7 extends the redirect to the pointer.
 Mouse coordinates delivered to a pane MUST be cells relative to its content
 area. While any button is held, every pointer event MUST go to the pane where
 the press began. Motion is reported once per cell change
-(LEXTER-DRAFT-mouse-reporting-D1 to -D3).
+(LEXTER-DRAFT-mouse-reporting-D1 to LEXTER-DRAFT-mouse-reporting-D3).
 
 ### Chrome
 
@@ -725,9 +728,9 @@ A window-owning object (`unix-terminal`, `compositor`) implements
 (`src/gui.lisp:gui-tick@2d4d743`). `gui-tick` MUST make its own GL context
 current before drawing and returns NIL when the object is finished.
 `gui-destroy` MUST be idempotent. `run-gui-loop` owns the event loop; the
-caller initialises and terminates GLFW (LEXTER-D22, -D3,
--D6). The optional **stop flag** is a cons cell whose car is true while the
-loop should run (LEXTER-D2, -D3).
+caller initialises and terminates GLFW (LEXTER-D22, LEXTER-D23, LEXTER-D26).
+The optional **stop flag** is a cons cell whose car is true while the loop
+should run (LEXTER-D2, LEXTER-D3).
 
 
 ## Required Backend State
@@ -803,11 +806,11 @@ that receive a capture are called with keyword arguments (`:width`,
 `:height`, `:channels`, `:checksum`, `:name`, `:config`) and MUST accept
 `&allow-other-keys`.
 
-**Rationale:** LEXTER-D45 records raw input rather
-than the cell matrix, which loses control state; -D3 compares exact pixels,
-sound because the renderer is bitmap and nearest-neighbour; -D5 keeps blobs
-apart from their expected checksums. The capture comes from the offscreen
-framebuffer (LEXTER-D42).
+**Rationale:** LEXTER-D45 records raw input rather than the cell matrix, which
+loses control state; LEXTER-D47 compares exact pixels, sound because the
+renderer is bitmap and nearest-neighbour; LEXTER-D49 keeps blobs apart from
+their expected checksums. The capture comes from the offscreen framebuffer
+(LEXTER-D42).
 
 
 ## Conformance Walkthrough
@@ -819,7 +822,8 @@ bytes `ESC [ 3 1 m A`. The cursor is at (*c*, *r*) of the pane's screen.
 
 1. **Input.** The pane's `pane-process-output` reads the bytes through
    `vt-pane-read-bytes` and passes them to `process-output`. If recording, the
-   handler appends all six bytes first ([Required PTYB Blob Format](#required-ptyb-blob-format)).
+   handler appends all six bytes first ([Required PTYB Blob
+   Format](#required-ptyb-blob-format)).
 2. **SGR.** The parser dispatches `CSI 31 m`; `current-fg` becomes 1, a
    palette index ([Required VT Handler State](#required-vt-handler-state)).
 3. **Glyph.** Byte `#x41` reaches `handle-print`, which decodes codepoint 65,
@@ -846,13 +850,13 @@ bytes `ESC [ 3 1 m A`. The cursor is at (*c*, *r*) of the pane's screen.
    ([Required Synchronisation](#required-synchronisation)).
 8. **Upload and pack.** `render-frame` uploads the swatch texture if the
    grid's generation differs from the renderer's, then `build-render-data`
-   writes a 12-byte simple instance: column and row, *P* as four
-   little-endian bytes, *k* with bit 15 clear, and two bytes of padding
-   ([Required GPU Instance Layout](#required-gpu-instance-layout)).
+   writes a 12-byte simple instance: column and row, *P* as four little-endian
+   bytes, *k* with bit 15 clear, and two bytes of padding ([Required GPU
+   Instance Layout](#required-gpu-instance-layout)).
 9. **Vertex shader.** The instance becomes one cell-sized quad at the cell's
    pixel position, sampling atlas column `P mod cols` and row `P div cols`.
-10. **Fragment shader.** Where the glyph mask is 1, the shader reads texel *k*,
-    takes channel g (slot 1), recovers palette index 1, and outputs
+10. **Fragment shader.** Where the glyph mask is 1, the shader reads texel
+    *k*, takes channel g (slot 1), recovers palette index 1, and outputs
     `colors[s × 256 + 1]`: in the default palette, red (170, 0, 0). Where the
     mask is 0, it takes channel r (slot 0), index 0, and outputs black.
 
@@ -992,13 +996,13 @@ Table: The critique finding that examines each item.
 | 13 | LEXTER-O38 |
 | 14 | LEXTER-O31 |
 | 15 | LEXTER-O34 |
-| 16 | LEXTER-O39, -O18 |
+| 16 | LEXTER-O39, LEXTER-O36 |
 
-The critique also records departures this list does not name:
-LEXTER-O25 (TN3270E negotiation), -O12 (the scrollback viewport and scroll bar),
--O14 (workspace switching), -O15 (autowrap and the scrolling region), -O17
-(the headless and teardown paths), -O19 (package exports), and -O22 (the grid's
-unused dirty bits).
+The critique also records departures this list does not name: LEXTER-O25
+(TN3270E negotiation), LEXTER-O30 (the scrollback viewport and scroll bar),
+LEXTER-O32 (workspace switching), LEXTER-O33 (autowrap and the scrolling
+region), LEXTER-O35 (the headless and teardown paths), LEXTER-O37 (package
+exports), and LEXTER-O40 (the grid's unused dirty bits).
 
 ### What would close the gap
 

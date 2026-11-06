@@ -137,14 +137,13 @@ that set, the scrollback viewport and the inverted scroll-bar thumb
 LEXTER-DRAFT-pane-profiles-D5 draws the history and whose Scrollback Viewing
 section inverts the thumb.
 
-**Decision:** This plan covers the critique's
-LEXTER-O21, -O7, -O11, -O13, -O14, -O15,
--O16, -O17, -O19, and -O20, and the review's findings on the parallel
-stacks, global state, mode state, and babel's internals.
-LEXTER-O30 stays with the pane-profiles
-plan. The review's finding that the 3270 pane bypasses the model belongs to
-the cell plan, whose dense model must either rewrite that pane to the record
-or keep its own path.
+**Decision:** This plan covers the critique's LEXTER-O21, LEXTER-O25,
+LEXTER-O29, LEXTER-O31, LEXTER-O32, LEXTER-O33, LEXTER-O34, LEXTER-O35,
+LEXTER-O37, and LEXTER-O38, and the review's findings on the parallel stacks,
+global state, mode state, and babel's internals. LEXTER-O30 stays with the
+pane-profiles plan. The review's finding that the 3270 pane bypasses the model
+belongs to the cell plan, whose dense model must either rewrite that pane to
+the record or keep its own path.
 
 **Alternatives:**
 - Fold the thumb's inversion into this plan. Rejected: the pane-profiles
@@ -566,26 +565,23 @@ Table: Prior systems and what this plan draws from each.
 
 ## Roadmap
 
-1. **Tests.** The regression tests of LEXTER-D80 for
-   every finding in scope, in the suite the cell plan's Phase 0 creates.
-2. **Consolidation (LEXTER-D67).** One stack behind the
-   standalone terminal's API, after LEXTER-O41 is
-   settled. The cell plan's Phase 1 starts after this step. A Log records it.
-3. **The VT handler (LEXTER-D68, -D4, -D5, -D13,
-   -D14).** Host input at the boundary, autowrap through line feed, readers
-   through the handler, one home for modes, and the keystroke encoder.
-4. **Panes and the compositor (LEXTER-D71, -D10,
-   -D12).** The workspace-switch repaint, which the cell plan's Phase 3 waits
-   for; backend sizing; and the globals, after
-   LEXTER-O42 is settled.
-5. **Protocols (LEXTER-D72, -D8).** TN3270E
-   negotiation, screen sizing, and framing, after
-   LEXTER-O43 is settled; then telnet encoding and
-   option state. These depend on nothing above and may proceed at any time.
-6. **The PTY and the packages (LEXTER-D74, -D11).**
-   Separate child and descriptor state, and exports that name what exists.
-7. **Outside Lexter.** The BEL terminator, as
-   LEXTER-O44 decides.
+1. **Tests.** The regression tests of LEXTER-D80 for every finding in scope,
+   in the suite the cell plan's Phase 0 creates.
+2. **Consolidation (LEXTER-D67).** One stack behind the standalone terminal's
+   API, after LEXTER-O41 is settled. The cell plan's Phase 1 starts after this
+   step. A Log records it.
+3. **The VT handler (LEXTER-D68, LEXTER-D69, LEXTER-D70, LEXTER-D78,
+   LEXTER-D79).** Host input at the boundary, autowrap through line feed,
+   readers through the handler, one home for modes, and the keystroke encoder.
+4. **Panes and the compositor (LEXTER-D71, LEXTER-D75, LEXTER-D77).** The
+   workspace-switch repaint, which the cell plan's Phase 3 waits for; backend
+   sizing; and the globals, after LEXTER-O42 is settled.
+5. **Protocols (LEXTER-D72, LEXTER-D73).** TN3270E negotiation, screen sizing,
+   and framing, after LEXTER-O43 is settled; then telnet encoding and option
+   state. These depend on nothing above and may proceed at any time.
+6. **The PTY and the packages (LEXTER-D74, LEXTER-D76).** Separate child and
+   descriptor state, and exports that name what exists.
+7. **Outside Lexter.** The BEL terminator, as LEXTER-O44 decides.
 8. **Records.** A Log for each group of steps, and the Known nonconformance
    list of [LEXTER-DRAFT-data-structures-1e](Spec.DataStructures1e.md) updated
    as its items are fixed.

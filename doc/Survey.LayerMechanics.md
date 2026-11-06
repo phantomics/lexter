@@ -444,18 +444,17 @@ and the unread dirty bits (LEXTER-O40) in
 its first tier, where the Eval rates them low. Its remedy for the swatch table
 was a single authoritative intern table or content-addressed slots.
 
-Three observations follow. The redesign resolves or eases most of the
-medium- and low-severity findings, and almost all of them are about cells:
-it makes the record, rather than each function, the keeper of a cell's
-invariants, which is the fix the Eval's synthesis asks for under its second
-theme. It leaves untouched the Eval's first theme, copies of the same data
-with no owner, and the swatch findings in particular; it raises the stakes
-of those, since copied rows need swatch indices that mean the same wherever
-they go, and dirty-row uploads need trustworthy records. And it replaces the
-part of the cell format the Eval found sound: the GPU instance layout agrees
-byte for byte between packer and attribute setup. The case for the dense design is therefore
-capacity, speed, and maintainability, not the correctness of today's
-layout.
+Three observations follow. The redesign resolves or eases most of the medium-
+and low-severity findings, and almost all of them are about cells: it makes
+the record, rather than each function, the keeper of a cell's invariants,
+which is the fix the Eval's synthesis asks for under its second theme. It
+leaves untouched the Eval's first theme, copies of the same data with no
+owner, and the swatch findings in particular; it raises the stakes of those,
+since copied rows need swatch indices that mean the same wherever they go, and
+dirty-row uploads need trustworthy records. And it replaces the part of the
+cell format the Eval found sound: the GPU instance layout agrees byte for byte
+between packer and attribute setup. The case for the dense design is therefore
+capacity, speed, and maintainability, not the correctness of today's layout.
 
 ## Mutation Kernels
 
@@ -932,11 +931,11 @@ it out and decide it.
 1. **The fixes needed under any design**, the first group of
    LEXTER-O14: the VT handler's part of
    LEXTER-O19;
-   LEXTER-O21, -O7, -O11, -O13 to -O17, and
-   -O20; and the inverted thumb of
+   LEXTER-O21, LEXTER-O25, LEXTER-O29, LEXTER-O31 to LEXTER-O35, and
+   LEXTER-O38; and the inverted thumb of
    LEXTER-O30.
 2. **Per-screen swatch ranges**, which resolve
-   LEXTER-O20, -O4, and -O5 and give -O6 a
+   LEXTER-O20, LEXTER-O22, and LEXTER-O23 and give LEXTER-O24 a
    capacity per table (see Swatch Ownership).
 3. **The dense cell model.** It comes after the ranges: copying rows and
    uploading dirty rows both need swatch indices that mean the same wherever
@@ -1146,14 +1145,14 @@ and single-glyph uploads.
 
 The critique's findings fall into three groups. Some are needed whichever
 course is taken: the swatch protocol
-(LEXTER-O20, -O4, -O5, -O6), host input
+(LEXTER-O20, LEXTER-O22, LEXTER-O23, LEXTER-O24), host input
 (LEXTER-O21), the protocols and terminal
-paths (LEXTER-O25, -O11, -O13 to -O17,
--O20), the thumb's inversion (LEXTER-O30),
+paths (LEXTER-O25, LEXTER-O29, LEXTER-O31 to LEXTER-O35,
+LEXTER-O38), the thumb's inversion (LEXTER-O30),
 and the VT handler's part of LEXTER-O19,
 which leaves every CJK character wrong today and probably cannot wait. Some
 would be wasted work if the dense design follows: the per-function repairs
-of LEXTER-O26 and -O9, the duplicated
+of LEXTER-O26 and LEXTER-O27, the duplicated
 stride of LEXTER-O36, the dirty bits of
 LEXTER-O40, and the grid's half of
 LEXTER-O19. The rest are small either way.
@@ -1184,11 +1183,12 @@ its own, or intern into the table of the pane they belong to.
 A grid per pane keeps swatch indices local, lets a pane's dirty rows be
 uploaded straight from its own array, and gives each pane its palette slot by
 a uniform, at the cost of a draw call per pane and a separate home for chrome.
-One composed grid keeps a single draw call, but its copy must add each
-table's base to every swatch index, and palettes must travel in each cell's
+One composed grid keeps a single draw call, but its copy must add each table's
+base to every swatch index, and palettes must travel in each cell's
 palette-slot bits. *Update:* the steward has chosen one composed grid, with
 screens that store global swatch indices so that the copy needs no
-translation, as LEXTER-DRAFT-cell-model-revision-D12 and -D5 in
+translation, as LEXTER-DRAFT-cell-model-revision-D12 and
+LEXTER-DRAFT-cell-model-revision-D5 in
 [LEXTER-DRAFT-cell-model-revision](Plan.CellModelRevision.md) record.
 
 ### LEXTER-O18 — How does the block cursor learn the cell beneath it?

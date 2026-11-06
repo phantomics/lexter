@@ -317,11 +317,11 @@ was. Under S4, `terminal-reset` gives the reused renderer a fresh grid whose
 counter climbs through the same small numbers as the last one, so the second
 fixture's swatch table is never uploaded and it is drawn with the first
 fixture's colours: the checksum depends on which fixtures ran before it,
-against LEXTER-D47 (C2). Palettes have the same flaw:
-every screen's palette generation starts at 1, so two panes that share a slot, or a pane and a reset terminal,
-can present equal numbers for different palettes (S3). Detecting a change of
-producer in the renderer is the fix that LEXTER-D33 rejected
-for a related problem, which suggests the protocol needs it anyway.
+against LEXTER-D47 (C2). Palettes have the same flaw: every screen's palette
+generation starts at 1, so two panes that share a slot, or a pane and a reset
+terminal, can present equal numbers for different palettes (S3). Detecting a
+change of producer in the renderer is the fix that LEXTER-D33 rejected for a
+related problem, which suggests the protocol needs it anyway.
 
 **Evidence:** Reproduced with the stand-in upload rule. Fixture one on a fresh
 grid with `setup-default-swatches` interns `(0 1 1 0)` as swatch 1 and uploads
@@ -719,18 +719,19 @@ uses the content size, so the disagreement lasts only until the first resize.
 learns the data model before reading the Spec.
 
 **Objection:** They describe an earlier model (C7). README.md gives the
-instance strides as 8 and 12 bytes and the glyph index as 16 bits; they are 12,
-16, and 32. README.md also promises block, underline, and bar cursor styles,
-which are stored but not drawn: the cursor is always reverse video. The cell
-comment in `model.lisp` and the shader comments still say 16 bits; `grid.lisp`'s header
-assigns swatch slots 2 and 3 to cursor and selection, which nothing does;
-`load-pcf` says it returns a `PCF-FONT`; the swatch table's index comment
-describes list keys where the code packs an integer; and the telnet client's
-state comment lists states it does not have.
+instance strides as 8 and 12 bytes and the glyph index as 16 bits; they are
+12, 16, and 32. README.md also promises block, underline, and bar cursor
+styles, which are stored but not drawn: the cursor is always reverse video.
+The cell comment in `model.lisp` and the shader comments still say 16 bits;
+`grid.lisp`'s header assigns swatch slots 2 and 3 to cursor and selection,
+which nothing does; `load-pcf` says it returns a `PCF-FONT`; the swatch
+table's index comment describes list keys where the code packs an integer; and
+the telnet client's state comment lists states it does not have.
 
 **Evidence:** Traced against `README.md@2d4d743`, `src/model.lisp@2d4d743`,
 `src/shaders.lisp@2d4d743`, `src/grid.lisp@2d4d743`,
-`src/pcf.lisp:load-pcf@2d4d743`, and `src/telnet/client.lisp:telnet-client@2d4d743`.
+`src/pcf.lisp:load-pcf@2d4d743`, and
+`src/telnet/client.lisp:telnet-client@2d4d743`.
 
 **Severity:** low
 
@@ -767,13 +768,13 @@ delete the dirty bits and the docstring's claim.
   positions are kept apart everywhere the VT path touches them; the confusions
   in LEXTER-O28 are at the edges.
 - **The palette's placement.** Keeping the palette on the screen and sending
-  it straight to the renderer (LEXTER-D12, -D4) made
+  it straight to the renderer (LEXTER-D12, LEXTER-D15) made
   the alternate-screen and OSC work simple; the faults in
   LEXTER-O23 are in the generation protocol,
   not the placement.
 - **The alternate-screen pointer swap.** Entering and leaving are guarded and
   idempotent, the save slots are separate, and the swap forces a repaint, as
-  LEXTER-D30, -D6, and -D7 intend.
+  LEXTER-D30, LEXTER-D27, and LEXTER-D33 intend.
 - **The PTYB format.** Framing and validation are complete and simple, and the
   recording tap does not alter parsing.
 - **The input redirect.** Interception by method combination needs no data
@@ -786,38 +787,37 @@ delete the dirty bits and the docstring's claim.
 
 1. *Copies without an owner.* The model, the grid, and the GPU hold copies of
    the same swatch and layer data, synchronised by bare integers that carry no
-   identity (LEXTER-O20, -O4, -O5, -O9). Each
+   identity (LEXTER-O20, LEXTER-O22, LEXTER-O23, LEXTER-O27). Each
    copy was added for a good local reason, but no structure owns the swatch
    namespace or the definition of "changed". The second edition should name
    one owner per namespace and one meaning per counter.
 2. *Invariants kept by one writer and broken by the rest.* `write-char-at`
    honours the wide-character and layer rules; the flush, the cursor, the row
    operations, and resize do not
-   (LEXTER-O19, -O8, -O9). The Spec's
+   (LEXTER-O19, LEXTER-O26, LEXTER-O27). The Spec's
    invariants are stated per structure, but the code enforces them per
    function. A per-cell helper that every operation goes through would make
    them hold by construction.
 
 Robustness at the boundary is the third theme. Host input reaches typed slots
 and fixed arrays without validation
-(LEXTER-O21, -O6, -O13), and the external
+(LEXTER-O21, LEXTER-O24, LEXTER-O31), and the external
 protocols were implemented without checking against their texts
-(LEXTER-O25, -O16).
+(LEXTER-O25, LEXTER-O34).
 
 **Seeds worth a Plan or Survey.**
 
 - A Plan to fix the high-severity findings, with a regression fixture for
-  each, in the order of LEXTER-O19 to -O7: a
-  CJK line; a new colour after idle frames; malformed SGR and a tab after a
-  resize; two panes with different colours; two fixtures replayed in either
-  order; 2049 colour pairs; and a recorded TN3270E negotiation. Most can run
-  headlessly, as this critique's probes did.
+  each, in the order of LEXTER-O19 to LEXTER-O25: a CJK line; a new colour
+  after idle frames; malformed SGR and a tab after a resize; two panes with
+  different colours; two fixtures replayed in either order; 2049 colour pairs;
+  and a recorded TN3270E negotiation. Most can run headlessly, as this
+  critique's probes did.
 - A Survey of how other terminals own colour and glyph data across panes and
   the GPU, to inform the second edition's answer to the first theme.
-- The test rig cannot detect LEXTER-O20 or
-  -O5, because both depend on what the renderer recorded before the capture. A
-  check that compares the GPU's swatch table with the grid's would make such
-  faults visible.
+- The test rig cannot detect LEXTER-O20 or LEXTER-O23, because both depend on
+  what the renderer recorded before the capture. A check that compares the
+  GPU's swatch table with the grid's would make such faults visible.
 
 **Observed outside the target.** An OSC sequence ended by BEL rather than
 `ESC \` is accumulated but never dispatched, so palette changes and window

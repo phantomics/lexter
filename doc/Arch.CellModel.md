@@ -141,7 +141,7 @@ The design serves these concerns:
 
 - **Exactness.** Every pixel is a selection of one palette entry or inline
   colour, so the GPU and the CPU renderer draw the same bytes
-  (LEXTER-DRAFT-cell-model-revision-D15, -D16).
+  (LEXTER-DRAFT-cell-model-revision-D15, LEXTER-DRAFT-cell-model-revision-D16).
 - **Uniformity.** One namespace of formats, one rule for how layers and masks
   compose, layers that differ only in their settings, and settings that
   travel with their glyph, so that writers and readers handle no special
@@ -166,7 +166,7 @@ taken from it.
 |---|---|---|
 | [LEXTER-DRAFT-cell-field-format](Survey.CellFieldFormat.md) | A 32-byte record of control words, glyphs, and a tail; inline colours, surfaces, and tile mode; keeping what only the CPU reads beside the grid | The fixed three layers and three masks, a fill for each layer, the layer count and the cursor and line bits in the header, the tail type, payloads growing backwards into absent layers, and the fill rule |
 | [LEXTER-0013](Survey.LayerMechanics.md) | Layers and masks in one dense record, and the mask code | — |
-| [LEXTER-DRAFT-cell-model-revision](Plan.CellModelRevision.md) | Masks with an operation and a selector (LEXTER-DRAFT-cell-model-revision-D7), halves (-D8), the overlay list (-D10), one composed grid (-D12), integer colour stores (-D14), selection without blending (-D15) | The fixed layout of word 1 and the mask targets that LEXTER-DRAFT-cell-model-revision-D7 gives, with the tail type folded into unused masks |
+| [LEXTER-DRAFT-cell-model-revision](Plan.CellModelRevision.md) | Masks with an operation and a selector (LEXTER-DRAFT-cell-model-revision-D7), halves (LEXTER-DRAFT-cell-model-revision-D8), the overlay list (LEXTER-DRAFT-cell-model-revision-D10), one composed grid (LEXTER-DRAFT-cell-model-revision-D12), integer colour stores (LEXTER-DRAFT-cell-model-revision-D14), selection without blending (LEXTER-DRAFT-cell-model-revision-D15) | The fixed layout of word 1 and the mask targets that LEXTER-DRAFT-cell-model-revision-D7 gives, with the tail type folded into unused masks |
 | Clipping masks and masks (*Clipping masks and masks in image editors and vector formats*) | A mask attached by position to what it cuts, as Photoshop clips a layer by the one beneath it and SVG and PDF apply a mask to the object it is given; here the mask follows what it cuts | Masks with alpha: here a mask's pixels are inked or not |
 | VGA and MDA text attributes | A cell as a fixed record that the display reads directly | Underline as an attribute bit, which only the display hardware can draw |
 | kitty | Underline and strikethrough drawn as generated sprites in its sprite map (*kitty decorations*) | — |
@@ -991,13 +991,14 @@ running, up to the 256 slots the record addresses, is open too.
 
 ### LEXTER-O51 — How are tile sets fitted to the cell size, and may masks cut tiles?
 
-LEXTER-D91 answers LEXTER-DRAFT-cell-field-format-O1 with a
-transparency index in each tile cell, and much of -O2 with tiles the size of
-a cell. What remains of -O2 is how a tile set drawn at another size is
-fitted: sliced into cells, scaled by an integer, bordered, or refused. Masks
-that cut tiles are also open: a mask's reach could run one past the glyph
-layers to cut the top tile, or two to cut the bottom tile as well, which
-needs no new field, only a wider clamp and a coverage bit for each tile.
+LEXTER-D91 answers LEXTER-DRAFT-cell-field-format-O1 with a transparency index
+in each tile cell, and much of LEXTER-DRAFT-cell-field-format-O2 with tiles
+the size of a cell. What remains of LEXTER-DRAFT-cell-field-format-O2 is how a
+tile set drawn at another size is fitted: sliced into cells, scaled by an
+integer, bordered, or refused. Masks that cut tiles are also open: a mask's
+reach could run one past the glyph layers to cut the top tile, or two to cut
+the bottom tile as well, which needs no new field, only a wider clamp and a
+coverage bit for each tile.
 
 ### LEXTER-O52 — How does a mask apply to a wide display glyph?
 
@@ -1033,7 +1034,7 @@ calls for.
    transformed copy (LEXTER-D93).
 5. **With the plan's Phase 5.** The CPU renderer follows the same procedure.
 6. **Later.** The inline-colour format; tiles and their texture, after
-   LEXTER-O45 and -O6, and the fitting of tile sets of
+   LEXTER-O45 and LEXTER-O50, and the fitting of tile sets of
    LEXTER-O51; the void and effects, after the survey of
    surfaces; further underline styles, after LEXTER-O48.
 7. **The second edition specified.** Spec.DataStructures2e takes its record

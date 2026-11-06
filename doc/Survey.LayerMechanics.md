@@ -1,5 +1,5 @@
 ---
-id:            LEXTER-DRAFT-layer-mechanics
+id:            LEXTER-0013
 title:         "Layer Mechanics: Survey"
 genre:         Survey
 scope:         component
@@ -42,21 +42,21 @@ cites:
     locator:  "Alacritty issue 5843, github.com/alacritty/alacritty"
     external: true
 open-questions:
-  - LEXTER-DRAFT-layer-mechanics-O1
-  - LEXTER-DRAFT-layer-mechanics-O2
-  - LEXTER-DRAFT-layer-mechanics-O3
-  - LEXTER-DRAFT-layer-mechanics-O4
-  - LEXTER-DRAFT-layer-mechanics-O5
-  - LEXTER-DRAFT-layer-mechanics-O6
-  - LEXTER-DRAFT-layer-mechanics-O7
-  - LEXTER-DRAFT-layer-mechanics-O8
-  - LEXTER-DRAFT-layer-mechanics-O9
-  - LEXTER-DRAFT-layer-mechanics-O10
-  - LEXTER-DRAFT-layer-mechanics-O11
-  - LEXTER-DRAFT-layer-mechanics-O12
-  - LEXTER-DRAFT-layer-mechanics-O13
-  - LEXTER-DRAFT-layer-mechanics-O14
-  - LEXTER-DRAFT-layer-mechanics-O15
+  - LEXTER-O4
+  - LEXTER-O5
+  - LEXTER-O6
+  - LEXTER-O7
+  - LEXTER-O8
+  - LEXTER-O9
+  - LEXTER-O10
+  - LEXTER-O11
+  - LEXTER-O12
+  - LEXTER-O13
+  - LEXTER-O14
+  - LEXTER-O15
+  - LEXTER-O16
+  - LEXTER-O17
+  - LEXTER-O18
 ---
 
 # Layer Mechanics: Survey
@@ -267,7 +267,7 @@ glyph that no screen can show. 24 bits are enough for any atlas: the largest
 texture GL allows, 16384 pixels square, holds about 2.1 million 8×16 glyphs.
 
 The steward leans to the 32-byte record, for its headroom and because one
-record fills one 256-bit AVX2 register (LEXTER-DRAFT-layer-mechanics-O1).
+record fills one 256-bit AVX2 register (LEXTER-O4).
 
 **Layers are for glyphs; attributes are bits.** Underline, strikethrough, and
 overline are rules of pixels the shader can draw from bits, and should not
@@ -280,7 +280,7 @@ and overline (one bit each) and a swatch slot for the underline colour (two
 bits). An earlier draft gave the cursor two bits as well, set by the flush on
 the cursor's cell; the steward has since chosen to draw cursors from an
 overlay list (see Cursors and the Overlay List), which leaves those bits free
-unless the block style keeps them (LEXTER-DRAFT-layer-mechanics-O15). Either
+unless the block style keeps them (LEXTER-O18). Either
 way, the flush stops interning a reversed swatch and writing it into the grid
 on every frame, which is the write behind
 LEXTER-DRAFT-data-structures-1e-critique-O2, a source of the growth in
@@ -473,7 +473,7 @@ Operations that fit:
 - animating masks by rewriting the mask words of many cells from a computed
   sequence;
 - copying a pane's rows into a composed grid, if there is one
-  (LEXTER-DRAFT-layer-mechanics-O14).
+  (LEXTER-O17).
 
 The 32-byte record suits SIMD exactly. One record is one 256-bit AVX2
 register: a kernel loads a cell, merges new fields under a lane mask with a
@@ -594,9 +594,9 @@ The model could store the grid's record too:
   is the seed of LEXTER-DRAFT-data-structures-1e-critique-O9. Copying
   requires a swatch index in a pane's screen to mean the same in the grid,
   which today it does not (LEXTER-DRAFT-data-structures-1e-critique-O4,
-  LEXTER-DRAFT-layer-mechanics-O5). With a grid per pane, the screen's array
+  LEXTER-O8). With a grid per pane, the screen's array
   would itself be uploaded and there would be nothing to copy
-  (LEXTER-DRAFT-layer-mechanics-O14).
+  (LEXTER-O17).
 - **Attributes need a home.** The SGR attributes that are drawn, underline
   and its relatives, become the record's line-attribute bits. Those that
   affect only how colours are chosen, such as bold as bright and reverse
@@ -609,7 +609,7 @@ The model could store the grid's record too:
 - **The cursor leaves the model.** Drawing the cursor would no longer write
   into the model: the overlay list draws it over the grid, or, for the block
   style, the copy sets cursor bits in the grid's record (see Cursors and the
-  Overlay List, LEXTER-DRAFT-layer-mechanics-O15).
+  Overlay List, LEXTER-O18).
 - **The model grows.** A screen of 80×24 records is 61 KB, against about
   20 KB now. That is small, but it is three times larger.
 
@@ -678,14 +678,14 @@ screen and give each table its own range of one GPU swatch store:
   range for both is the same idea for swatches.
 
 There are two ways to draw from the ranges
-(LEXTER-DRAFT-layer-mechanics-O14):
+(LEXTER-O17):
 
 - **A grid per pane.** Each pane's cells are their own array, drawn by one
   instanced draw with the uniforms `u_swatch_base` and `u_palette_slot`.
   Indices stay local, a pane's dirty rows are uploaded from its own array
   with no composed grid to copy into, and each pane draws with its own
   palette slot, so cells need no palette-slot bits
-  (LEXTER-DRAFT-layer-mechanics-O9). It costs a draw call per pane, and
+  (LEXTER-O12). It costs a draw call per pane, and
   chrome needs a grid or overlay of its own. It is separation by surface, in
   the sense of Pipeline Separation.
 - **One composed grid.** Panes are copied into one window-wide grid drawn in
@@ -717,8 +717,8 @@ the indices still used by the screen's cells and scrollback, free the rest,
 and bump the table's version, since eviction breaks the rule that a table
 only grows. A range large enough, with a fallback when it fills such as the
 nearest existing swatch, avoids eviction altogether. How ranges are sized and
-released is LEXTER-DRAFT-layer-mechanics-O12, and where the swatches of
-writers without a screen live is LEXTER-DRAFT-layer-mechanics-O13.
+released is LEXTER-O15, and where the swatches of
+writers without a screen live is LEXTER-O16.
 
 ## Cursors and the Overlay List
 
@@ -795,20 +795,20 @@ design. Its consequences:
   CPU copies layer 0's glyph and settings into the cursor's instance and
   refreshes them when the cell's row changes, or the block style stays in the
   grid pass as cursor bits in the record's header
-  (LEXTER-DRAFT-layer-mechanics-O15).
+  (LEXTER-O18).
 - **The header's cursor bits may be freed.** If every style is drawn as an
   overlay, the two cursor bits of the header in
   [LEXTER-DRAFT-cell-field-format](Survey.CellFieldFormat.md) join the spare
   bits that LEXTER-DRAFT-cell-field-format-O7 counts.
 - **Overlays need colours.** An overlay belongs to a pane or to chrome and
   takes its swatches from that table's range
-  (LEXTER-DRAFT-layer-mechanics-O13).
+  (LEXTER-O16).
 - **Animation still costs frames.** An animated overlay writes no cells and
   uploads no rows, but the CPU still runs a tick, sets a time uniform, issues
   the draws, and presents the frame on every animation frame. The larger
   cost, redrawing the window, is what partial redraw limits. Animating only
   the focused pane, at a modest rate, and fixing time during test captures
-  (LEXTER-DRAFT-layer-mechanics-O8) keep the cost small.
+  (LEXTER-O11) keep the cost small.
 - **Exotic cursors become cheap.** A cursor that scans sideways like a wave
   is the lower one-eighth block "▁" cut by the left blocks "▏" to "▉". With
   one mask that gives a wipe: intersection with a growing left block, then
@@ -930,7 +930,7 @@ The steward's intended order of work follows. The development plan will set
 it out and decide it.
 
 1. **The fixes needed under any design**, the first group of
-   LEXTER-DRAFT-layer-mechanics-O11: the VT handler's part of
+   LEXTER-O14: the VT handler's part of
    LEXTER-DRAFT-data-structures-1e-critique-O1;
    LEXTER-DRAFT-data-structures-1e-critique-O3, -O7, -O11, -O13 to -O17, and
    -O20; and the inverted thumb of
@@ -955,17 +955,17 @@ it out and decide it.
 
 Design questions remain within it: how ranges are sized and released, and
 whether the primary and alternate screens share a table
-(LEXTER-DRAFT-layer-mechanics-O12); where the swatches of writers without a
-screen live (LEXTER-DRAFT-layer-mechanics-O13); a grid per pane or one
-composed grid (LEXTER-DRAFT-layer-mechanics-O14); and how the block cursor
-learns the cell beneath it (LEXTER-DRAFT-layer-mechanics-O15).
+(LEXTER-O15); where the swatches of writers without a
+screen live (LEXTER-O16); a grid per pane or one
+composed grid (LEXTER-O17); and how the block cursor
+learns the cell beneath it (LEXTER-O18).
 
 ## Honest Limits
 
 - **A fixed ceiling.** Three layers and one mask per layer, permanently for
   the standard pipeline; raising it means a new record size.
 - **The thin single-cell band.** A sub-cell band of a thin glyph needs two
-  masks or a generated glyph (LEXTER-DRAFT-layer-mechanics-O3).
+  masks or a generated glyph (LEXTER-O6).
 - **A rewrite.** The model's storage, the grid, `flush-to-display`, the
   renderer, both shaders, and the 3270 pane, which writes to the grid
   directly, would all change.
@@ -1064,20 +1064,20 @@ Outside it:
 
 ## Open Questions
 
-### LEXTER-DRAFT-layer-mechanics-O1 — A 32-byte or a 24-byte record?
+### LEXTER-O4 — A 32-byte or a 24-byte record?
 
 The 32-byte record has spare bits and matches a 256-bit register; the
 24-byte record saves a quarter of the memory and bandwidth but has almost no
 room for growth, and none for the cursor and line-attribute bits. The
 steward leans to 32 bytes. What stays open is whether the spare bits are
-enough, and how the record is aligned (LEXTER-DRAFT-layer-mechanics-O7).
+enough, and how the record is aligned (LEXTER-O10).
 
-### LEXTER-DRAFT-layer-mechanics-O2 — The operation and selector code, or a truth table?
+### LEXTER-O5 — The operation and selector code, or a truth table?
 
 The steward's encoding has a natural "none" and a spare code for effects;
 the truth table makes every code a distinct function.
 
-### LEXTER-DRAFT-layer-mechanics-O3 — One mask per layer, or two?
+### LEXTER-O6 — One mask per layer, or two?
 
 One mask fits the record and covers most of the scroll bar. A thin band
 inside one cell needs a second mask, which would cost 12 more bytes per
@@ -1087,18 +1087,18 @@ layer. The mask-target update of
 [LEXTER-DRAFT-cell-field-format](Survey.CellFieldFormat.md) records it, with
 two encodings, as a possibility rather than a decision.
 
-### LEXTER-DRAFT-layer-mechanics-O4 — Should the model store the grid's record?
+### LEXTER-O7 — Should the model store the grid's record?
 
 Sharing the format makes the flush a copy and scrollback compact, and makes
 the model three times larger. The model's attributes would need a place.
 
-### LEXTER-DRAFT-layer-mechanics-O5 — Who owns the swatch namespace?
+### LEXTER-O8 — Who owns the swatch namespace?
 
 That panes must stop overwriting each other's swatches is settled by both
 critiques (LEXTER-DRAFT-data-structures-1e-critique-O4); the question is the
 owner. A swatch table owned by the compositor and shared by every writer; a
 table per screen with its own range of one store, drawn from a grid per pane
-or from one composed grid (LEXTER-DRAFT-layer-mechanics-O14); or
+or from one composed grid (LEXTER-O17); or
 content-addressed slots, the review's alternative. The steward prefers
 per-screen ranges, for what a window-wide table gives up (see Swatch
 Ownership). The choice also decides how capacity is
@@ -1106,14 +1106,14 @@ enforced (LEXTER-DRAFT-data-structures-1e-critique-O6) and how change records
 carry an identity (LEXTER-DRAFT-data-structures-1e-critique-O5). It is a
 prerequisite of row copying, and of the dense design generally.
 
-### LEXTER-DRAFT-layer-mechanics-O6 — One pipeline, or separate pipelines by surface?
+### LEXTER-O9 — One pipeline, or separate pipelines by surface?
 
 Separate pipelines allow a deep pipeline for graphics without burdening
 text. What a deep record would hold (layer count, colours per cell, palette
 or RGBA) is open, as is whether the compositor's panes are the right unit of
 surface.
 
-### LEXTER-DRAFT-layer-mechanics-O7 — Which route for kernels, and where does the grid live?
+### LEXTER-O10 — Which route for kernels, and where does the grid live?
 
 Custom VOPs, sb-simd, or typed Lisp first; and the Lisp heap, foreign
 memory, or mapped GPU memory for the array. Alignment now weighs on the
@@ -1121,28 +1121,28 @@ second choice: in the Lisp heap, records need an offset of 16 bytes that
 depends on how SBCL places large arrays, and grids under 128 KB move during
 collection; foreign memory and mapped buffers give a fixed, chosen alignment.
 
-### LEXTER-DRAFT-layer-mechanics-O8 — What may an unused mask word carry?
+### LEXTER-O11 — What may an unused mask word carry?
 
 The candidates are offsets, opacity, effects, blink glyphs, and gradients.
 How effects are selected, and how they stay deterministic under test, is
 open.
 
-### LEXTER-DRAFT-layer-mechanics-O9 — Should each cell carry a palette slot?
+### LEXTER-O12 — Should each cell carry a palette slot?
 
 Two bits per cell would let every pane draw with its own palette, rather
 than all of them with the focused pane's. With a grid per pane
-(LEXTER-DRAFT-layer-mechanics-O14), a palette-slot uniform for each pane's
+(LEXTER-O17), a palette-slot uniform for each pane's
 draw does the same, and the bits are needed only if palettes must vary
 within a pane.
 
-### LEXTER-DRAFT-layer-mechanics-O10 — How are generated shapes added to the atlas?
+### LEXTER-O13 — How are generated shapes added to the atlas?
 
 Bands, wipes, and other shapes a font lacks would be added at run time. The
 atlas currently re-uploads the whole texture to add glyphs
 (`src/atlas.lisp:add-cursor-glyphs@2d4d743`), and would need reserved space
 and single-glyph uploads.
 
-### LEXTER-DRAFT-layer-mechanics-O11 — Repair the first edition in place, or move to the second?
+### LEXTER-O14 — Repair the first edition in place, or move to the second?
 
 The critique's findings fall into three groups. Some are needed whichever
 course is taken: the swatch protocol
@@ -1164,7 +1164,7 @@ the first edition in full before the second edition begins, as
 LEXTER-DRAFT-cell-model-revision-D2 in
 [LEXTER-DRAFT-cell-model-revision](Plan.CellModelRevision.md) records.
 
-### LEXTER-DRAFT-layer-mechanics-O12 — How are swatch ranges sized and released?
+### LEXTER-O15 — How are swatch ranges sized and released?
 
 Ranges can be fixed, for example 2048 entries each, which fits 32 tables in
 65,536, or allocated as tables grow, with relocation. Relocating a range
@@ -1173,13 +1173,13 @@ into a composed grid. Open with it: whether the primary and alternate screens
 share one table, when a range is released, and whether a full table evicts
 unused swatches or falls back to the nearest existing one.
 
-### LEXTER-DRAFT-layer-mechanics-O13 — Where do the swatches of writers without a screen live?
+### LEXTER-O16 — Where do the swatches of writers without a screen live?
 
 Chrome drawn by decorators, the overlay list, and the 3270 pane write colours
 without a VT screen's table. They could share a chrome table with a range of
 its own, or intern into the table of the pane they belong to.
 
-### LEXTER-DRAFT-layer-mechanics-O14 — A grid per pane, or one composed grid?
+### LEXTER-O17 — A grid per pane, or one composed grid?
 
 A grid per pane keeps swatch indices local, lets a pane's dirty rows be
 uploaded straight from its own array, and gives each pane its palette slot by
@@ -1191,7 +1191,7 @@ screens that store global swatch indices so that the copy needs no
 translation, as LEXTER-DRAFT-cell-model-revision-D12 and -D5 in
 [LEXTER-DRAFT-cell-model-revision](Plan.CellModelRevision.md) record.
 
-### LEXTER-DRAFT-layer-mechanics-O15 — How does the block cursor learn the cell beneath it?
+### LEXTER-O18 — How does the block cursor learn the cell beneath it?
 
 An overlay drawn after the grid cannot read the cell it negates. The CPU can
 copy layer 0's glyph and settings into the cursor's instance and refresh them

@@ -36,6 +36,7 @@ decisions:
   - LEXTER-D92
   - LEXTER-D93
   - LEXTER-DRAFT-cell-model-D14
+  - LEXTER-DRAFT-cell-model-D15
 open-questions:
   - LEXTER-O45
   - LEXTER-O46
@@ -46,6 +47,7 @@ open-questions:
   - LEXTER-O51
   - LEXTER-O52
   - LEXTER-O53
+  - LEXTER-DRAFT-cell-model-O10
 cites:
   - title:    "X Logical Font Description Conventions"
     locator:  "X Consortium, XLFD version 1.5, the font properties UNDERLINE_POSITION, UNDERLINE_THICKNESS, STRIKEOUT_ASCENT, and STRIKEOUT_DESCENT"
@@ -100,7 +102,7 @@ Table: Terms used in this design, with their definitions.
 | Format | The arrangement of a record's words, selected by the record's first byte |
 | Format word | Word 0: the format in byte 0, the format's structure in byte 1, flags common to every format in byte 2, and the format's parameters in byte 3 |
 | Drawing flags | Bits 16–18 of the format word, at the same place in every format: wide, right half, and blink |
-| Header word | Word 1: the swatch index, the palette slot, and the background slot, read the same way in every format |
+| Header word | Word 1: the swatch index, the palette slot, and the background slot, read the same way in every format, and colour parameters the format defines |
 | Glyph format | A format whose cells hold glyph words: plain, void, inline colours, and tiles |
 | Glyph word | A word holding a 24-bit glyph and a settings byte, as a layer or as a mask |
 | Glyph count, type bits | In a glyph format, the number of glyph words in use and, for glyphs 1–5, whether each is a layer or a mask |
@@ -185,7 +187,7 @@ taken from it.
 
 ### LEXTER-D81 — The format word comes first, with one job for each of its bytes
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:** The cell-field-format survey opens the record with a header and
 a word of layer settings, finds a cell's arrangement from a tail type in the
@@ -213,7 +215,9 @@ where a format has no halves. Bits 19–23 are reserved: flags common to every
 format are allocated from bit 19 upwards, and a format whose parameters
 outgrow byte 3 may claim bits from 23 downwards, so that a reader always
 finds the common flags at the bottom of byte 2. Word 1 is the header word
-(LEXTER-D87), read the same way in every record; no format may redefine it.
+(LEXTER-D87): its swatch index, palette slot, and background slot are read
+the same way in every record, and no format may redefine them; its last six
+bits are colour parameters that the format defines.
 The first eight bytes therefore say what a cell is, its shape, and what
 colours it draws in, and a kernel reads or changes them with one 64-bit
 operation, or one flag with a byte store.
@@ -230,13 +234,15 @@ operation, or one flag with a byte store.
   where a flag at a fixed place serves every format.
 - The wide bits placed by each format. Rejected: the wide-pair helpers would
   first have to ask which format a cell has.
-- Formats that may redefine the header word. Rejected: it is read by the row
-  copies, colour animation, the cell checksum, and both renderers, which
-  should not first ask what format a cell has.
+- Formats that may redefine the header word's swatch, palette slot, or
+  background slot. Rejected: they are read by the row copies, colour
+  animation, the cell checksum, and both renderers, which should not first
+  ask what format a cell has. Only the colour parameters, which the renderers
+  alone read, belong to the format.
 
 ### LEXTER-D82 — One namespace of formats names every cell
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:** Earlier drafts had two mechanisms for special cells: a tail
 type found in the bits of unused masks, and escape cells marked by an absent
@@ -258,8 +264,8 @@ Table: Formats.
 
 A renderer that meets a format it does not know draws the cell as blank, in
 the header's background slot. Only the format word's fixed fields and the
-header word are common to every format, so a renderer cannot read an unknown
-format's glyphs;
+header word's swatch, palette slot, and background slot are common to every
+format, so a renderer cannot read an unknown format's glyphs;
 this ends the cell-field-format survey's fallback, in which a renderer that
 met an unknown tail type still drew the cell's layers. Renderers and writers
 ship together, so an unknown format means a fault, not an older renderer. In
@@ -279,7 +285,7 @@ and the effect's contents are LEXTER-O53.
 
 ### LEXTER-D83 — A glyph format gives its glyph count and type bits in the format word, and they are authoritative
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:** A cell of a glyph format holds some glyph words, each a layer or
 a mask. Their number could be found from glyphs of 0, but a zero glyph is not
@@ -329,7 +335,7 @@ Renderers still clamp it, so that a bad record cannot read past them.
 
 ### LEXTER-D84 — Each glyph word holds a 24-bit glyph and its own settings byte
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:** The cell-field-format survey keeps the settings of all three
 layers and masks in word 1, apart from their glyphs, so moving a layer means
@@ -376,7 +382,7 @@ this, and writers use nothing else. The reserved bits are left for later use
 
 ### LEXTER-D85 — Layers and masks are interleaved, and each mask cuts the layers before it, as far as its reach
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:** A fixed three layers and three masks leaves masks unused in
 most cells and cannot give a layer more than three cuts or a cell a fourth
@@ -438,7 +444,7 @@ control flow (*OpenGL Shading Language 3.30 specification*).
 
 ### LEXTER-D86 — The cell has one background slot, and layers have no fill
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:** The cell-field-format survey gives each layer a fill slot and a
 fill-on bit, later replaced by a rule, so that a layer's uncovered pixels can
@@ -474,9 +480,9 @@ only by being drawn first.
   a swatch with its slots exchanged, which is the interning the critique
   found to grow without bound (LEXTER-O24).
 
-### LEXTER-D87 — The header word holds the swatch, an eight-bit palette slot, and the background slot
+### LEXTER-D87 — The header word holds the swatch, an eight-bit palette slot, the background slot, and the format's colour parameters
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:** The cell-field-format survey's header holds the swatch index, a
 two-bit palette slot, the wide bits, two cursor bits, the layer count, three
@@ -496,12 +502,14 @@ Table: Bits of word 1, the header word.
 | 0–15 | 16 | Swatch index | A global index into the swatch store |
 | 16–23 | 8 | Palette slot | 0–255 |
 | 24–25 | 2 | Background slot | The slot of pixels that no layer covers |
-| 26–31 | 6 | Reserved | Zero |
+| 26–31 | 6 | Colour parameters | Defined by the format, as tiles define their colour cycles (LEXTER-DRAFT-cell-model-D15); zero where the format defines none |
 
-The header word holds all of the cell's colours, so a kernel that recolours
-cells touches one word. The palette slot is a whole byte, so a writer sets it
-with one byte store, and every format, tiles included, reaches every palette
-the same way.
+Bits 0–25 mean the same in every format. Bits 26–31 hold colour behaviour that
+a format defines, as byte 3 of the format word holds its other parameters;
+only the renderers read them. The header word holds all of the cell's colours,
+so a kernel that recolours cells touches one word. The palette slot is a whole
+byte, so a writer sets it with one byte store, and every format, tiles
+included, reaches every palette the same way.
 
 **Alternatives:**
 - A six-bit slot for glyphs, with a two-bit extension for tiles. Not chosen
@@ -510,6 +518,9 @@ the same way.
   terminals need costs nothing.
 - The background slot in the format word, beside the wide bits. Not chosen
   by the steward: it is a colour, and the colours are kept together.
+- Bits 26–31 kept for parameters common to every format. Not chosen by the
+  steward: it is too restrictive, since colour behaviour that one format
+  has, such as cycling a tile's colours, belongs with the colours.
 - Keep the cursor bits for the block style. Rejected: the block cursor is a
   transformed copy of the cell beneath it (LEXTER-D93).
 - Keep the line bits, drawn by the shader as rules. Rejected for the reasons
@@ -517,7 +528,7 @@ the same way.
 
 ### LEXTER-D88 — Lines are glyphs: a mask on the text in the text's colour, or a layer beneath the text in their own
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:** Underline, strikethrough, and overline belong to the text, not to
 a moment, so they belong in the grid. As header bits they cost five bits with
@@ -579,7 +590,7 @@ lies beneath, stays (LEXTER-DRAFT-cell-model-D14).
 
 ### LEXTER-D89 — Generated glyphs have reserved atlas positions and names beyond Unicode
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:** The atlas keys its generated cursor glyphs by the private-use
 codepoints U+E000–E002 (`src/atlas.lisp:add-cursor-glyphs@2d4d743`). Nerd
@@ -626,7 +637,7 @@ its own line glyphs is LEXTER-O46.
 
 ### LEXTER-D90 — A pixel that no layer covers takes the background slot, except in a void
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:** Selection without blending
 (LEXTER-DRAFT-cell-model-revision-D15) needs every pixel to end as one slot
@@ -644,9 +655,9 @@ under Drawing a Pixel, and both renderers follow it.
   then have no background of its own, and the grid's output would depend on
   what was drawn before it.
 
-### LEXTER-D91 — Tiles are a glyph format, with cell-sized tiles of sixteen colours beneath the glyphs
+### LEXTER-D91 — Tiles are a glyph format, with two cell-sized tiles of sixteen colours drawn with the glyphs
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:** The cell-field-format survey sketches tile mode: glyphs whose
 pixels are colour indices 0–15, read through four swatches, for tile-based
@@ -654,7 +665,9 @@ games, boards, and cards. Indexed glyphs cannot share the font's atlas,
 since a one-bit glyph read as indices, or an indexed glyph read as ink,
 draws wrongly. A tile drawn over another needs a value that lets the one
 beneath show, and two tiles in one cell may want different colours from the
-same four swatches. Games want text written over their tiles.
+same four swatches. Games want text written over their tiles, and sometimes a
+piece passing in front of a label. Tile systems mirror their tiles, so that
+one tile serves several orientations.
 
 **Decision:** A tile cell is format 4, a glyph format with up to three glyph
 words, drawn over two tiles.
@@ -663,18 +676,31 @@ Table: The record of a tile cell.
 
 | Word | Contents |
 |---|---|
-| 0 | Format 4; bits 8–10 the glyph count, 0–3; bits 11–12 the type bits of glyphs 1–2; bits 16–18 the drawing flags, for the glyphs; bits 24–27 the transparency index; bits 28–29 the bottom tile's colour offset; bits 30–31 the top tile's colour offset; the rest reserved |
-| 1 | The header word: the swatch for the glyph layers, the palette slot, and the background slot |
+| 0 | Format 4; bits 8–10 the glyph count, 0–3; bits 11–12 the type bits of glyphs 1–2; bits 16–18 the drawing flags, for the glyphs; bit 23 the top tile above the glyphs; bits 24–27 the transparency index; bits 28–29 the bottom tile's colour offset; bits 30–31 the top tile's colour offset; the rest reserved |
+| 1 | The header word: the swatch for the glyph layers, the palette slot, and the background slot; bits 26–27 the top tile's colour cycle and bits 28–29 the bottom tile's (LEXTER-DRAFT-cell-model-D15) |
 | 2–4 | Glyph words, as in any glyph format |
-| 5 | The bottom tile (bits 0–15) and the top tile (bits 16–31), indices into the tile texture |
+| 5 | The bottom tile (bits 0–15) and the top tile (bits 16–31) |
 | 6 | Swatch A, colours 0–3 (bits 0–15); swatch B, colours 4–7 (bits 16–31) |
 | 7 | Swatch C, colours 8–11; swatch D, colours 12–15 |
+
+Table: Each 16-bit tile field in word 5.
+
+| Bits | Field |
+|---|---|
+| 0–13 | The tile's index in the tile texture; 0 is no tile |
+| 14 | Horizontal flip |
+| 15 | Vertical flip |
 
 - **Cell-sized tiles.** A tile is the size of one cell. A larger picture is
   an array of tiles in neighbouring cells, as text is: a 16-by-16 picture is
   two tiles side by side in cells of 8 by 16, or four in cells of 8 by 8. Tile
-  0 is no tile. The wide bits apply only to the glyphs, so any writing, of
-  either width, can be drawn over tiles.
+  0 is no tile, and its flip bits are zero. The wide bits apply only to the
+  glyphs, so any writing, of either width, can be drawn over tiles.
+- **Flips.** Each tile field carries a horizontal and a vertical flip, so
+  that a tile is drawn as itself, as either mirror image, or turned by a half
+  turn: a renderer reads column *w* − 1 − *x*, or row *h* − 1 − *y*. Quarter
+  turns are not offered, since cells are seldom square. A picture several
+  cells wide is mirrored by writing its tiles in reverse order, each flipped.
 - **Sixteen colours, a transparency index, and offsets.** A tile's pixel
   holds a value *v*, 0–15. A value equal to the transparency index is
   transparent. Any other is moved by the tile's colour offset, a number of
@@ -683,8 +709,15 @@ Table: The record of a tile cell.
   transparency index is compared before the offset, so one index serves both
   tiles.
 - **Order.** The bottom tile is drawn first, the top tile over it, and the
-  glyph layers over both, with their masks. A pixel that none of them covers
-  takes the background slot, as in every cell (LEXTER-D90).
+  glyph layers over both, with their masks. When bit 23 of the format word is
+  set, the top tile is drawn over the glyph layers instead, and the bottom
+  tile stays beneath them, so that a piece can pass in front of a label. Bit
+  23 is the top of byte 2, which a format may claim (LEXTER-D81). A pixel
+  that none of them covers takes the background slot, as in every cell
+  (LEXTER-D90).
+- **Colour cycling.** Each tile may cycle its colours on a clock of its own,
+  by fields in the header word's colour parameters
+  (LEXTER-DRAFT-cell-model-D15).
 - **A common arrangement.** Tiles made to lie on top use colours 0–7 with 8
   as the transparency index and an offset of 0, in swatches A and B; tiles
   made to lie beneath use colours 0–7 with an offset of 2, in swatches C and
@@ -695,10 +728,10 @@ Table: The record of a tile cell.
   to the top tile and then the bottom one (LEXTER-O51).
 - **The tile texture.** Tiles are kept in a texture of their own with the
   internal format `R8UI`, one value to a texel, apart from the font's atlas.
-  Sixteen bits address 65,536 tiles. The 1024-by-1024 texture that OpenGL 3.3
+  Fourteen bits address 16,384 tiles, which the flips make serve up to four
+  times as many orientations. The 1024-by-1024 texture that OpenGL 3.3
   guarantees holds 8192 tiles in cells of 8 by 16, or 16,384 in cells of 8
-  by 8; on hardware with larger textures the index, not the texture, is the
-  limit.
+  by 8.
 - **Palettes.** A tile set that wants palettes of its own is allocated slots
   as a terminal is (LEXTER-D92).
 
@@ -710,6 +743,9 @@ Table: The record of a tile cell.
 - Tiles twice a cell wide, addressed with the wide bits. Rejected: a picture
   larger than two cells would need a position within it, and the wide bits
   could not then serve the glyphs drawn over the tiles.
+- Sixteen-bit tile indices without flips. Not chosen by the steward: flips
+  are a property of nearly every tile system, cutting the tiles a set needs,
+  and fourteen bits still address what the guaranteed texture holds.
 - Tile parameters across bits 18–25, as an earlier draft placed them. Not
   chosen: byte 3 holds them exactly, and byte 2 is left to the drawing flags
   common to every format (LEXTER-D81).
@@ -729,7 +765,7 @@ Table: The record of a tile cell.
 
 ### LEXTER-D92 — One allocator hands out palette slots 1–255, in a store whose size the configuration sets
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:** The first edition has four palette slots, set by hand through a
 pane's `palette-slot` (`src/panes/vt-pane.lisp:vt-pane@2d4d743`), and the
@@ -777,7 +813,7 @@ What happens when the slots run out is LEXTER-O50.
 
 ### LEXTER-D93 — An overlay instance carries a full record, and the block cursor is a transformed copy of the cell beneath it
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:** LEXTER-DRAFT-cell-model-revision-D10 gives each overlay instance
 a glyph, up to two masks, a colour, and a position, and
@@ -834,7 +870,7 @@ LEXTER-DRAFT-cell-model-revision-O5.
 
 ### LEXTER-DRAFT-cell-model-D14 — A blink flag hides the topmost layer while the blink phase is off
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:** The first edition stores a blink attribute (SGR 5) and draws
 nothing for it (`src/model.lisp:+attr-blink+@2d4d743`). Blink is not
@@ -884,6 +920,59 @@ in every format (LEXTER-D81).
   cells can serve.
 - Blink as an overlay. Rejected: overlays are for what moves or lasts a
   moment, and blink lasts as long as the text.
+
+### LEXTER-DRAFT-cell-model-D15 — A tile's colours cycle on a clock of their own, set by the header word's colour parameters
+
+**Status:** Accepted
+
+**Context:** Colour cycling animates water, fire, and conveyors by rotating
+colours rather than redrawing pixels, as Deluxe Paint and arcade boards did.
+Rewriting cells or swatches at each step would make a kernel pass over the
+model, and uploads, many times a second; the blink phase shows that a clock
+given to the renderers needs neither (LEXTER-DRAFT-cell-model-D14). Cycling
+runs faster than blink, at several steps a second, and a cell's two tiles
+may want to cycle at different rates.
+
+**Decision:** In a tile cell, bits 26–27 of the header word are the top
+tile's cycle and bits 28–29 the bottom tile's; bits 30–31 are reserved. A
+cycle field *f* gives a cycle of *N* = 2^*f* steps: 0 is no cycling, 1 two
+steps, 2 four, and 3 eight.
+
+- **The rule.** A tile's pixel value *v* is first tested against the
+  transparency index; a transparent pixel stays transparent whatever the
+  cycle. A visible value below *N* becomes (*v* + step) mod *N*; values of
+  *N* and above stay as they are. The tile's colour offset is applied after
+  the cycle, so the cycle runs over the first *N* colours of the tile's own
+  swatches: an eight-step cycle over A and B for a tile with offset 0, or
+  over C and D for one with offset 2.
+- **Two clocks.** The top tiles cycle on an upper clock and the bottom tiles
+  on a lower clock. Each is a counter that the renderer advances at a rate
+  the configuration sets, and gives both renderers, as it gives the blink
+  phase; a cell's step is the counter, so cycles of two, four, and eight
+  steps stay in step with one another. The test rig fixes both clocks, so a
+  cycling cell has one checksum.
+- **Forward only.** A cycle that should run backwards is drawn by reversing
+  its colours in the swatches, which is done once, not at every step.
+- **Nothing is rewritten.** The record does not change as its colours cycle,
+  and partial redraw finds the rows to redraw at each step from the records,
+  as it does for blink.
+- **Glyph formats** do not cycle yet: their cells have only four slots, so
+  their cycles need a form of their own (LEXTER-DRAFT-cell-model-O10).
+
+**Alternatives:**
+- A kernel that rotates swatch contents or cell values at each step.
+  Rejected: it passes over the model and uploads many times a second, where a
+  clock changes nothing in the record.
+- Animating reserved swatches. Not chosen for tiles: it needs swatches that
+  interning never hands out (LEXTER-DRAFT-cell-field-format-O6), and changes
+  every cell that shares them.
+- One clock, shared with blink. Rejected: cycling runs several times faster
+  than blink, and the steward wants the two tiles' cycles separable.
+- The cycle fields in byte 2 of the format word. Not chosen by the steward:
+  cycling is colour behaviour, which belongs in the header word
+  (LEXTER-D87).
+- A direction bit. Not chosen by the steward: reversing is rare, and a swatch
+  change serves it.
 
 ## The Record
 
@@ -940,12 +1029,17 @@ for i in 0 .. n-1:
         cov = (cov & ~R) | (op(i, cov, m) & R)
 if (word(0) >> 18) & 1 and blink_off and k > 0: // the topmost layer blinks
     cov &= ~(1 << (k - 1))
-if cov == 0 and f == TILES:                      // no glyph covers: the tiles
-    index = tile_index(word(5) >> 16, (word(0) >> 30) & 3)       // top
-    if index is none:
-        index = tile_index(word(5) & 0xFFFF, (word(0) >> 28) & 3) // bottom
-    if index is not none:
-        colour = palette[palette_slot * 256 + index]; done
+if f == TILES:
+    top    = tile_index(word(5) >> 16, (word(0) >> 30) & 3,
+                        (word(1) >> 26) & 3, upper_step)
+    bottom = tile_index(word(5) & 0xFFFF, (word(0) >> 28) & 3,
+                        (word(1) >> 28) & 3, lower_step)
+    if (word(0) >> 23) & 1 and top is not none:  // the top tile over glyphs
+        colour = palette[palette_slot * 256 + top]; done
+    if cov == 0:                                 // no glyph covers
+        index = (top is not none) ? top : bottom
+        if index is not none:
+            colour = palette[palette_slot * 256 + index]; done
 slot = (f == VOID or not draws_background) ? NOTHING : bg
 l = 0
 for i in 0 .. n-1:                               // the topmost layer wins
@@ -957,10 +1051,15 @@ colour:
 colour = (f == INLINE) ? payload_colour(slot)
        : palette[palette_slot * 256 + swatch[swatch_index][slot]]
 
-tile_index(t, offset):                           // a palette index, or none
+tile_index(field, offset, cycle, step):         // a palette index, or none
+    t = field & 0x3FFF
     if t == 0: return none                       // no tile
-    v = tile_pixel(t)                            // 0-15
+    tx = (field >> 14) & 1 ? w - 1 - x : x       // horizontal flip
+    ty = (field >> 15) & 1 ? h - 1 - y : y       // vertical flip
+    v = tile_pixel(t, tx, ty)                    // 0-15
     if v == (word(0) >> 24) & 15: return none    // the transparency index
+    N = 1 << cycle
+    if v < N: v = (v + step) mod N               // the colour cycle
     c  = (v + 4 * offset) mod 16
     s  = c div 4                                 // swatch A, B, C, or D
     sw = (word(6 + s div 2) >> (16 * (s mod 2))) & 0xFFFF
@@ -977,17 +1076,21 @@ covers the pixel, and combines that, by its operation, with the bits of the
 layers it reaches: the most recent layer and as many before it as its reach
 gives. If the cell blinks and the blink phase is off, the topmost layer's bit
 is then cleared, so that the layers beneath, or the background, show. In a
-tile cell, a pixel that no glyph layer covers is then given to
-the top tile, or, where the top tile is absent or transparent, to the bottom
-tile: the tile's value, unless it is the transparency index, is moved by the
-tile's colour offset and selects a slot of one of swatches A–D. Otherwise a
+tile cell, each tile's value is read at the pixel, mirrored as its flips
+say; unless it is the transparency index, it is cycled on its tile's clock,
+moved by the tile's colour offset, and selects a slot of one of swatches
+A–D. A top tile raised above the glyphs takes the pixel first; otherwise a
+pixel that no glyph layer covers is given to the top tile, or, where it is
+absent or transparent, to the bottom tile. Otherwise a
 second loop visits the layers in order and takes the ink slot of the topmost
 layer whose bit is set. A pixel that nothing covers keeps the background
 slot, or, in a void or an overlay instance that does not draw its
 background, is discarded. The slot is then looked up in the inline colours
 or in the swatch and the palette. In the grid, `draws_background` is always
-true; `blink_off` is the blink phase, which both renderers are given
-(LEXTER-DRAFT-cell-model-D14).
+true; `blink_off` is the blink phase, and `upper_step` and `lower_step` the
+two cycle clocks, which both renderers are given
+(LEXTER-DRAFT-cell-model-D14, LEXTER-DRAFT-cell-model-D15); *w* and *h* are
+the cell's size, and *x* and *y* the pixel's place in it.
 
 Table: Mask operations, applied to the bits the mask reaches.
 
@@ -1040,11 +1143,15 @@ Table: Where each cursor and pointer effect is drawn.
 
 ### LEXTER-O45 — How is the block cursor drawn over a tile cell?
 
-Exchanging the background slot with the first layer's ink slot inverts a tile
-cell's glyphs and its background, but not its tiles, whose colours come from
-swatches A–D. The cursor could be the outlined block glyph over such a cell,
-or the tile format could define how its copy is transformed, such as by
-exchanging swatches or offsets.
+Exchanging the background slot with the topmost layer's ink slot inverts a
+tile cell's glyphs and its background, but not its tiles, whose colours come
+from swatches A–D. The cursor could be the outlined block glyph over such a
+cell, or the tile format could define how its copy is transformed, such as by
+exchanging swatches or offsets, or by a bit that inverts each tile's colours.
+The steward notes that inverted colours suit abstract designs, such as
+gradients, and spoil naturalistic ones, such as grass and flowers, whose
+palettes are not meant to be rearranged; so the choice may belong to the tile
+set rather than to the format.
 
 ### LEXTER-O46 — May a font supply its own line glyphs?
 
@@ -1071,10 +1178,11 @@ reading lines back passes it over (LEXTER-D88).
 
 ### LEXTER-O49 — What do the reserved bits hold?
 
-The header word has six reserved bits; the format word thirteen in the
-plain, void, and inline-colour formats, five common flags in byte 2 and all
-of byte 3, and five in tiles; a layer's settings byte five; and a mask's
-two. The candidates are
+The header word's colour parameters are six bits that the plain, void, and
+inline-colour formats leave reserved, of which tiles use four for their
+cycles; the format word has thirteen reserved bits in those three formats,
+five common flags in byte 2 and all of byte 3, and four in tiles, bits 19–22;
+a layer's settings byte has five; and a mask's two. The candidates are
 effects for each layer, which need no payload and so could stand beside
 masks. The bits stay reserved until a use is chosen; state that only the CPU
 reads, such as the protected-cell bit of DECSCA
@@ -1113,6 +1221,15 @@ need fewer than three words, which would leave the void more glyph words.
 The effect's contents are LEXTER-O11. Both are left to
 the survey of surfaces and effects that LEXTER-DRAFT-cell-model-revision-D12
 calls for.
+
+### LEXTER-DRAFT-cell-model-O10 — How would a glyph cell cycle its colours?
+
+Tiles cycle up to eight colours (LEXTER-DRAFT-cell-model-D15), but a glyph
+cell has only the four slots of its swatch, so its cycles need a form of their
+own: the topmost layer's ink slot and the background slot could each step
+through two or four slots on the two clocks, giving pulsing or rainbow text
+without rewriting the cells. Whether glyph formats cycle, and how their
+colour parameters lay this out, is open.
 
 ## Roadmap
 
@@ -1252,3 +1369,16 @@ cell.
 | 6 | Swatches A and B, the piece's eight colours |
 | 7 | Swatches C and D, the square's eight colours, reached through the offset of 2 |
 | Result | The square, the piece over it, and the letter over both |
+
+Table: Shore water, mirrored, with its waves cycling beneath a boat that
+passes in front of a label.
+
+| Word | Value |
+|---|---|
+| 0 | Tiles, glyph count 1; top tile above the glyphs; transparency index 8; bottom offset 2, top offset 0 |
+| 1 | Swatch *s* for the label, the tile set's palette slot, background slot 0; top cycle 0, bottom cycle 2 (four steps) |
+| 2 | The atlas position of the label's letter; ink slot 1 |
+| 5 | The shore's water tile with its horizontal flip set, so that the same tile serves the opposite shore (bits 0–15); the boat's tile (bits 16–31) |
+| 6 | Swatches A and B, the boat's colours |
+| 7 | Swatch C, four shades of water that rotate on the lower clock; swatch D, the shore's fixed colours |
+| Result | The water's colours rotating through swatch C at each step of the lower clock, the shore steady, the label over the water, and the boat in front of the label |

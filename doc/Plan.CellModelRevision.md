@@ -988,7 +988,8 @@ Table: The later additions and what each waits for.
 |---|---|
 | Inline colours (LEXTER-D82) | Nothing beyond Phase 5; the handler then writes inline-colour cells for truecolour SGR (38;2 and 48;2) instead of mapping them to the 256-colour palette |
 | Strikethrough, overline, and coloured underlines (LEXTER-D88) | Nothing beyond Phase 5; the handler gains SGR 9 and 29, 53 and 55, and 58 and 59, and the model the attributes that hold them. A coloured underline is a layer beneath the text, as CSS paints underlines |
-| Tiles and their texture (LEXTER-D91) | The cursor over a tile cell (LEXTER-O45), palette slots running out (LEXTER-O50), and the fitting of tile sets (LEXTER-O51) |
+| Tiles and their texture, with flips, a top tile that may pass in front of the glyphs, and colour cycling on two clocks (LEXTER-D91, LEXTER-DRAFT-cell-model-D15) | The cursor over a tile cell (LEXTER-O45), palette slots running out (LEXTER-O50), and the fitting of tile sets (LEXTER-O51) |
+| Colour cycling in glyph cells | How a cell of four slots cycles its colours (LEXTER-DRAFT-cell-model-O10) |
 | The void and effects (LEXTER-D82) | The survey of surfaces and effects, and what they carry (LEXTER-O53) |
 | Further underline styles (LEXTER-D89) | How their patterns meet from cell to cell (LEXTER-O48), and whether SGR 21, which the handler now reads as resetting bold, is the double underline that xterm and ECMA-48 make it |
 
@@ -1001,13 +1002,17 @@ offscreen target kept on, which overturns LEXTER-D39 and leaves one
 full-window blit per presented frame, or the buffer-age extensions cited
 above (LEXTER-DRAFT-cell-model-revision-O9).
 
-Blinking cells change on screen at each change of the blink phase without
-any row becoming dirty, so partial redraw keeps a mask of the rows that hold
-a blinking cell and redraws them at each change of phase. The mask is not
-maintained by writers: the renderer recomputes a row's bit whenever it
-uploads the row, from the blink flags of its records, so it cannot drift
-from the grid. The rows under the cursor, which shares the clock, are marked
-as moving or animating an instance marks them.
+Some cells change on screen with a clock, without any row becoming dirty:
+blinking cells at each change of the blink phase
+(LEXTER-DRAFT-cell-model-D14), and tile cells whose colours cycle at each
+step of the upper or lower cycle clock (LEXTER-DRAFT-cell-model-D15). So
+partial redraw keeps a mask of three bits for each row, one for each clock,
+set when the row holds a cell that the clock changes, and redraws the rows
+whose bit is set when that clock moves. The mask is not maintained by
+writers: the renderer recomputes a row's bits whenever it uploads the row,
+from the blink flags and cycle fields of its records, so it cannot drift from
+the grid. The rows under the cursor, which shares the blink clock, are
+marked as moving or animating an instance marks them.
 
 Phase 7, conditional, evicts unused swatches within a range, if
 LEXTER-DRAFT-cell-model-revision-O3 chooses eviction over a large range and a

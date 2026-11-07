@@ -1160,8 +1160,8 @@ The question is whether to repair the second group in place, as a stopgap,
 or to leave it for the second edition. The steward's intended order of work
 is under A Development Sequence. *Update:* the steward has chosen to repair
 the first edition in full before the second edition begins, as
-LEXTER-DRAFT-cell-model-revision-D2 in
-[LEXTER-DRAFT-cell-model-revision](Plan.CellModelRevision.md) records.
+LEXTER-D97 in
+[LEXTER-0017](Plan.CellModelRevision.md) records.
 
 ### LEXTER-O15 — How are swatch ranges sized and released?
 
@@ -1187,9 +1187,9 @@ One composed grid keeps a single draw call, but its copy must add each table's
 base to every swatch index, and palettes must travel in each cell's
 palette-slot bits. *Update:* the steward has chosen one composed grid, with
 screens that store global swatch indices so that the copy needs no
-translation, as LEXTER-DRAFT-cell-model-revision-D12 and
-LEXTER-DRAFT-cell-model-revision-D5 in
-[LEXTER-DRAFT-cell-model-revision](Plan.CellModelRevision.md) record.
+translation, as LEXTER-D107 and
+LEXTER-D100 in
+[LEXTER-0017](Plan.CellModelRevision.md) record.
 
 ### LEXTER-O18 — How does the block cursor learn the cell beneath it?
 

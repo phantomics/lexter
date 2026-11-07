@@ -16,7 +16,7 @@ provenance:
 relates-to:
   - LEXTER-0014
   - LEXTER-DRAFT-data-structures-1e
-  - LEXTER-DRAFT-cell-model-revision
+  - LEXTER-0017
   - LEXTER-DRAFT-pane-profiles
   - LEXTER-0013
   - LEXTER-0005
@@ -69,7 +69,7 @@ telnet protocols, the PTY paths, and the package boundaries. It also takes up
 the structural findings of the review cited above: the two parallel terminal
 stacks, global state in place of instance state, mode state kept in two
 places, and reliance on babel's internals. It is the companion of
-[LEXTER-DRAFT-cell-model-revision](Plan.CellModelRevision.md), which repairs
+[LEXTER-0017](Plan.CellModelRevision.md), which repairs
 and then replaces the cells, and it answers the findings of
 [LEXTER-0014](Eval.Critique.DataStructures1e.md)
 that the cell plan leaves to it. It is the first of a series of plans for
@@ -129,7 +129,7 @@ encoded through babel's internal functions.
 **Context:** The development sequence of
 [LEXTER-0013](Survey.LayerMechanics.md) begins with fixes
 needed under any design. The cell plan's
-LEXTER-DRAFT-cell-model-revision-D1 keeps to the cell model and leaves the
+LEXTER-D96 keeps to the cell model and leaves the
 other fixes to a separate plan. One finding in
 that set, the scrollback viewport and the inverted scroll-bar thumb
 (LEXTER-O30), is already planned in
@@ -248,7 +248,7 @@ OSC 4 changes made before it existed are lost inside it
 of the handler, and every reader, the Origin integration included, asks the
 handler for the active screen. The alternate screen is created with a copy of
 the primary's palette. Whether the two screens also share a swatch table is
-the cell plan's LEXTER-DRAFT-cell-model-revision-O3.
+the cell plan's LEXTER-O58.
 
 **Alternatives:**
 - Keep the slot and update it on every swap. Rejected: it is a second copy
@@ -452,7 +452,7 @@ into the pane's write buffer. It needs no allocation and no library.
 **Status:** Accepted
 
 **Context:** The critique reproduced its findings in SBCL with no display,
-and the cell plan's LEXTER-DRAFT-cell-model-revision-D11 makes the same rule
+and the cell plan's LEXTER-D106 makes the same rule
 for its own.
 
 **Decision:** Each finding in scope gets a test that reproduces it before it
@@ -588,4 +588,4 @@ Table: Prior systems and what this plan draws from each.
 
 How these steps interleave with the cell plan's phases and the pane-profiles
 plan is set out in the ordering table at the end of the cell plan's Roadmap
-([LEXTER-DRAFT-cell-model-revision](Plan.CellModelRevision.md)).
+([LEXTER-0017](Plan.CellModelRevision.md)).

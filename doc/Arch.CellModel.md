@@ -14,7 +14,7 @@ provenance:
   assistant:   opencode
   session:     "Cell model revision plan (2026-11-02), the dense cell model"
 relates-to:
-  - LEXTER-DRAFT-cell-model-revision
+  - LEXTER-0017
   - LEXTER-DRAFT-cell-field-format
   - LEXTER-0013
   - LEXTER-DRAFT-data-structures-1e
@@ -80,7 +80,7 @@ This document specifies the dense cell model of Lexter's second edition: the
 bits means, how a renderer turns it into pixels, and the overlay instance
 built from it. It refines the layout that
 [LEXTER-DRAFT-cell-field-format](Survey.CellFieldFormat.md) proposed, as
-[LEXTER-DRAFT-cell-model-revision](Plan.CellModelRevision.md) left it to be
+[LEXTER-0017](Plan.CellModelRevision.md) left it to be
 refined. A record begins with a format word, which says how its other words
 are arranged, whether the cell is half of a double-width glyph, and whether
 its text blinks, and a header word, which holds the cell's colours and which
@@ -142,7 +142,7 @@ shader understands.
 **The cell model draws; it does not remember.** It models the cells the GPU
 and the CPU renderer draw, and holds only what they read. The characters a
 cell shows, which selection, copying, search, and screen readers need, are
-kept in a text grid of their own (LEXTER-DRAFT-cell-model-revision-O8), and
+kept in a text grid of their own (LEXTER-O63), and
 hyperlink ids, protected cells, semantic zones, and the terminal's modes are
 likewise state that Lexter keeps apart from the cell model. Writers keep the
 two in step; this document specifies only the side that is drawn.
@@ -151,7 +151,7 @@ The design serves these concerns:
 
 - **Exactness.** Every pixel is a selection of one palette entry or inline
   colour, so the GPU and the CPU renderer draw the same bytes
-  (LEXTER-DRAFT-cell-model-revision-D15, LEXTER-DRAFT-cell-model-revision-D16).
+  (LEXTER-D110, LEXTER-D111).
 - **Uniformity.** One namespace of formats, one rule for how layers and masks
   compose, layers that differ only in their settings, and settings that
   travel with their glyph, so that writers and readers handle no special
@@ -160,7 +160,7 @@ The design serves these concerns:
   fixed places, so a reader learns a cell's shape and colours from its first
   eight bytes.
 - **Normalisation.** The cell checksum
-  (LEXTER-DRAFT-cell-model-revision-D13) takes unused and reserved fields as
+  (LEXTER-D108) takes unused and reserved fields as
   zero; here they are zero by rule, and each picture has one encoding.
 - **Capacity for later formats.** The format byte has room for tiles,
   surfaces, effects, and formats not yet imagined, without a new record.
@@ -176,7 +176,7 @@ taken from it.
 |---|---|---|
 | [LEXTER-DRAFT-cell-field-format](Survey.CellFieldFormat.md) | A 32-byte record of control words, glyphs, and a tail; inline colours, surfaces, and tile mode; keeping what only the CPU reads beside the grid | The fixed three layers and three masks, a fill for each layer, the layer count and the cursor and line bits in the header, the tail type, payloads growing backwards into absent layers, and the fill rule |
 | [LEXTER-0013](Survey.LayerMechanics.md) | Layers and masks in one dense record, and the mask code | — |
-| [LEXTER-DRAFT-cell-model-revision](Plan.CellModelRevision.md) | Masks with an operation and a selector (LEXTER-DRAFT-cell-model-revision-D7), halves (LEXTER-DRAFT-cell-model-revision-D8), the overlay list (LEXTER-DRAFT-cell-model-revision-D10), one composed grid (LEXTER-DRAFT-cell-model-revision-D12), integer colour stores (LEXTER-DRAFT-cell-model-revision-D14), selection without blending (LEXTER-DRAFT-cell-model-revision-D15) | The fixed layout of word 1 and the mask targets that LEXTER-DRAFT-cell-model-revision-D7 gives, with the tail type folded into unused masks |
+| [LEXTER-0017](Plan.CellModelRevision.md) | Masks with an operation and a selector (LEXTER-D102), halves (LEXTER-D103), the overlay list (LEXTER-D105), one composed grid (LEXTER-D107), integer colour stores (LEXTER-D109), selection without blending (LEXTER-D110) | The fixed layout of word 1 and the mask targets that LEXTER-D102 gives, with the tail type folded into unused masks |
 | Clipping masks and masks (*Clipping masks and masks in image editors and vector formats*) | A mask attached by position to what it cuts, as Photoshop clips a layer by the one beneath it and SVG and PDF apply a mask to the object it is given; here the mask follows what it cuts | Masks with alpha: here a mask's pixels are inked or not |
 | CSS text decoration (*CSS Text Decoration Module*) | Underlines and overlines painted beneath the text, line-through over it, which places a coloured underline beneath the text | The deprecated `blink` value, which blinks the text with its decorations; here a coloured underline beneath the text stays |
 | VGA and MDA text attributes | A cell as a fixed record that the display reads directly | Underline as an attribute bit, which only the display hardware can draw |
@@ -279,7 +279,7 @@ and the effect's contents are LEXTER-O53.
 - Escape cells beside tail types. Rejected: two kinds of special cell, found
   by two tests, where one byte serves.
 - The tail type in the bits of unused masks, as
-  LEXTER-DRAFT-cell-model-revision-D7 has it. Rejected: finding it depends on
+  LEXTER-D102 has it. Rejected: finding it depends on
   four fields, and it limits formats to eight.
 - The word "kind", or "template", for the format. Not chosen by the steward:
   "kind" is too general to be clear, and "template" suggests a generic form
@@ -321,7 +321,7 @@ A record of zeros is a plain cell with no glyphs and a background slot of 0:
 every pixel takes slot 0 of global swatch 0 in palette slot 0
 (LEXTER-D90). Global swatch 0 and palette slot 0 must
 always hold valid default colours; which table owns swatch 0 is
-LEXTER-DRAFT-cell-model-revision-O4.
+LEXTER-O59.
 
 Writers never produce a glyph count beyond the format's glyph words.
 Renderers still clamp it, so that a bad record cannot read past them.
@@ -369,13 +369,13 @@ Table: The settings byte of a mask.
 | 30–31 | 2 | Reserved | Zero |
 
 Writing only a glyph, or only a setting, masks the rest of the word; the
-accessors generated from LEXTER-DRAFT-cell-model-revision-D9's descriptor do
+accessors generated from LEXTER-D104's descriptor do
 this, and writers use nothing else. The reserved bits are left for later use
 (LEXTER-O49).
 
 **Alternatives:**
 - Settings in word 1, as the survey and
-  LEXTER-DRAFT-cell-model-revision-D7 have them. Rejected: a layer would be
+  LEXTER-D102 have them. Rejected: a layer would be
   split across two words, and the word is better spent on the cell as a
   whole.
 - A flag in each byte saying layer or mask. Rejected by the steward: the type
@@ -437,7 +437,7 @@ control flow (*OpenGL Shading Language 3.30 specification*).
 - A single bit in each mask that cuts every layer before it. Not chosen: the
   reach covers it, by its largest value, and also cuts the top layers while
   sparing those beneath, such as a highlight under the text.
-- Three layers and three masks, as LEXTER-DRAFT-cell-model-revision-D7 has
+- Three layers and three masks, as LEXTER-D102 has
   them. Rejected: it reads every slot in every cell and fixes how glyph words
   are shared between layers and masks.
 - Mask *k* bound to layer *k*, for uniform loops. Rejected: neighbouring
@@ -489,7 +489,7 @@ only by being drawn first.
 **Context:** The cell-field-format survey's header holds the swatch index, a
 two-bit palette slot, the wide bits, two cursor bits, the layer count, three
 line bits, and a two-bit line colour slot. The cursor is drawn by the overlay
-list (LEXTER-DRAFT-cell-model-revision-D10), the wide bits move to the
+list (LEXTER-D105), the wide bits move to the
 format word (LEXTER-D81), the glyph count replaces the layer
 count (LEXTER-D83), lines become glyphs
 (LEXTER-D88), and the background moves from the layers to
@@ -642,7 +642,7 @@ its own line glyphs is LEXTER-O46.
 **Status:** Accepted
 
 **Context:** Selection without blending
-(LEXTER-DRAFT-cell-model-revision-D15) needs every pixel to end as one slot
+(LEXTER-D110) needs every pixel to end as one slot
 or as nothing. A cell may have no layer that covers a given pixel, or no
 glyphs at all.
 
@@ -790,7 +790,7 @@ pane's `palette-slot` (`src/panes/vt-pane.lisp:vt-pane@2d4d743`), and the
 renderer compares palette generations by slot, whoever produced them
 (`src/renderer.lisp:render-state@2d4d743`): the pattern the critique found
 for swatches (LEXTER-O23). The integer
-palette store (LEXTER-DRAFT-cell-model-revision-D14) can hold far more. A
+palette store (LEXTER-D109) can hold far more. A
 terminal applies palette changes to its primary and alternate screens alike
 (`src/vt-handler.lisp:%handler-screens@2d4d743`).
 
@@ -807,7 +807,7 @@ terminal applies palette changes to its primary and alternate screens alike
 - **Allocation.** One allocator hands out slots 1 upwards, to the end of the
   store, to terminals and to tile sets alike. A terminal is given one when it
   is created and gives it back when it goes away, alongside its swatch range
-  (LEXTER-DRAFT-cell-model-revision-D4); its primary and alternate screens
+  (LEXTER-D99); its primary and alternate screens
   share it. A tile set is given as many as it loads palettes.
 - **Uploads by owner.** The renderer records, for each slot, the owner it
   uploaded and that palette's version, and uploads a slot again when either
@@ -833,9 +833,9 @@ What happens when the slots run out is LEXTER-O50.
 
 **Status:** Accepted
 
-**Context:** LEXTER-DRAFT-cell-model-revision-D10 gives each overlay instance
+**Context:** LEXTER-D105 gives each overlay instance
 a glyph, up to two masks, a colour, and a position, and
-LEXTER-DRAFT-cell-model-revision-O5 asks how the block cursor learns the cell
+LEXTER-O60 asks how the block cursor learns the cell
 beneath it. A block cursor that reproduces the cell exactly must draw its
 layers, its masks, and its half of a wide glyph, and its background as well
 as its glyphs. Other overlays, such as an underline cursor, must leave the
@@ -874,7 +874,7 @@ Table: The overlay instance, by word.
 
 The cursor needs no mode of its own in the shader: inversion is a change to
 the copied record. The steward chose the full copy, which answers
-LEXTER-DRAFT-cell-model-revision-O5.
+LEXTER-O60.
 
 **Alternatives:**
 - An inverted flag, with the pass exchanging slots as it draws. Rejected: it
@@ -884,7 +884,7 @@ LEXTER-DRAFT-cell-model-revision-O5.
   drop the cell's other layers, its masks, and its lines.
 - Keep cursor bits in the header for the block style. Rejected: it writes an
   ephemeral state into the static grid, which
-  LEXTER-DRAFT-cell-model-revision-D10 keeps apart.
+  LEXTER-D105 keeps apart.
 
 ### LEXTER-D94 — A blink flag hides the topmost layer while the blink phase is off
 
@@ -1159,7 +1159,7 @@ Table: Mask operations, applied to the bits the mask reaches.
 The right half of a double-width glyph samples the second of the glyph's two
 atlas columns; tiles are cell-sized and have no halves. The colour is written
 as bytes, divided by 255 on the GPU, without blending
-(LEXTER-DRAFT-cell-model-revision-D15).
+(LEXTER-D110).
 
 ## Palettes and Swatches
 
@@ -1174,7 +1174,7 @@ as bytes, divided by 255 on the GPU, without blending
   0–255.
 - **What the checksum hashes.** The cell checksum hashes the contents of
   every palette slot that a cell selects
-  (LEXTER-DRAFT-cell-model-revision-D13).
+  (LEXTER-D108).
 
 ## Lines and Cursors
 
@@ -1265,7 +1265,7 @@ and is now LEXTER-O55.
 
 ### LEXTER-O52 — How does a mask apply to a wide display glyph?
 
-It is LEXTER-DRAFT-cell-model-revision-O6. Line glyphs are narrow and are
+It is LEXTER-O61. Line glyphs are narrow and are
 applied to each half's cell as they are, so whichever rule is chosen must
 let a narrow mask apply to one half.
 
@@ -1275,7 +1275,7 @@ The cell-field-format survey's surface tile, a surface id and a column and
 row within the surface, is the candidate for the void's payload, and it may
 need fewer than three words, which would leave the void more glyph words.
 The effect's contents are LEXTER-O11. Both are left to
-the survey of surfaces and effects that LEXTER-DRAFT-cell-model-revision-D12
+the survey of surfaces and effects that LEXTER-D107
 calls for.
 
 ### LEXTER-O54 — How would a glyph cell cycle its colours?
@@ -1314,14 +1314,14 @@ It is left for a step after the first tiles, in the plan's Later Formats.
    private-use codepoints to positions 1–4 (LEXTER-D89).
 2. **With the plan's Phase 2.** The palette store, sized by the
    configuration (LEXTER-D92), with the integer stores of
-   LEXTER-DRAFT-cell-model-revision-D14.
+   LEXTER-D109.
 3. **With the plan's Phase 3.** The record as specified here: the format
    word with its drawing flags, the header word with its background slot,
    glyph words with their settings, the plain format with its glyph count and
    type bits, masks with their reach, lines as glyphs with the single
    underline, blinking text and the blink phase, the procedure of Drawing a
    Pixel in the shader, and palette slots allocated to terminals.
-   The descriptor of LEXTER-DRAFT-cell-model-revision-D9 is written from
+   The descriptor of LEXTER-D104 is written from
    these tables.
 4. **With the plan's Phase 4.** The overlay instance and the block cursor's
    transformed copy (LEXTER-D93).

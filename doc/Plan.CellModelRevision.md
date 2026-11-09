@@ -58,6 +58,7 @@ open-questions:
   - LEXTER-O66
   - LEXTER-O67
   - LEXTER-O68
+  - LEXTER-DRAFT-cell-model-revision-O14
 cites:
   - title:    "Session transcript ses_febe-LexterCritique"
     locator:  "session-ses_febe-LexterCritique.md, the closing review"
@@ -1237,6 +1238,34 @@ glyph words keep their place within the glyph count
 Partial redraw finds the rows to redraw at a change of phase from a mask it
 derives as rows are uploaded (see Partial Redraw and Eviction).
 
+### LEXTER-DRAFT-cell-model-revision-O14 — Should a character's width come from Unicode's tables rather than the atlas?
+
+LEXTER-D98 has the VT handler ask the atlas whether a glyph is wide
+(`src/atlas.lisp:atlas-glyph-wide-p@2d4d743`), so a character's width is a
+property of the font that happens to be loaded. Applications decide widths
+from Unicode's East Asian Width property, through wcwidth and the tables
+that shells, readline, ncurses, and editors carry, and place the cursor by
+them; a terminal that disagrees moves every later character on the line out
+of place, and the application's idea of the screen drifts from the
+terminal's. A dual-width font (LEXTER-0007) can supply wide glyphs for
+characters that Unicode makes narrow, and narrow glyphs for some it makes
+wide. The choices:
+
+- **Width from Unicode's tables.** The handler decides each character's
+  width from a table generated from one version of Unicode's data, as the
+  prior-art evaluation of other terminals is to establish they do, and the
+  atlas is fitted to the width: a narrow glyph in a wide pair is centred or
+  padded, and a glyph wider than its character's width is clipped or
+  replaced.
+- **Width from the atlas,** as LEXTER-D98 has it. It matches what the font
+  draws, at the cost of disagreeing with applications.
+- **Unicode's tables with settings.** As the first, with a setting for
+  characters of ambiguous width, which some terminals let the user make wide,
+  and later the grapheme-cluster widths of mode 2027.
+
+It is settled before Phase 1, whose repair of the handler's wide writes
+(LEXTER-O19) depends on it.
+
 ## Prior Art
 
 Table: Prior systems and what this plan draws from each.
@@ -1260,7 +1289,9 @@ Table: Prior systems and what this plan draws from each.
    each finding in scope, reproducing it before it is repaired
    (LEXTER-D106).
 2. **Phase 1: the first edition repaired.** It starts after the companion
-   plan's consolidation of the two terminal stacks (LEXTER-D67). The repairs
+   plan's consolidation of the two terminal stacks (LEXTER-D67), and once
+   LEXTER-DRAFT-cell-model-revision-O14 has settled where widths come from.
+   The repairs
    of The First Edition Repaired, finding by finding, each turning its test
    green. Double-width text renders through the VT path. A Log records the
    phase.

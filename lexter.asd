@@ -67,7 +67,7 @@
   :description "TN3270/TN3270E client library for Lexter"
   :license "BSD"
   :version "0.1.0"
-  :depends-on (#:usocket #:babel #:tacle.tn3270/lexicon #:specops/format.ebcdic)
+  :depends-on (#:usocket #:babel #:tacle.tn3270/lexicon #:specops.map.ebcdic)
   :serial t
   :components ((:file "src/tn3270/packages")
                (:file "src/tn3270/codec")

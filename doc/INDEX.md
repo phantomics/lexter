@@ -28,6 +28,7 @@ Table: Documents in the LEXTER namespace.
 | [LEXTER-0016](Arch.CellModel.md) | The Cell Model Architecture | Architecture | project | Accepted | — |
 | [LEXTER-0017](Plan.CellModelRevision.md) | Cell Model Revision: Development Plan | Plan | project | Accepted | — |
 | [LEXTER-DRAFT-cell-field-format](Survey.CellFieldFormat.md) | Cell Field Format: Survey | Survey | component | Deprecated | renderer |
+| [LEXTER-DRAFT-cell-models-prior-art](Eval.CellModels.PriorArt.md) | Cell Models: Prior-Art Evaluation | Eval (prior-art) | project | Draft | — |
 | [LEXTER-DRAFT-data-structures-1e](Spec.DataStructures1e.md) | Data Structures, First Edition: Specification | Spec | project | Deprecated | — |
 | [LEXTER-DRAFT-mouse-reporting](Log.MouseReporting.md) | Mouse Reporting: Development Log | Log | component | Draft | vt |
 | [LEXTER-DRAFT-pane-profiles](Plan.PaneProfiles.md) | Pane Profiles and Scrollback Viewing: Development Plan | Plan | component | Accepted | panes |
@@ -244,6 +245,7 @@ Table: Decision, open-question, and memo records in the LEXTER namespace.
 | [LEXTER-DRAFT-cell-field-format-O10](Survey.CellFieldFormat.md#lexter-draft-cell-field-format-o10--how-is-a-surfaces-geometry-kept-consistent-with-its-cells) | Open question | How is a surface's geometry kept consistent with its cells? | — | LEXTER-DRAFT-cell-field-format |
 | [LEXTER-DRAFT-cell-field-format-O11](Survey.CellFieldFormat.md#lexter-draft-cell-field-format-o11--should-masks-have-targets-and-in-which-encoding) | Open question | Should masks have targets, and in which encoding? | — | LEXTER-DRAFT-cell-field-format |
 | [LEXTER-DRAFT-cell-field-format-O12](Survey.CellFieldFormat.md#lexter-draft-cell-field-format-o12--how-does-a-mask-apply-to-a-wide-display-glyph) | Open question | How does a mask apply to a wide display glyph? | — | LEXTER-DRAFT-cell-field-format |
+| [LEXTER-DRAFT-cell-model-revision-O14](Plan.CellModelRevision.md#lexter-draft-cell-model-revision-o14--should-a-characters-width-come-from-unicodes-tables-rather-than-the-atlas) | Open question | Should a character's width come from Unicode's tables rather than the atlas? | — | LEXTER-0017 |
 | [LEXTER-DRAFT-pane-profiles-O1](Plan.PaneProfiles.md#lexter-draft-pane-profiles-o1--should-unseen-output-be-a-flag-or-a-line-count) | Open question | Should unseen output be a flag or a line count? | — | LEXTER-DRAFT-pane-profiles |
 | [LEXTER-DRAFT-pane-profiles-O2](Plan.PaneProfiles.md#lexter-draft-pane-profiles-o2--how-does-a-workspace-find-its-compositor) | Open question | How does a workspace find its compositor? | — | LEXTER-DRAFT-pane-profiles |
 | [LEXTER-DRAFT-pane-profiles-O3](Plan.PaneProfiles.md#lexter-draft-pane-profiles-o3--which-other-settings-move-into-profiles) | Open question | Which other settings move into profiles? | — | LEXTER-DRAFT-pane-profiles |

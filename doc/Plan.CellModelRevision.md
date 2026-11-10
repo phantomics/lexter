@@ -14,6 +14,7 @@ provenance:
   assistant:   opencode
   session:     "Cell model revision plan (2026-11-02)"
 relates-to:
+  - LEXTER-DRAFT-cell-models-prior-art
   - LEXTER-0016
   - LEXTER-0015
   - LEXTER-DRAFT-pane-profiles
@@ -1252,11 +1253,12 @@ characters that Unicode makes narrow, and narrow glyphs for some it makes
 wide. The choices:
 
 - **Width from Unicode's tables.** The handler decides each character's
-  width from a table generated from one version of Unicode's data, as the
-  prior-art evaluation of other terminals is to establish they do, and the
-  atlas is fitted to the width: a narrow glyph in a wide pair is centred or
-  padded, and a glyph wider than its character's width is clipped or
-  replaced.
+  width from a table generated from one version of Unicode's data, as every
+  terminal in the prior-art evaluation does
+  ([LEXTER-DRAFT-cell-models-prior-art](Eval.CellModels.PriorArt.md), R4),
+  and the atlas is fitted to the width: a narrow glyph in a wide pair is
+  centred or padded, and a glyph wider than its character's width is clipped
+  or replaced.
 - **Width from the atlas,** as LEXTER-D98 has it. It matches what the font
   draws, at the cost of disagreeing with applications.
 - **Unicode's tables with settings.** As the first, with a setting for

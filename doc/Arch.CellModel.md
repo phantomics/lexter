@@ -966,11 +966,17 @@ Table: Colour cycles in a tile cell.
 | Both 0 | No cycling | One cycle of all 16 colours, on the first clock |
 | A field of 1 (*N* = 2) | The pair's first 2 colours cycle; the other 6 stay | The pair cycles as four groups of 2 |
 | A field of 2 (*N* = 4) | The pair's first 4 colours cycle; the other 4 stay | The pair cycles as two groups of 4, one in each swatch |
-| A field of 3 (*N* = 8) | The pair's 8 colours cycle as one group | The same |
-| A field of 0, beside another | The pair stays | The pair stays |
+| A field of 3 (*N* = 8), beside a field of 1 or 2 | The pair's 8 colours cycle as one group | The same |
+| Both 3 | Each pair's 8 colours cycle as one group | One cycle of all 16 colours in reverse, on the first clock |
+| One 3, the other 0 | That pair's 8 colours cycle; the other pair stays | Reserved |
+| A field of 0, beside a field of 1 or 2 | The pair stays | The pair stays |
 
-The sixteen-colour cycle takes the encoding that would otherwise mean no
-cycling with grouping on, so the fifth bit is never idle.
+Grouping changes nothing where each field is 0 or 3, since a pair of eight
+colours is a single group, so those codes would repeat others. Two of them
+carry the sixteen-colour cycles: both fields 0 with grouping on, forward,
+and both fields 3 with grouping on, in reverse. The two codes with one field
+at 3, the other at 0, and grouping on are reserved; a renderer draws them as
+it would with grouping off.
 
 - **The order of steps.** A tile's pixel value is tested for transparency
   first, then moved by the tile's offset to a colour position; a position in
@@ -987,8 +993,13 @@ cycling with grouping on, so the fifth bit is never idle.
   in A–B and a bottom tile with an offset of 2 in C–D, so each tile cycles on
   its own clock; a single tile reaching both pairs cycles two gradients at
   once.
-- **Forward only.** A cycle that should run backwards is drawn by reversing
-  its colours in the swatches, which is done once, not at every step.
+- **Forward, but for the full cycle.** Cycles run forward, except the
+  reversed sixteen-colour cycle. Any other cycle that should run backwards
+  is drawn by reversing its colours in the swatches, which is done once, not
+  at every step: a cycle of two or four colours needs one more swatch, and a
+  cycle of eight two more. Reversing all sixteen colours that way would need
+  a second set of four swatches, a duplicate of the tile's whole palette,
+  which is why that one reversal has a code of its own.
 - **Nothing is rewritten.** The record does not change as its colours cycle,
   and partial redraw finds the rows to redraw at each step from the records,
   as it does for blink.
@@ -1018,7 +1029,11 @@ cycling with grouping on, so the fifth bit is never idle.
   cycling is colour behaviour, which belongs in the header word
   (LEXTER-D87).
 - A direction bit. Not chosen by the steward: reversing is rare, and a swatch
-  change serves it.
+  change serves it, except for all sixteen colours, which a code that
+  grouping left redundant now carries without spending a bit.
+- Reversed eight-colour cycles in the two codes with one field at 3 and
+  grouping on. Not chosen for now by the steward: each could reverse one
+  pair only while the other pair stays still, so the codes are reserved.
 
 ## The Record
 
@@ -1109,10 +1124,12 @@ tile_index(field, offset, clear):               // a palette index, or none
     sw = (word(6 + s div 2) >> (16 * (s mod 2))) & 0xFFFF
     return swatch[sw][c mod 4]
 
-cycle(c):                                       // LEXTER-DRAFT-cell-model-D15
+cycle(c):                                       // LEXTER-D95
     a = (word(1) >> 26) & 3; b = (word(1) >> 28) & 3; g = (word(1) >> 30) & 1
     if a == 0 and b == 0:                        // none, or all sixteen
         return g ? (c + first_step) mod 16 : c
+    if a == 3 and b == 3 and g:                  // all sixteen, in reverse
+        return (c + 16 - first_step mod 16) mod 16
     base = c & 8; r = c & 7                      // the pair, the place in it
     N    = 1 << (base == 0 ? a : b)
     step = base == 0 ? first_step : second_step

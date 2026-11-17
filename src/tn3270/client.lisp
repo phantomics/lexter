@@ -452,4 +452,4 @@
 
 (defun char-to-ebcdic (char)
   "Convert character to EBCDIC CP037."
-  (specops/format.ebcdic:ebcdic-code-cp037 char))
+  (specops.map.ebcdic:ebcdic-code-cp037 char))

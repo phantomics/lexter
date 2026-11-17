@@ -3,9 +3,10 @@
 ;;;; Structural tests of findings about the code's arrangement rather than its
 ;;;; behaviour (LEXTER-DRAFT-cell-model-revision-D21): they read Lexter's
 ;;;; source as text, or inspect its loaded functions. Pure: no GL, no writes.
-;;;; They fail until Phase 1 repairs LEXTER-O36 and LEXTER-O40; the
-;;;; consolidation of the two terminal stacks (LEXTER-D67) also removes one
-;;;; duplicate.
+;;;; They fail until Phase 1 repairs LEXTER-O36 and LEXTER-O40, and the
+;;;; terminal-fixes plan the Origin integration's reads of LEXTER-O29
+;;;; (LEXTER-D70); the consolidation of the two terminal stacks (LEXTER-D67)
+;;;; also removes one duplicate.
 
 (in-package #:lexter-tests)
 (in-suite structure)
@@ -49,6 +50,14 @@ and renderer, so that the layers cannot drift apart."
 colour does not change when the first pane is focused."
   (is (equalp (lexter/model:make-default-palette)
               (lexter/panes::make-xterm-palette))))
+
+(def-test origin-integration-reads-screens-through-the-handler ()
+  "LEXTER-O29: the Origin integration reads a terminal's screen by asking its
+VT handler for the active one, never through the standalone terminal's cached
+screen slot, which holds the primary screen while the alternate one is shown
+(LEXTER-D70)."
+  (is-false (search "unix-terminal-screen"
+                    (uiop:read-file-string (source-path "src/origin-impulse.lisp")))))
 
 (def-test render-data-claims-no-incremental-rebuild ()
   "LEXTER-O40: building the render data takes no flag it ignores and claims no

@@ -7,15 +7,15 @@
 (in-package #:lexter/tn3270)
 
 ;;; --------------------------------------------------------------------------
-;;; EBCDIC conversion (via specops/format.ebcdic)
+;;; EBCDIC conversion (via specops.map.ebcdic)
 ;;; --------------------------------------------------------------------------
 
 (defun ebcdic-to-char (byte &optional ge-mode)
   "Convert EBCDIC byte to Unicode character.
    If GE-MODE is true, use CP310 (APL) character set."
   (if ge-mode
-      (specops/format.ebcdic:ebcdic-code-cp310 byte)
-      (specops/format.ebcdic:ebcdic-code-cp037 byte)))
+      (specops.map.ebcdic:ebcdic-code-cp310 byte)
+      (specops.map.ebcdic:ebcdic-code-cp037 byte)))
 
 ;;; --------------------------------------------------------------------------
 ;;; Order parsing

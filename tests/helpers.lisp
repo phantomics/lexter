@@ -42,15 +42,36 @@
   :description "How the code is arranged: shared definitions have one home, and no claim outruns the code"
   :in lexter)
 
+(def-suite tn3270
+  :description "The TN3270 client's negotiation and record framing, and its screen's geometry, over a loopback socket"
+  :in lexter)
+
+(def-suite telnet
+  :description "What a telnet pane sends: encoded characters, escaped IAC, and option replies, over a loopback socket"
+  :in lexter)
+
+(def-suite pty
+  :description "Terminals without a PTY: input events that have no backend to reach"
+  :in lexter)
+
+(def-suite pty-slow
+  :description "The PTY's descriptor and child after the child exits; spawns a process (excluded by :skip-slow)"
+  :in lexter)
+
 ;;; ============================================================
 ;;; Test runners  (Square.md §11)
 ;;; ============================================================
 
+(defparameter *fast-suites*
+  '(atlas handler model grid swatches structure tn3270 telnet pty)
+  "The child suites run when slow tests are skipped.")
+
 (defun run-all-tests (&key skip-slow)
   "Run all Lexter test suites. Return T if all pass.
-SKIP-SLOW omits the *-slow suites; Lexter has none yet, so every suite runs."
-  (declare (ignore skip-slow))
-  (let ((results (run 'lexter)))
+When SKIP-SLOW is true, omit the *-slow suites."
+  (let ((results (if skip-slow
+                     (loop :for suite :in *fast-suites* :nconc (run suite))
+                     (run 'lexter))))
     (explain! results)
     (results-status results)))
 
@@ -296,6 +317,88 @@ does not reach it."
     (loop :for slot :below 4
           :for i = (+ (* index 4) slot)
           :collect (if (< i (length data)) (aref data i) 0))))
+
+;;; ============================================================
+;;; Async polling  (Square.md §7)
+;;; ============================================================
+
+(defun wait-for-predicate (predicate &key (timeout 2) (interval 0.01))
+  "Poll PREDICATE until it returns true or TIMEOUT seconds elapse.
+Return T on success, NIL on timeout."
+  (let ((deadline (+ (get-internal-real-time)
+                     (* timeout internal-time-units-per-second))))
+    (loop
+      (when (funcall predicate) (return t))
+      (when (>= (get-internal-real-time) deadline) (return nil))
+      (sleep interval))))
+
+;;; ============================================================
+;;; Loopback sockets  (Square.md §7, §13)
+;;; ============================================================
+;;;
+;;; The protocol tests connect a real client to a peer in the same image, on
+;;; an ephemeral port of the loopback interface: hermetic, with no server
+;;; outside the test.
+
+(defmacro with-loopback-listener ((listener port) &body body)
+  "Run BODY with LISTENER bound to a socket listening on an ephemeral loopback
+port, and PORT to that port; close the listener afterwards."
+  `(let ((,listener (usocket:socket-listen "127.0.0.1" 0
+                                           :reuse-address t
+                                           :element-type '(unsigned-byte 8))))
+     (unwind-protect
+          (let ((,port (usocket:get-local-port ,listener)))
+            ,@body)
+       (usocket:socket-close ,listener))))
+
+(defun accept-peer (listener &key (timeout 2))
+  "Accept one connection on LISTENER within TIMEOUT seconds, and return its
+socket; signal an error if none arrives."
+  (or (and (usocket:wait-for-input listener :timeout timeout :ready-only t)
+           (usocket:socket-accept listener :element-type '(unsigned-byte 8)))
+      (error "No connection arrived at the loopback listener.")))
+
+(defun peer-send (peer &rest parts)
+  "Send PARTS, bytes or strings, from the PEER socket."
+  (let ((stream (usocket:socket-stream peer)))
+    (write-sequence (apply #'octets parts) stream)
+    (force-output stream)))
+
+(defun peer-receive (peer)
+  "Read every byte now available on the PEER socket, without blocking."
+  (let ((stream (usocket:socket-stream peer))
+        (bytes '()))
+    (loop :while (listen stream)
+          :do (let ((b (read-byte stream nil nil)))
+                (if b (push b bytes) (return))))
+    (coerce (nreverse bytes) '(vector (unsigned-byte 8)))))
+
+(defun exchange (peer poll &key (until (constantly nil)) (timeout 1))
+  "Collect what reaches PEER while calling POLL, the client's side, until UNTIL
+returns true of the bytes collected, or TIMEOUT seconds pass. Return the
+bytes collected."
+  (let ((received (make-array 0 :element-type '(unsigned-byte 8)
+                                :adjustable t :fill-pointer 0)))
+    (wait-for-predicate (lambda ()
+                          (funcall poll)
+                          (loop :for b :across (peer-receive peer)
+                                :do (vector-push-extend b received))
+                          (funcall until received))
+                        :timeout timeout)
+    (coerce received '(vector (unsigned-byte 8)))))
+
+(defun bytes-contain-p (bytes &rest sequence)
+  "True when BYTES contain SEQUENCE, a list of bytes and strings, in order."
+  (search (apply #'octets sequence) bytes))
+
+(defun count-occurrences (bytes &rest sequence)
+  "The number of places at which SEQUENCE, bytes and strings, occurs in BYTES."
+  (let ((pattern (apply #'octets sequence)))
+    (loop :with start = 0
+          :for pos = (search pattern bytes :start2 start)
+          :while pos
+          :count t
+          :do (setf start (1+ pos)))))
 
 ;;; ============================================================
 ;;; Reading Lexter's source  (structural tests)

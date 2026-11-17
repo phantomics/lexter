@@ -59,7 +59,8 @@
   :description "Regression suite for Lexter (FiveAM + cl-hamcrest), headless"
   :license "BSD"
   :version "0.1.0"
-  :depends-on (#:lexter #:lexter/unix #:lexter/panes #:babel #:sb-introspect
+  :depends-on (#:lexter #:lexter/unix #:lexter/panes #:lexter/tn3270
+               #:lexter/telnet-pane #:babel #:usocket #:sb-introspect #:sb-posix
                #:fiveam #:hamcrest/fiveam)
   :serial t
   :components ((:module "tests"
@@ -71,7 +72,10 @@
                              (:file "test-model")
                              (:file "test-grid")
                              (:file "test-swatches")
-                             (:file "test-structure"))))
+                             (:file "test-structure")
+                             (:file "test-tn3270")
+                             (:file "test-telnet")
+                             (:file "test-pty"))))
   :perform (asdf:test-op (o s)
              (uiop:symbol-call '#:lexter-tests '#:run-all-tests)))
 

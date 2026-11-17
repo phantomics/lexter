@@ -67,7 +67,10 @@ Project-specific facts the skills cannot infer:
 - Test directory: tests/
 - Test-system form: secondary `lexter/tests`, defined in `lexter.asd`; the
   package is `lexter-tests` and the root suite `lexter`
-- Run command: `sbcl --non-interactive --eval '(ql:quickload :lexter/tests)' --eval '(asdf:test-system :lexter)'`
+- Run command: `sbcl --non-interactive --eval '(ql:quickload :lexter/tests)' --eval '(asdf:test-system :lexter)'`;
+  for the fast loop, `(lexter-tests:run-all-tests :skip-slow t)` omits
+  `pty-slow`, which forks processes. The protocol suites connect real clients
+  to peers on loopback sockets in the same image
 - The suite runs headless: no GL context or display. Tests build their fonts
   in memory and pack atlases with `pack-atlas`, never `build-atlas`
 - Reproduction tests for findings in LEXTER-0017 and LEXTER-0015 assert the

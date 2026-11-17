@@ -6,7 +6,11 @@ subtype:       prior-art
 scope:         project
 project:       Lexter
 language:      en
-status:        Draft
+status:        Accepted
+authors:
+  - Andrew Sengul
+approved-by:   Andrew Sengul
+reviewed:      2026-11-16
 provenance:
   assistant:   opencode
   session:     "Cell model prior-art evaluation (2026-11-09)"

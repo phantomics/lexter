@@ -55,6 +55,7 @@ open-questions:
   - LEXTER-O54
   - LEXTER-O55
   - LEXTER-DRAFT-cell-model-O12
+  - LEXTER-DRAFT-cell-model-O13
 cites:
   - title:    "X Logical Font Description Conventions"
     locator:  "X Consortium, XLFD version 1.5, the font properties UNDERLINE_POSITION, UNDERLINE_THICKNESS, STRIKEOUT_ASCENT, and STRIKEOUT_DESCENT"
@@ -1120,6 +1121,15 @@ Table: The fields of a drawn row.
   never causes an upload, since no record changes. Until partial redraw
   (the plan's Phase 6), every frame redraws every row, and damage is what
   that phase redraws by.
+- **Global changes.** A change to a store that renderers read beside the
+  records (the palette store, a swatch range uploaded again after its
+  version is bumped, or the tile texture) damages every row of every grid. A
+  rebuilt atlas makes every row dirty, since records name atlas positions
+  that must be written again. A swatch table that only grows damages
+  nothing, since no cell yet names its new entries. Such changes are rare,
+  and a full redraw costs what every frame costs before partial redraw.
+  Whether a palette change should damage only the rows of the panes that use
+  its slot is LEXTER-DRAFT-cell-model-O13.
 - **Only what renderers read.** The drawn row holds nothing that renderers
   do not read; the terminal row beside the text grid holds the rest.
 
@@ -1610,6 +1620,19 @@ that only grow allow (LEXTER-D99). If swatch ranges come to cycle
 a cycling range. Neither format is needed before the plan's Later Formats,
 and until tiles are built, format 4 may still change rather than gain a
 sibling.
+
+### LEXTER-DRAFT-cell-model-O13 — Should a palette change damage only the rows that use its slot?
+
+A change to the palette store damages every row of every grid
+(LEXTER-DRAFT-cell-model-D16), which is simple and never costs more than a
+frame before partial redraw. A palette slot belongs to a terminal or a tile
+set (LEXTER-D92), and the compositor knows the area of each pane, so a
+change could damage only the rows of the panes that use the slot. That is
+cheap to work out, but it is a heuristic: a slot named by hand is shared
+among panes, chrome and tiles can name any slot, and the overlay list draws
+in slots of its own. It is left until measurements of partial redraw show
+that full damage on palette changes costs enough to matter, as it might for
+a host that changes palette entries by OSC 4 on every frame.
 
 ## Roadmap
 

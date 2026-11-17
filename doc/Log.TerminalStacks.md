@@ -97,22 +97,25 @@ reporting and wheel scrolling of the scrollback.
 
 ### `src/panes/compositor.lisp`
 
-- The compositor struct gains `headless` and `layout-fn`; the constructor
-  `make-paned-compositor` takes `:headless` and `:layout-fn`.
-- The liveness test in `gui-tick` stops the compositor when no pane is alive
+- The compositor struct gains `headless` and `layout-fn`
+  (`src/panes/compositor.lisp:compositor@ee026f2`); the constructor
+  `src/panes/compositor.lisp:make-paned-compositor@ee026f2` takes `:headless` and
+  `:layout-fn`.
+- The liveness test in `src/panes/compositor.lisp:gui-tick@ee026f2` stops the compositor when no pane is alive
   only if it is not headless (LEXTER-O41).
-- `handle-compositor-key` uses the compositor's own prefix key, and has no
+- `src/panes/compositor.lisp:handle-compositor-key@ee026f2` uses the compositor's own prefix key, and has no
   meta-mode when it is NIL.
-- `handle-compositor-resize` calls the layout function after resizing the
+- `src/panes/compositor.lisp:handle-compositor-resize@ee026f2` calls the layout function after resizing the
   grid.
-- `compositor-capture` binds the cursor's blink phase to the compositor's,
+- `src/panes/compositor.lisp:compositor-capture@ee026f2` binds the cursor's blink phase to the compositor's,
   marks every pane and the decorations dirty, and then flushes.
-- `compositor-reset-display` replaces the display grid with a fresh one of the
+- `src/panes/compositor.lisp:compositor-reset-display@ee026f2` replaces the display grid with a fresh one of the
   compositor's size, with the default swatches.
 
 ### `src/panes/protocol.lisp`, `vt-pane.lisp`, `function-pane.lisp`, `packages.lisp`
 
-`pane-mark-dirty` is added to the protocol, with a default that does nothing;
+`pane-mark-dirty` is added to the protocol
+(`src/panes/protocol.lisp:pane-mark-dirty@ee026f2`), with a default that does nothing;
 a VT pane marks its active screen dirty, and a function pane sets its dirty
 flag. `lexter/panes` exports it, `compositor-reset-display`, and the
 compositor accessors the standalone terminal reads.
@@ -123,7 +126,11 @@ The standalone terminal is rewritten as a layer over the compositor, 259
 lines in place of 658. `make-terminal` builds a `uterm-pane`, given the
 command unless the terminal has no PTY; a workspace holding it; and a
 compositor with no prefix key, headless when there is no PTY, whose layout
-function resizes the pane. The `gui-*` methods delegate to the compositor;
+function resizes the pane (`src/unix-term.lisp:make-terminal@ee026f2`). The
+terminal is `src/unix-term.lisp:unix-terminal@ee026f2`; the screen and PTY are read
+by `src/unix-term.lisp:terminal-screen@ee026f2` and
+`src/unix-term.lisp:terminal-pty@ee026f2`, and a reset is
+`src/unix-term.lisp:terminal-reset@ee026f2`. The `gui-*` methods delegate to the compositor;
 `terminal-capture` calls `compositor-capture`; recording uses the pane's VT
 handler; `terminal-config-plist` reads the compositor. Removed with the
 duplication: the terminal's own main loop, key table and encoder, character
@@ -133,7 +140,8 @@ callbacks, and `setup-default-swatches`.
 ### `src/origin-impulse.lisp`
 
 The window fields, the configuration of the title and pixel scale, and the
-export and import of handoff state use `terminal-screen`, `terminal-pty`, and
+export and import of handoff state
+(`src/origin-impulse.lisp:%window-fields@ee026f2`) use `terminal-screen`, `terminal-pty`, and
 the exported accessors, in place of the cached screen slot and internal
 symbols (LEXTER-D70, LEXTER-D76).
 
@@ -182,7 +190,7 @@ and `lexter/origin` depend on `lexter/panes`.
 
 ## Files
 
-Table: Files added or changed by the consolidation.
+Table: Files added or changed by the consolidation, in commit `ee026f2`.
 
 | File | Action | Description |
 |---|---|---|

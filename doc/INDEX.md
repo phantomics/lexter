@@ -33,6 +33,7 @@ Table: Documents in the LEXTER namespace.
 | [LEXTER-DRAFT-data-structures-1e](Spec.DataStructures1e.md) | Data Structures, First Edition: Specification | Spec | project | Deprecated | — |
 | [LEXTER-DRAFT-mouse-reporting](Log.MouseReporting.md) | Mouse Reporting: Development Log | Log | component | Draft | vt |
 | [LEXTER-DRAFT-pane-profiles](Plan.PaneProfiles.md) | Pane Profiles and Scrollback Viewing: Development Plan | Plan | component | Accepted | panes |
+| [LEXTER-DRAFT-pane-profiles-log](Log.PaneProfiles.md) | Pane Profiles and Scrollback Viewing: Development Log | Log | component | Draft | panes |
 | [LEXTER-DRAFT-regression-suite](Log.RegressionSuite.md) | Regression Suite (Phase 0): Development Log | Log | project | Draft | — |
 | [LEXTER-DRAFT-terminal-stacks](Log.TerminalStacks.md) | Consolidating the Terminal Stacks: Development Log | Log | project | Draft | — |
 

@@ -424,14 +424,15 @@ The nearest palette colour; a palette slot kept for each terminal as a cache,
 with a rule for a full cache; or inline colours. The choice decides how
 exactly today's programs are drawn, and how scrollback keeps their colours.
 
-**Resolution:** 2026-11-17 — accepted, recorded at the steward's direction:
-inline colours. Once the inline-colour format (LEXTER-D82) is built, the
-handler writes 24-bit SGR colours as inline colours, and until then maps them
-to the nearest of the 256 palette colours, as it does today. History keeps
-24-bit colour in its styles from the start
-(LEXTER-DRAFT-cell-model-revision-D19). The details of the format's
-handling, such as a cell that mixes a palette colour with a 24-bit one, are
-worked out when it is built. The palette cache of Tier 0 is not pursued.
+**Resolution:** 2026-11-17 — settled by the steward in
+[LEXTER-0017](Plan.CellModelRevision.md), not in this survey, which decides
+nothing. The plan's Later Formats has the handler write 24-bit SGR colours
+as inline colours once that format (LEXTER-D82) is built, and map them to
+the nearest of the 256 palette colours until then, as it does today; and
+LEXTER-DRAFT-cell-model-revision-D19 keeps 24-bit colour in history's
+styles from the start. The details of the format's handling, such as a cell
+that mixes a palette colour with a 24-bit one, are left to the step that
+builds it. The palette cache of Tier 0 is therefore not pursued.
 
 ### LEXTER-DRAFT-host-protocol-O4 — How are styling variants named and chosen?
 

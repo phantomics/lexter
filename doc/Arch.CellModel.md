@@ -896,8 +896,11 @@ Table: The overlay instance, by word.
   as its background in the copy if its own was slot 0, and slot 0 otherwise.
   The copy keeps the cell's blink flag, so text under the cursor blinks with
   its neighbours. The flush copies the record again whenever the cursor
-  moves or its row changes. A cursor on a double-width glyph is two
-  instances, one for each half.
+  moves or its row changes. A cursor on a character that covers several
+  cells is one instance for each cell it covers: two for a double-width
+  glyph or a narrow character on a double-size line, and four for a
+  double-width glyph on a double-size line
+  (LEXTER-DRAFT-cell-model-D17).
 - **The other styles** are instances that do not draw their background, of
   plain cells whose one glyph is a cursor glyph (LEXTER-D89)
   in the cursor's colour.
@@ -1093,7 +1096,7 @@ Table: The fields of a drawn row.
 
 | Field | Contents | Written by |
 |---|---|---|
-| Change stamp | The value of one counter global to Lexter, taken whenever a record in the row is written | The record accessors generated from the descriptor (LEXTER-D104) |
+| Change stamp | The value of one 64-bit counter global to Lexter, taken whenever a record in the row is written; at 64 bits it never wraps around in practice | The record accessors generated from the descriptor (LEXTER-D104) |
 | Clock mask | One bit for each clock: the blink phase, the first cycle clock, and the second cycle clock, to begin with; set when the row holds a cell whose pixels that clock changes | Each renderer, which derives it from the row's records when it takes the row |
 
 - **Change stamps.** Each reader remembers, for each row, the stamp it last
@@ -1151,6 +1154,13 @@ by an integer is exact. The cell-field-format survey asked whether the wide
 bits should become a position within a larger object
 (LEXTER-DRAFT-cell-field-format-O3).
 
+This decision answers the part of LEXTER-DRAFT-cell-field-format-O3 that
+concerns DEC's double-size lines: the wide bits, with the line size and the
+magnified half, place a cell within a character magnified two times. Objects
+larger than that, such as images, text of other sizes, and tiles of several
+cells, are not given a position in the cell's flags; they are left to tiles
+and surfaces.
+
 **Decision:** Bits 19–20 of the format word are the line size, and bit 21 is
 the magnified half, in every format (LEXTER-D81).
 
@@ -1189,7 +1199,7 @@ the magnified half, in every format (LEXTER-D81).
   Not chosen: they would need a position within a larger object, which a few
   flags cannot hold; larger text is for tiles or a surface.
 
-### LEXTER-DRAFT-cell-model-D18 — A record's bits are spent by the reach of what they hold
+### LEXTER-DRAFT-cell-model-D18 — A record's bits are spent by the scope of what they hold
 
 **Status:** Proposed
 
@@ -1245,11 +1255,15 @@ neighbouring pixel of the glyph.
 **Decision:** A bold cell's text layer holds the glyph of a bold font in the
 chain: a font in the chain may have a bold companion, and the atlas keeps
 the bold glyphs at positions of their own, keyed by codepoint, width, and
-weight (LEXTER-D89). Where no bold font covers the codepoint, the regular
-glyph is drawn. Bold-as-bright stays a choice of the terminal's colours. A
-cell's boldness, for attribute reports and copying with formatting, is read
-from the terminal's style, not from the record
-(LEXTER-DRAFT-cell-model-revision-D19). Bold costs no bits of the record
+weight (LEXTER-D89). A bold companion has the same cell size as its regular
+font; a companion whose glyphs differ in width from the width a character is
+written at is fitted to it as the regular font's glyphs are
+(LEXTER-DRAFT-cell-model-revision-D18). Where no bold font covers the
+codepoint, the regular glyph is drawn. Bold-as-bright stays a choice of the
+terminal's colours. A cell's boldness, for attribute reports and copying with
+formatting, is read from the style id that the text grid keeps for the cell,
+not from the record (LEXTER-DRAFT-cell-model-revision-D19,
+LEXTER-DRAFT-cell-model-revision-D20). Bold costs no bits of the record
 (LEXTER-DRAFT-cell-model-D18).
 
 **Alternatives:**
@@ -1360,14 +1374,28 @@ cycle(c):                                       // LEXTER-D95
     if g: return base + (r & ~(N - 1)) + ((r + step) & (N - 1))  // groups
     if r < N: return base + (r + step) mod N     // the pair's first N
     return c
+
+pixel(g):                                       // glyph g at the pixel: 0 or 1
+    rh = (word(0) >> 16) & (word(0) >> 17) & 1   // the right half of a wide glyph
+    sz = (word(0) >> 19) & 3                     // the line size
+    mh = (word(0) >> 21) & 1                     // the magnified half
+    if sz == 0:
+        gx = rh * w + x; gy = y
+    else:                                        // LEXTER-DRAFT-cell-model-D17
+        gx = ((2 * rh + mh) * w + x) div 2       // magnified across
+        gy = (sz == 1) ? y : ((sz - 2) * h + y) div 2   // and down, by half
+    return glyph_pixel(g, gx, gy)                // gx counts across g's atlas columns
 ```
 
 Description: The procedure reads the format from the first byte and the
 background slot from the header word; an unknown format is drawn in the
 background slot. For a glyph format it reads the glyph count, clamped to the
 format's glyph words, and the type bits, and keeps one coverage bit for each
-layer. A glyph that is a layer sets its bit to whether its glyph covers the
-pixel under its selector. A glyph that is a mask finds whether its own glyph
+layer. A glyph is read at the pixel's place in the cell, in the second of its
+atlas columns for the right half of a wide glyph, and magnified two times
+across, and down for double height, when the cell has a line size. A glyph
+that is a layer sets its bit to whether its glyph covers the pixel under its
+selector. A glyph that is a mask finds whether its own glyph
 covers the pixel, and combines that, by its operation, with the bits of the
 layers it reaches: the most recent layer and as many before it as its reach
 gives. If the cell blinks and the blink phase is off, the topmost layer's bit
@@ -1400,7 +1428,7 @@ Table: Mask operations, applied to the bits the mask reaches.
 The right half of a double-width glyph samples the second of the glyph's two
 atlas columns; tiles are cell-sized and have no halves. In a cell with a line
 size, `pixel` reads every glyph magnified, at the column and row that
-LEXTER-DRAFT-cell-model-D17 gives; tiles are read as they are. The colour is written
+LEXTER-DRAFT-cell-model-D17 gives; `tile_index` reads tiles as they are. The colour is written
 as bytes, divided by 255 on the GPU, without blending
 (LEXTER-D110).
 

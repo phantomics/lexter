@@ -825,8 +825,8 @@ Table: Who decides a character's width, by the path that writes it.
 | Path | Width decided by |
 |---|---|
 | The VT parser: shells, telnet, SSH, bulletin boards | Lexter's width table |
-| The API: chrome, decorators, function panes, Common Lisp applications | The caller, by default the width of the glyph in the atlas |
-| The 3270 data stream | The data stream: one buffer address is one cell, and a double-byte character takes two |
+| The API: chrome, decorators, function panes, Common Lisp applications | The caller, by default the natural width of the glyph of the first font in the chain that covers the codepoint |
+| The 3270 data stream | The data stream: one buffer address is one cell, and a double-byte character, where supported, takes two |
 
 - **The path, not the owner.** A Common Lisp program that sends escape
   sequences into a VT pane writes through the parser, so the width table
@@ -836,8 +836,11 @@ Table: Who decides a character's width, by the path that writes it.
   the atlas, with no GL, so that the handler and headless replays need no
   font. The configuration may make characters of ambiguous width wide, and
   override the width of single codepoints or ranges; a user who does so
-  makes the same setting in the programs that run in the terminal. The widths
-  of grapheme clusters, as mode 2027 asks, are a later addition to the table.
+  makes the same setting in the programs that run in the terminal. The table
+  gives width 0 to combining marks and other zero-width characters, which
+  join the cell of the character before them
+  (LEXTER-DRAFT-cell-model-revision-D20). The widths of grapheme clusters, as
+  mode 2027 asks, are a later addition to the table.
 - **Decided once, and stored.** A character's width is decided when its cell
   is written, and stored: in the record's halves
   (LEXTER-D103) and in the text grid's wide bit
@@ -918,14 +921,26 @@ a screen's top is kept in its history as text and styles.
   video, blink, and invisible. Room for 24-bit colour is there from the start,
   though Phase 3 writes only palette colours, so that history keeps truecolour
   once the inline-colour format writes it (see Later Formats).
-- **From a record to a style.** When a row leaves the screen, each cell's
-  colours are taken from the palette indices of its swatch's slots, its lines
-  are read back from its glyph words as
-  [LEXTER-0016](Arch.CellModel.md) describes (LEXTER-D88), and its blink from
-  its flag. Layers, masks, and tiles beyond what a style holds are not kept.
+- **From the screen to history.** Each character's cell in the screen's
+  text grid already holds its style id
+  (LEXTER-DRAFT-cell-model-revision-D20), so a row that leaves the screen is
+  moved into history by copying its text, wide bits, style ids, and terminal
+  row; nothing is read back from its records. A record cannot give back what
+  a style holds: bold is a choice of glyph, which the record does not mark
+  (LEXTER-DRAFT-cell-model-D19 in [LEXTER-0016](Arch.CellModel.md)); an
+  invisible cell has no glyphs, as a blank one has; and reverse video is only
+  a pair of exchanged slots. Layers, masks, and tiles beyond what a style
+  holds are not kept.
 - **From a style to a record.** Viewing history rebuilds the rows shown with
   the function by which the handler writes a cell, so that one function makes
-  records from text and styles wherever they come from.
+  records from text and styles wherever they come from. The pane-profiles
+  plan draws the history in `flush-to-display`
+  (LEXTER-DRAFT-pane-profiles-D5), and in the second edition its viewport
+  builds the history rows it shows with this function. That plan's history
+  cells of glyph, swatch, and attributes, and the lossy history and shared
+  swatch problem its tensions list
+  ([LEXTER-DRAFT-pane-profiles](Plan.PaneProfiles.md), Scrollback Viewing),
+  belong to the first edition; this decision replaces them.
 - **Swatches in use.** History holds palette indices, not swatch indices, so
   only the cells on screen keep swatches in use, and eviction (Phase 7) marks
   only them. A palette changed by OSC 4 recolours the history, as it does in
@@ -948,6 +963,9 @@ LEXTER-O57. This decision replaces Phase 3's scrollback of records.
 - Records in compressed pages, as Ghostty keeps its history. Not chosen: it
   keeps the cost of what history does not need, and compression can be added
   over text and styles later.
+- Styles read back from the records as a row leaves the screen. Rejected:
+  bold, invisible text, and reverse video cannot be recovered from a record,
+  so the screen's text grid keeps each cell's style id instead.
 - Styles that hold palette indices only. Rejected: history would lose
   truecolour even after the inline-colour format arrives, and the style
   format would have to change.
@@ -974,9 +992,17 @@ the first edition keeps none of them.
 
 **Decision:**
 
-- **The character's cell** in the screen's text grid holds its codepoints and
-  a wide bit, the width that the writing path decided
-  (LEXTER-DRAFT-cell-model-revision-D18).
+- **The character's cell** in the screen's text grid holds its codepoints, a
+  wide bit, the width that the writing path decided
+  (LEXTER-DRAFT-cell-model-revision-D18), and a style id, naming the style
+  in which the terminal wrote it (LEXTER-DRAFT-cell-model-revision-D19).
+  Attribute reports, copying with formatting, and the move of a row into
+  history read a cell's attributes from its style, not from its record.
+- **Zero-width characters,** such as combining marks, the zero-width joiner,
+  and variation selectors, to which the width table gives width 0, are added
+  to the codepoints of the cell of the character before them. How they are
+  drawn, as a layer, as a mask, or not at all, is open
+  (LEXTER-O63; for hosts, LEXTER-DRAFT-host-protocol-O6).
 - **Every other cell the character covers** holds a continuation marker, a
   value beyond Unicode, distinct from the names of generated glyphs at
   0x110000 and above (LEXTER-D89). The columns a
@@ -1167,7 +1193,7 @@ Table: What Phase 3 builds from the architecture.
   readers. The architecture leaves this text grid, like hyperlink ids and
   protected cells, to state that Lexter keeps apart from the cell model, and
   writers keep the two in step. Each character's cell holds its wide bit and
-  the other cells it covers hold continuation markers, and a terminal row of
+  style id, the other cells it covers hold continuation markers, and a terminal row of
   soft wrap, prompt kind, and line size lies beside each row
   (LEXTER-DRAFT-cell-model-revision-D20); how it holds codepoints and
   clusters is LEXTER-O63.
@@ -1366,8 +1392,12 @@ cell's SGR attributes itself.
 
 Since 2026-11-17 the question is narrower: history is kept as text and
 styles, not records (LEXTER-DRAFT-cell-model-revision-D19), so the compact
-scrollback above no longer argues for storing records, and what remains is
-whether a screen stores records for its rows on screen beside its text grid.
+scrollback above no longer argues for storing records. The screen keeps each
+cell's attributes as a style id in its text grid
+(LEXTER-DRAFT-cell-model-revision-D20), so the model's attributes have their
+place, and the records are not needed to report or copy them. What remains
+is whether a screen stores records for its rows on screen beside its text
+grid, or builds them as it copies its rows into the composed grid.
 
 ### LEXTER-O58 — How are swatch ranges sized and released, and what does a full table do?
 
@@ -1446,10 +1476,11 @@ consistent with the record under every operation. It is
 LEXTER-DRAFT-cell-field-format-O8.
 
 Since 2026-11-17 part of it is settled: a character's cell holds its wide
-bit, the other cells it covers hold continuation markers, and a terminal row
+bit and style id, the other cells it covers hold continuation markers, and a terminal row
 of soft wrap, prompt kind, and line size lies beside each row
 (LEXTER-DRAFT-cell-model-revision-D20). How the codepoints and grapheme
-clusters of a cell are held remains open.
+clusters of a cell are held remains open, and so does how the zero-width
+characters that join a cell are drawn.
 
 ### LEXTER-O64 — A persistent target or buffer age for partial redraw?
 

@@ -35,10 +35,11 @@
 ;;; --------------------------------------------------------------------------
 
 (defstruct cell-layer
-  "One layer within a layered cell."
+  "One layer within a layered cell. Its slot names are the model's
+   (MODEL-LAYER), so that one name means one thing in both (LEXTER-O36)."
   (glyph-idx        0    :type (unsigned-byte 32))
-  (ink-idx          0    :type (unsigned-byte 2))   ; swatch slot for ink
-  (bg-idx           0    :type (unsigned-byte 2))   ; swatch slot for bg (layer 0 only)
+  (ink-slot         0    :type (unsigned-byte 2))   ; swatch slot for ink
+  (bg-slot          0    :type (unsigned-byte 2))   ; swatch slot for bg (layer 0 only)
   ;; :none = fully opaque both sides (layer 0)
   ;; :bg   = mask=0 pixels transparent, mask=1 uses ink
   ;; :fg   = mask=1 pixels transparent, mask=0 uses ink
@@ -58,7 +59,7 @@
   ;; --- Swatch table ---
   ;; Each swatch is 4 consecutive bytes (global palette indices for slots 0-3).
   ;; swatch-data[i*4 + slot] = palette index for swatch i, slot s
-  (swatch-count  256 :type fixnum)
+  (swatch-count  2048 :type fixnum)
   (swatch-data   #() :type (simple-array (unsigned-byte 8) (*)))
   ;; --- Simple path storage (per-cell) ---
   (glyphs        #() :type (simple-array (unsigned-byte 32) (*)))
@@ -245,8 +246,8 @@
           ;; Bootstrap layer 0 with current glyph
           (setf (aref (cell-location-layers loc) 0)
                 (make-cell-layer :glyph-idx (aref (display-grid-glyphs grid) i)
-                                 :ink-idx   1   ; fg = slot 1
-                                 :bg-idx    0   ; bg = slot 0
+                                 :ink-slot  1   ; fg = slot 1
+                                 :bg-slot   0   ; bg = slot 0
                                  :transparent-side :none))
           (setf (sbit (display-grid-layered-flags grid) i) 1
                 (gethash key (display-grid-layered-cells grid)) loc)
@@ -262,10 +263,10 @@
     (setf (cell-location-swatch-idx loc) swatch-idx)
     (mark-row-dirty grid row)))
 
-(defun set-cell-layer (grid col row layer-num glyph-idx ink-idx
-                       &key (bg-idx 0) (transparent-side :none))
+(defun set-cell-layer (grid col row layer-num glyph-idx ink-slot
+                       &key (bg-slot 0) (transparent-side :none))
   "Define layer LAYER-NUM (0-2) at (COL, ROW).
-   INK-IDX/BG-IDX are swatch slot indices (0-3).
+   INK-SLOT/BG-SLOT are swatch slot indices (0-3).
    TRANSPARENT-SIDE: :none (opaque), :bg (ink on mask=1), :fg (ink on mask=0)."
   (assert (<= 0 layer-num (1- +max-layers+)) (layer-num)
           "Layer number must be 0-~d" (1- +max-layers+))
@@ -273,8 +274,8 @@
   (let ((loc (gethash (cons col row) (display-grid-layered-cells grid))))
     (setf (aref (cell-location-layers loc) layer-num)
           (make-cell-layer :glyph-idx        glyph-idx
-                           :ink-idx          ink-idx
-                           :bg-idx           bg-idx
+                           :ink-slot         ink-slot
+                           :bg-slot          bg-slot
                            :transparent-side transparent-side))
     (mark-row-dirty grid row)))
 
@@ -287,6 +288,26 @@
 
 (defun cell-layered-p (grid col row)
   (= 1 (sbit (display-grid-layered-flags grid) (%idx grid col row))))
+
+(defun continuation-p (grid col row)
+  "True when the cell at COL, ROW is the right half of a double-width glyph."
+  (= 1 (sbit (display-grid-continuation-flags grid) (%idx grid col row))))
+
+(defun exchange-cell-slots (grid col row)
+  "Draw the cell at COL, ROW with the ink and background slots of its layer 0
+   exchanged, as the first edition draws the cursor (LEXTER-D101): a simple
+   cell becomes a layered cell whose one layer inks in slot 0 over slot 1, and
+   a layered cell's layer 0 has its slots exchanged. The cell's swatch and wide
+   flag are kept, so no reversed swatch is interned and a pair stays a pair."
+  (let* ((loc (%ensure-layered grid col row))
+         (layer (aref (cell-location-layers loc) 0)))
+    (when layer
+      (setf (aref (cell-location-layers loc) 0)
+            (make-cell-layer :glyph-idx (cell-layer-glyph-idx layer)
+                             :ink-slot (cell-layer-bg-slot layer)
+                             :bg-slot (cell-layer-ink-slot layer)
+                             :transparent-side (cell-layer-transparent-side layer))))
+    (mark-row-dirty grid row)))
 
 ;;; --------------------------------------------------------------------------
 ;;; Render data builder
@@ -303,12 +324,12 @@
 (defun %u32-b2 (v) (ldb (byte 8 16) v))
 (defun %u32-b3 (v) (ldb (byte 8 24) v))
 
-(defun build-render-data (grid &key force-full)
-  "Build GPU instance buffers using pre-allocated storage.
-   If FORCE-FULL is true, rebuild everything.  Otherwise, only rebuild dirty rows.
+(defun build-render-data (grid)
+  "Build GPU instance buffers using pre-allocated storage, from every cell of
+   GRID; the row dirty flags are cleared, and kept for the second edition to
+   upload by (LEXTER-O40).
    Returns (values simple-buffer simple-byte-count layered-buffer layered-layer-counts).
    The returned buffers are the grid's cached buffers - do NOT modify them."
-  (declare (ignore force-full))
   (let* ((cols   (display-grid-cols grid))
          (rows   (display-grid-rows grid))
          (sbuf   (display-grid-simple-buffer grid))
@@ -383,8 +404,8 @@
                                    (aref lbuf (+ idx 6)) (%u32-b2 glyph)
                                    (aref lbuf (+ idx 7)) (%u32-b3 glyph)
                                    ;; i_ink_bg (uint8 x2) at 8-9, i_ts (uint8) at 10, pad 11
-                                   (aref lbuf (+ idx 8)) (cell-layer-ink-idx layer)
-                                   (aref lbuf (+ idx 9)) (cell-layer-bg-idx layer)
+                                   (aref lbuf (+ idx 8)) (cell-layer-ink-slot layer)
+                                   (aref lbuf (+ idx 9)) (cell-layer-bg-slot layer)
                                    (aref lbuf (+ idx 10)) ts
                                    (aref lbuf (+ idx 11)) 0
                                    ;; i_swatch (uint16) at 12-13; bytes 14-15 pad
@@ -433,7 +454,14 @@
         (let ((old-i (+ (* row old-cols) col))
               (new-i (+ (* row new-cols) col)))
           (setf (aref new-glyphs new-i) (aref (display-grid-glyphs grid) old-i)
-                (aref new-swatch-indices new-i) (aref (display-grid-swatch-indices grid) old-i)))))
+                (aref new-swatch-indices new-i) (aref (display-grid-swatch-indices grid) old-i)
+                (sbit new-wide-flags new-i) (sbit (display-grid-wide-flags grid) old-i)
+                (sbit new-continuation-flags new-i)
+                (sbit (display-grid-continuation-flags grid) old-i)))))
+    ;; A pair cut by a narrower right edge loses its left half's flag (LEXTER-O26)
+    (when (< new-cols old-cols)
+      (dotimes (row (min old-rows new-rows))
+        (setf (sbit new-wide-flags (+ (* row new-cols) (1- new-cols))) 0)))
     ;; Copy existing layered cells that still fit
     (maphash (lambda (key loc)
                (destructuring-bind (col . row) key

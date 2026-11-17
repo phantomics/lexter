@@ -6,6 +6,8 @@
   :in-order-to ((asdf:test-op (asdf:test-op #:lexter/tests)))
   :serial t
   :components ((:file "src/packages")
+               (:file "src/width-data")
+               (:file "src/width")
                (:file "src/pcf")
                (:file "src/atlas")
                (:file "src/grid")
@@ -80,6 +82,7 @@
                              (:file "test-tn3270")
                              (:file "test-telnet")
                              (:file "test-pty")
+                             (:file "test-width")
                              (:file "test-profiles")
                              (:file "test-scrollback"))))
   :perform (asdf:test-op (o s)

@@ -41,7 +41,8 @@
                                 (pixel-scale nil)
                                 (title "lexter terminal")
                                 (visible t)
-                                (no-pty nil))
+                                (no-pty nil)
+                                (width-policy lexter/width:*default-width-policy*))
   "Create an uninitialized UNIX-TERMINAL with the given configuration.
 
 The window, OpenGL context, renderer, and PTY are NOT created yet -- call
@@ -57,7 +58,11 @@ dimensions. Otherwise FONT-PATH is loaded (PCF, or BDF when it ends in .bdf).
 NO-PTY, when T, builds a headless replay terminal: no child process is spawned
 and COMMAND may be NIL. Drive it by feeding bytes to PROCESS-OUTPUT and reading
 back pixels with TERMINAL-CAPTURE (combine with :VISIBLE NIL for a hidden
-window)."
+window).
+
+WIDTH-POLICY decides character widths (LEXTER/WIDTH:MAKE-WIDTH-POLICY); by
+default Unicode's tables, with characters of ambiguous width narrow. A user who
+changes it makes the same setting in the programs the terminal runs."
   (let* ((pane (make-instance 'lexter/panes:uterm-pane
                               :command (unless no-pty command)
                               :args args
@@ -75,6 +80,7 @@ window)."
                       :prefix-key nil
                       :visible visible
                       :headless no-pty
+                      :width-policy width-policy
                       :layout-fn (lambda (comp new-cols new-rows)
                                    (declare (ignore comp))
                                    (lexter/panes:pane-resize pane new-cols new-rows)))))
@@ -115,7 +121,8 @@ thread, after GLFW:INITIALIZE."
                                (pixel-scale nil)
                                (title "lexter terminal")
                                (visible t)
-                               (stop-flag nil))
+                               (stop-flag nil)
+                               (width-policy lexter/width:*default-width-policy*))
   "Run a terminal emulator with COMMAND as a standalone, blocking call.
 
    COMMAND: program to run (e.g. \"/bin/bash\")
@@ -130,6 +137,7 @@ thread, after GLFW:INITIALIZE."
    PIXEL-SCALE: integer scaling factor (nil = 1x)
    TITLE: window title
    STOP-FLAG: a list whose CAR is checked each tick; NIL CAR terminates the loop
+   WIDTH-POLICY: how character widths are decided (see MAKE-TERMINAL)
 
    This is a thin wrapper over the iteration API: it owns the GLFW
    initialize/terminate lifecycle, builds the terminal with MAKE-TERMINAL,
@@ -141,7 +149,7 @@ thread, after GLFW:INITIALIZE."
   (let ((term (make-terminal command :args args :font-path font-path :fonts fonts
                                      :cols cols :rows rows
                                      :pixel-scale pixel-scale :title title
-                                     :visible visible)))
+                                     :visible visible :width-policy width-policy)))
     (unwind-protect
          (progn
            (gui-initialize term)

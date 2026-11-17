@@ -188,11 +188,8 @@
   (let* ((width (content-width pane))
          (height (content-height pane))
          (screen (lexter/model:make-screen :cols width :rows height)))
-    ;; Set blank glyph from atlas
-    (when atlas
-      (let ((space-idx (lexter/atlas:atlas-glyph-index atlas 32)))
-        (when space-idx
-          (setf (lexter/model:screen-blank-glyph screen) space-idx))))
+    ;; The blank is the atlas's empty glyph (LEXTER-D89, LEXTER-O28)
+    (setf (lexter/model:screen-blank-glyph screen) lexter/atlas:+empty-glyph-position+)
     ;; Store screen
     (setf (vt-pane-screen pane) screen)
     ;; Set up VT handler

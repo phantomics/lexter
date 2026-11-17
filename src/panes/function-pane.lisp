@@ -104,7 +104,7 @@
           :do (lexter/grid:set-simple-cell grid c grid-row
                                             (char-code char) swatch))))
 
-(defun clear-pane-region (pane grid &key (glyph 32) (swatch 0))
+(defun clear-pane-region (pane grid &key (glyph lexter/atlas:+empty-glyph-position+) (swatch 0))
   "Clear the entire pane region with GLYPH and SWATCH."
   (loop :for row :from (pane-row pane) :below (+ (pane-row pane) (pane-height pane))
         :do (loop :for col :from (pane-col pane) :below (+ (pane-col pane) (pane-width pane))

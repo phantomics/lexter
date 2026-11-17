@@ -79,7 +79,10 @@
   (layout-fn    nil :type (or null function))
   ;; The compositor's private profile of settings, which every pane inherits
   ;; through its workspace (profile.lisp)
-  (profile      (make-instance 'pane-profile)))
+  (profile      (make-instance 'pane-profile))
+  ;; How character widths are decided: the atlas fits its glyphs to this
+  ;; policy, and every VT handler on the atlas follows it (LEXTER-D117)
+  (width-policy lexter/width:*default-width-policy*))
 
 (defmethod own-profile ((comp compositor))
   (compositor-profile comp))
@@ -156,10 +159,7 @@
   (when (< index (length (compositor-workspaces comp)))
     (setf (compositor-active-index comp) index)
     ;; Clear grid and mark for full redraw
-    (clear-grid (compositor-display comp)
-                :glyph (lexter/atlas:atlas-glyph-index
-                        (compositor-atlas comp) 32)
-                :swatch 0)))
+    (clear-grid (compositor-display comp) :swatch 0)))
 
 (defun handle-compositor-char (comp codepoint)
   "Route character input to focused pane."
@@ -299,8 +299,7 @@
           (compositor-resize-pending comp) nil)
     ;; Resize the display grid
     (lexter/grid:resize-grid (compositor-display comp) new-cols new-rows
-                              :blank-glyph (lexter/atlas:atlas-glyph-index
-                                            (compositor-atlas comp) 32))
+                              :blank-glyph lexter/atlas:+empty-glyph-position+)
     ;; Mark all workspaces' decorations dirty (layout changed)
     (dolist (ws (compositor-workspaces comp))
       (mark-decorations-dirty ws))
@@ -394,7 +393,8 @@
                                    (prefix-key :f12)
                                    (visible t)
                                    (headless nil)
-                                   (layout-fn nil))
+                                   (layout-fn nil)
+                                   (width-policy lexter/width:*default-width-policy*))
   "Create an uninitialized COMPOSITOR for the given WORKSPACES.
 
 The window, OpenGL context, and renderer are NOT created yet -- call
@@ -413,7 +413,9 @@ PREFIX-KEY: key that activates meta-mode (default :f12); NIL disables it
 HEADLESS:   when T, keep running although no pane has a live backend (a
             replay terminal fed through its VT handler)
 LAYOUT-FN:  a function of the compositor, columns, and rows, called after the
-            window is resized to lay out the panes; NIL leaves them as they are"
+            window is resized to lay out the panes; NIL leaves them as they are
+WIDTH-POLICY: how character widths are decided (LEXTER/WIDTH:MAKE-WIDTH-POLICY);
+            by default Unicode's tables, with ambiguous characters narrow"
   (unless workspaces
     (error "At least one workspace is required"))
   (let ((comp (make-compositor :workspaces workspaces
@@ -427,7 +429,8 @@ LAYOUT-FN:  a function of the compositor, columns, and rows, called after the
                                :prefix-key prefix-key
                                :visible visible
                                :headless headless
-                               :layout-fn layout-fn)))
+                               :layout-fn layout-fn
+                               :width-policy width-policy)))
     ;; Each workspace refers back to its compositor, so that its panes find
     ;; the compositor's profile (LEXTER-DRAFT-pane-profiles-O2).
     (dolist (ws workspaces)
@@ -472,7 +475,8 @@ new context current, so the atlas/renderer GL objects belong to it."
                 :opengl-forward-compat t)))
       (gl:viewport 0 0 win-w win-h)
       ;; Build atlas with all fonts, then add cursor glyphs, then renderer.
-      (let ((atlas (lexter/atlas:build-atlas font-list)))
+      (let ((atlas (lexter/atlas:build-atlas font-list
+                                             :width-policy (compositor-width-policy comp))))
         (lexter/atlas:add-cursor-glyphs atlas)
         (let ((display (lexter/grid:make-display-grid :cols cols :rows rows))
               (renderer (lexter/renderer:make-renderer atlas win-w win-h
@@ -533,9 +537,7 @@ new context current, so the atlas/renderer GL objects belong to it."
             (dolist (pane (workspace-panes ws))
               (pane-initialize pane atlas)))
           ;; Clear grid initially
-          (clear-grid display
-                      :glyph (lexter/atlas:atlas-glyph-index atlas 32)
-                      :swatch 0)
+          (clear-grid display :swatch 0)
           (setf (compositor-running comp) t
                 (compositor-last-tick-time comp) (glfw:get-time))
           comp)))))
@@ -652,45 +654,10 @@ new context current, so the atlas/renderer GL objects belong to it."
 ;;; --------------------------------------------------------------------------
 
 (defun make-xterm-palette ()
-  "Return a (simple-array single-float (1024)) with the standard xterm colours."
-  (let ((p (make-array 1024 :element-type 'single-float :initial-element 0.0)))
-    (flet ((set-rgb (i r g b)
-             (setf (aref p (+ (* i 4) 0)) (/ r 255.0)
-                   (aref p (+ (* i 4) 1)) (/ g 255.0)
-                   (aref p (+ (* i 4) 2)) (/ b 255.0)
-                   (aref p (+ (* i 4) 3)) 1.0))
-           (comp6 (v) (if (zerop v) 0 (+ 55 (* 40 v)))))
-      ;; Colours 0-15: standard ANSI
-      (loop :for (r g b) :in '((0   0   0)    ; 0  black
-                               (170 0   0)    ; 1  dark red
-                               (0   170 0)    ; 2  dark green
-                               (170 85  0)    ; 3  dark yellow
-                               (0   0   170)  ; 4  dark blue
-                               (170 0   170)  ; 5  dark magenta
-                               (0   170 170)  ; 6  dark cyan
-                               (220 220 220)  ; 7  light grey
-                               (85  85  85)   ; 8  dark grey
-                               (255 85  85)   ; 9  bright red
-                               (85  255 85)   ; 10 bright green
-                               (255 255 85)   ; 11 bright yellow
-                               (85  85  255)  ; 12 bright blue
-                               (255 85  255)  ; 13 bright magenta
-                               (85  255 255)  ; 14 bright cyan
-                               (255 255 255)) ; 15 white
-            :for i :from 0
-            :do (set-rgb i r g b))
-      ;; Colours 16-231: 6x6x6 cube
-      (loop :for i :from 16 :to 231
-            :for n = (- i 16)
-            :do (set-rgb i
-                         (comp6 (floor n 36))
-                         (comp6 (mod (floor n 6) 6))
-                         (comp6 (mod n 6))))
-      ;; Colours 232-255: greyscale ramp
-      (loop :for i :from 232 :to 255
-            :for v = (+ 8 (* 10 (- i 232)))
-            :do (set-rgb i v v v)))
-    p))
+  "Return the default palette, the model's (MAKE-DEFAULT-PALETTE), so that a
+   colour is the same before a pane's palette is first uploaded as after it
+   (LEXTER-O36). Kept under this name for its callers."
+  (lexter/model:make-default-palette))
 
 (defun setup-default-swatches (display)
   "Initialize default swatches in display grid."

@@ -132,14 +132,10 @@
                                     :tab-stops tab-stops
                                     :encoding encoding
                                     :bold-as-bright bold-as-bright)))
-    ;; Set the blank glyph on the screen (atlas index for space character)
-    ;; and fill the screen with blank glyphs
-    (when atlas
-      (let ((space-glyph (lexter/atlas:atlas-glyph-index atlas 32)))
-        (when space-glyph
-          (setf (screen-blank-glyph screen) space-glyph)
-          ;; Fill screen with proper blank glyph (not codepoint 32)
-          (fill (lexter/model::screen-glyphs screen) space-glyph))))
+    ;; The blank is the atlas's empty glyph, at the position every atlas
+    ;; reserves for it, not the glyph of the space (LEXTER-D89, LEXTER-O28)
+    (setf (screen-blank-glyph screen) lexter/atlas:+empty-glyph-position+)
+    (fill (lexter/model::screen-glyphs screen) lexter/atlas:+empty-glyph-position+)
     ;; Set default tab stops every 8 columns
     (loop :for i :from 0 :below cols :by 8
           :do (setf (sbit tab-stops i) 1))
@@ -222,24 +218,58 @@
 ;;; Print handler with UTF-8 decoding
 ;;; --------------------------------------------------------------------------
 
+(defun %wrap-to-next-line (handler)
+  "Move the cursor to the start of the next row, scrolling up at the bottom."
+  (let* ((screen (vt-handler-screen handler))
+         (row (cursor-row screen)))
+    (if (< row (1- (screen-rows screen)))
+        (set-cursor-position screen 0 (1+ row))
+        (progn
+          (scroll-up screen)
+          (set-cursor-position screen 0 row)))))
+
 (defun %print-codepoint (handler codepoint)
-  "Actually print a fully-decoded Unicode codepoint to the screen."
+  "Print a fully-decoded Unicode codepoint at the cursor. Its width comes from
+   the width table, through the atlas's width policy (LEXTER-D117): a character
+   of width 0 is dropped until the text grid of Phase 3 gives it a cell to join
+   (LEXTER-DRAFT-cell-model-revision-D23); a character of width 2 is written as
+   a pair and moves the cursor two columns, wrapping first when it would begin
+   in the last column (LEXTER-D98); and a character that no font covers is
+   written at its width with the \"no glyph\" glyph."
+  (let* ((screen (vt-handler-screen handler))
+         (atlas (vt-handler-atlas handler))
+         (width (lexter/width:char-width codepoint
+                                         (if atlas
+                                             (lexter/atlas:atlas-width-policy atlas)
+                                             lexter/width:*default-width-policy*))))
+    (when (zerop width)
+      (return-from %print-codepoint))
+    (when (and (= width 2) (< (screen-cols screen) 2))
+      (setf width 1))
+    ;; A pair cannot begin in the last column: blank it and wrap first, or,
+    ;; without autowrap, write the pair in the last two columns.
+    (when (and (= width 2) (= (cursor-col screen) (1- (screen-cols screen))))
+      (if (vt-handler-autowrap handler)
+          (progn
+            (write-char-at screen (cursor-col screen) (cursor-row screen)
+                           (screen-blank-glyph screen))
+            (%wrap-to-next-line handler))
+          (set-cursor-position screen (- (screen-cols screen) 2) (cursor-row screen))))
+    (%write-printed-char handler codepoint width)))
+
+(defun %write-printed-char (handler codepoint width)
+  "Write CODEPOINT, of WIDTH 1 or 2, at the cursor, which has room for it, and
+   advance the cursor by WIDTH."
   (let* ((screen (vt-handler-screen handler))
          (atlas (vt-handler-atlas handler))
          (cols (screen-cols screen))
          (col (cursor-col screen))
          (row (cursor-row screen))
-         ;; Look up glyph index from codepoint
-         (glyph-idx (when atlas
-                      (lexter/atlas:atlas-glyph-index atlas codepoint))))
+         (glyph-idx (or (and atlas (lexter/atlas:atlas-glyph-index atlas codepoint width))
+                        lexter/atlas:+no-glyph-position+)))
     (when *debug-vt*
-      (format t "~&[PRINT] codepoint=~D (#x~X) glyph-idx=~S~%" 
-              codepoint codepoint glyph-idx))
-    ;; Only print if we have a valid glyph
-    (unless glyph-idx
-      (when *debug-vt*
-        (format t "~&[PRINT] SKIPPED (no glyph for U+~4,'0X)~%" codepoint))
-      (return-from %print-codepoint))
+      (format t "~&[PRINT] codepoint=~D (#x~X) width=~D glyph-idx=~S~%"
+              codepoint codepoint width glyph-idx))
     ;; Calculate effective foreground color
     ;; Bold-as-bright: promote fg 0-7 to 8-15 when bold is active
     (let* ((attrs (vt-handler-current-attrs handler))
@@ -257,20 +287,16 @@
                                       0)))
       ;; Write character at cursor position
       (write-char-at screen col row glyph-idx
-                   :swatch swatch-idx
-                   :attrs attrs)
+                     :swatch swatch-idx
+                     :attrs attrs
+                     :wide (= width 2))
       ;; Advance cursor
-      (let ((new-col (1+ col)))
+      (let ((new-col (+ col width)))
         (cond
           ((< new-col cols)
            (set-cursor-position screen new-col row))
           ((vt-handler-autowrap handler)
-           ;; Wrap to next line
-           (if (< row (1- (screen-rows screen)))
-               (set-cursor-position screen 0 (1+ row))
-               (progn
-                 (scroll-up screen)
-                 (set-cursor-position screen 0 row))))
+           (%wrap-to-next-line handler))
           (t
            ;; Stay at right edge
            (set-cursor-position screen (1- cols) row)))))))

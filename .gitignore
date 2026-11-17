@@ -30,3 +30,4 @@
 
 # OSX folder metadata
 .DS_Store
+tools/ucd-cache/

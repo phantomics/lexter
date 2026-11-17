@@ -74,7 +74,7 @@
         (set-swatch grid 200 0 2 9 0)
         (set-cell-swatch grid 1 3 200)
         ;; Layer 0: '#' — ink=slot1(dark-green), bg=slot0(black)
-        (set-cell-layer grid 1 3 0 hash-glyph 1 :bg-idx 0 :transparent-side :none)
+        (set-cell-layer grid 1 3 0 hash-glyph 1 :bg-slot 0 :transparent-side :none)
         ;; Layer 1: 'X' — ink=slot2(bright-red), bg transparent
         (set-cell-layer grid 1 3 1 x-glyph    2 :transparent-side :bg)))
     ;; Row 3 label (swatch 100 = grey text)
@@ -87,7 +87,7 @@
         (set-swatch grid 201 0 14 4 0)
         (set-cell-swatch grid 1 5 201)
         ;; Layer 0: '@' solid, cyan-on-black
-        (set-cell-layer grid 1 5 0 block-glyph 1 :bg-idx 0 :transparent-side :none)
+        (set-cell-layer grid 1 5 0 block-glyph 1 :bg-slot 0 :transparent-side :none)
         ;; Layer 1: 'A' with :fg transparent — the letter pixels are cut out,
         ;;          revealing black from layer 0 through the letter shape
         (set-cell-layer grid 1 5 1 letter-glyph 2 :transparent-side :fg)))

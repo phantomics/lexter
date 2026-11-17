@@ -13,9 +13,7 @@
   (:documentation "A terminal pane with a scroll bar, as a decorated layout has."))
 
 (defparameter *history-codepoints* '(#x20 #x41 #x42 #x43 #x44 #x45)
-  "The space, A, B, C, D, and E: the characters of the history tests. The space
-comes first, at atlas position 0, which the first edition's flush draws as the
-blank (LEXTER-O28), so that no letter is taken for a blank.")
+  "The space, A, B, C, D, and E: the characters of the history tests.")
 
 (defmacro with-history ((pane grid &key (class ''lexter/panes:uterm-pane)
                                         (width 10) (height 3))
@@ -101,14 +99,15 @@ the cursor's place in the grid keeps the colours of the line it shows."
 
 (def-test short-history-line-is-padded ()
   "LEXTER-O30: a history line narrower than the pane, left by a resize, is
-drawn padded with blanks."
+drawn padded with blanks: the atlas's empty glyph, the screen's blank."
   (with-history (pane grid :width 10)
     (lexter/panes:pane-resize pane 12 3)
     (let ((wide (make-test-grid :cols 12 :rows 3)))
       (scroll-to pane 1)
       (lexter/panes:pane-flush pane wide)
       (is (= (letter #x42) (grid-glyph wide 0 0)))
-      (is (= (letter #x20) (grid-glyph wide 11 0))))))
+      (is (= (lexter/model:screen-blank-glyph (view-screen pane))
+             (grid-glyph wide 11 0))))))
 
 ;;; ------------------------------------------------------------
 ;;; The wheel  (LEXTER-O30, LEXTER-DRAFT-pane-profiles-D7)

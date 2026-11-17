@@ -54,6 +54,10 @@
   :description "Terminals without a PTY: input events that have no backend to reach"
   :in lexter)
 
+(def-suite width
+  :description "Character widths from Unicode's tables, and width policies"
+  :in lexter)
+
 (def-suite profiles
   :description "Pane profiles: settings looked up through parent profiles, then workspace and compositor"
   :in lexter)
@@ -72,7 +76,7 @@
 
 (defparameter *fast-suites*
   '(atlas handler model grid swatches structure tn3270 telnet pty
-    profiles scrollback)
+    width profiles scrollback)
   "The child suites run when slow tests are skipped.")
 
 (defun run-all-tests (&key skip-slow)
@@ -171,10 +175,12 @@ that no test passes because the space happens to take atlas position 0."
                                   :wide-glyphs wide-glyphs)))
 
 (defun make-test-atlas (&key (fonts (list (make-test-font))) (cols 16)
-                             (cursor-glyphs t))
-  "Pack an atlas from FONTS with COLS columns, without GL, and add the cursor
-glyphs as the production path does when CURSOR-GLYPHS is true."
-  (let ((atlas (lexter/atlas:pack-atlas fonts :cols cols)))
+                             (cursor-glyphs t)
+                             (width-policy lexter/width:*default-width-policy*))
+  "Pack an atlas from FONTS with COLS columns, fitted to WIDTH-POLICY, without
+GL, and add the cursor glyphs as the production path does when CURSOR-GLYPHS
+is true."
+  (let ((atlas (lexter/atlas:pack-atlas fonts :cols cols :width-policy width-policy)))
     (when cursor-glyphs
       (lexter/atlas:add-cursor-glyphs atlas))
     atlas))

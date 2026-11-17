@@ -126,3 +126,58 @@ share one palette (LEXTER-D70)."
       (is-false (eq alternate *screen*))
       (is (equalp (multiple-value-list (lexter/model:get-palette-entry *screen* 1))
                   (multiple-value-list (lexter/model:get-palette-entry alternate 1)))))))
+
+;;; ------------------------------------------------------------
+;;; Widths from the table  (LEXTER-D117, LEXTER-DRAFT-cell-model-revision-D23)
+;;; ------------------------------------------------------------
+
+(defmacro with-terminal-on-atlas ((atlas-form &key (cols 10) (rows 3)) &body body)
+  "Run BODY as WITH-CLEAN-TERMINAL does, but on the atlas ATLAS-FORM makes."
+  `(let* ((*atlas*   ,atlas-form)
+          (*screen*  (make-test-screen :cols ,cols :rows ,rows :atlas *atlas*))
+          (*handler* (lexter/vt-handler:make-vt-handler *screen* *atlas*))
+          (*grid*    (make-test-grid :cols ,cols :rows ,rows)))
+     ,@body))
+
+(def-test zero-width-character-is-dropped ()
+  "A character of width 0, such as a combining mark, is dropped and does not
+move the cursor, until the text grid of Phase 3 gives it a cell to join."
+  (with-clean-terminal ()
+    (feed "A" (string (code-char #x0301)) "B")
+    (is (= (glyph *atlas* #x42) (screen-glyph *screen* 1 0)))
+    (is (= 2 (lexter/model:cursor-col *screen*)))))
+
+(def-test uncovered-character-draws-the-no-glyph-glyph ()
+  "A character that no font covers is written at its width from the table with
+the \"no glyph\" glyph, and moves the cursor by its width."
+  (with-clean-terminal ()
+    (feed (string (code-char #xE9)))
+    (is (= lexter/atlas:+no-glyph-position+ (screen-glyph *screen* 0 0)))
+    (is (= 1 (lexter/model:cursor-col *screen*)))
+    (feed (string (code-char #x1F600)))
+    (is (= lexter/atlas:+no-glyph-position+ (screen-glyph *screen* 1 0)))
+    (is-true (screen-wide-p *screen* 1 0))
+    (is (= 3 (lexter/model:cursor-col *screen*)))))
+
+(def-test width-comes-from-the-table-not-the-font ()
+  "A character's width is the table's, whatever its glyph's: an ideograph
+whose glyph is narrow still takes two columns, and a Latin letter whose glyph
+is wide takes one."
+  (with-terminal-on-atlas ((make-test-atlas
+                            :fonts (list (make-test-font :narrow '(#x4E00 #x20) :wide '(#x41)))))
+    (feed (string (code-char #x4E00)))
+    (is-true (screen-wide-p *screen* 0 0))
+    (is (= 2 (lexter/model:cursor-col *screen*)))
+    (feed "A")
+    (is-false (screen-wide-p *screen* 2 0))
+    (is (= 3 (lexter/model:cursor-col *screen*)))))
+
+(def-test ambiguous-character-follows-the-atlas-policy ()
+  "A character of ambiguous width takes the width that the atlas's width
+policy gives it."
+  (with-terminal-on-atlas ((make-test-atlas
+                            :fonts (list (make-test-font :narrow '(#x03B1 #x20) :wide '()))
+                            :width-policy (lexter/width:make-width-policy :ambiguous-width 2)))
+    (feed (string (code-char #x03B1)))
+    (is-true (screen-wide-p *screen* 0 0))
+    (is (= 2 (lexter/model:cursor-col *screen*)))))

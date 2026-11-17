@@ -11,7 +11,6 @@
 ;;; Constants (must match grid.lisp)
 ;;; --------------------------------------------------------------------------
 
-(defconstant +layered-stride+ 16)   ; bytes per layered instance (must match grid.lisp)
 (defconstant +max-palette-slots+ 4  "Number of palette slots in the UBO.")
 (defconstant +palette-slot-size+ 4096 "Bytes per palette slot (256 x vec4).")
 

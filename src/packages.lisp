@@ -17,6 +17,17 @@
             #:glyph-index)
   (:shadowing-import-from #:chipz #:gzip #:make-decompressing-stream))
 
+(defpackage #:lexter/width
+  (:use #:cl)
+  (:export #:char-width
+           #:unicode-width-class
+           #:width-policy
+           #:make-width-policy
+           #:width-policy-ambiguous-width
+           #:width-policy-overrides
+           #:*default-width-policy*
+           #:+unicode-version+))
+
 (defpackage #:lexter/atlas
   (:use #:cl #:lexter/pcf)
   (:export #:build-atlas
@@ -32,9 +43,20 @@
            #:atlas-rows
            #:atlas-glyph-index
            #:atlas-glyph-wide-p
+           #:atlas-width-policy
+           ;; Generated glyphs, by name and by position (LEXTER-D89)
+           #:+generated-glyph-base+
+           #:+first-font-position+
+           #:+empty-glyph+
            #:+cursor-block-glyph+
            #:+cursor-underline-glyph+
-           #:+cursor-bar-glyph+))
+           #:+cursor-bar-glyph+
+           #:+cursor-outline-glyph+
+           #:+replacement-glyph+
+           #:+no-glyph-glyph+
+           #:+empty-glyph-position+
+           #:+replacement-glyph-position+
+           #:+no-glyph-position+))
 
 (defpackage #:lexter/grid
   (:use #:cl)
@@ -55,6 +77,8 @@
            #:set-cell-layer
            #:clear-cell-layers
            #:cell-layered-p
+           #:continuation-p
+           #:exchange-cell-slots
            ;; Dirty tracking
            #:mark-row-dirty
            #:mark-all-dirty
@@ -111,6 +135,8 @@
 
 (defpackage #:lexter/model
   (:use #:cl)
+  ;; The layer and swatch counts have one home, the grid (LEXTER-O36)
+  (:import-from #:lexter/grid #:+max-layers+ #:+swatch-slots+)
   (:export ;; Screen creation
            #:make-screen
            #:screen

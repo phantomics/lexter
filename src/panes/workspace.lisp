@@ -172,8 +172,9 @@ private profile PROFILE-PARENT as its parent, when one is given."
 ;;; Grid clearing utility
 ;;; --------------------------------------------------------------------------
 
-(defun clear-grid (grid &key (glyph 32) (swatch 0))
-  "Clear the entire grid with GLYPH and SWATCH."
+(defun clear-grid (grid &key (glyph lexter/atlas:+empty-glyph-position+) (swatch 0))
+  "Clear the entire grid with GLYPH, by default the atlas's empty glyph, and
+   SWATCH."
   (let ((cols (lexter/grid:display-grid-cols grid))
         (rows (lexter/grid:display-grid-rows grid)))
     (dotimes (row rows)

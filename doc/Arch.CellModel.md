@@ -127,6 +127,7 @@ Table: Terms used in this design, with their definitions.
 | Payload | The words after a cell's glyph words that its format defines, such as inline colours |
 | Generated glyph | A glyph that Lexter draws itself into a reserved atlas position, such as a line or a cursor |
 | Replacement glyph | The generated glyph drawn where a wide glyph must fit one cell and its ink is wider than the cell |
+| "No glyph" glyph | The generated glyph drawn in each cell of a character that no font in the chain covers |
 | Line glyph | A generated glyph holding one combination of underline, strikethrough, and overline |
 | Tile | A cell-sized picture of colour values 0–15, kept in the tile texture; a tile cell draws two beneath its glyphs |
 | Transparency field, colour offset | In a tile cell, the field that makes one value of the top tile transparent, the first colour of a swatch; and for each tile the number of swatches by which its values are moved |
@@ -631,13 +632,17 @@ Table: Reserved atlas positions.
 | 0 | The empty glyph |
 | 1–4 | Cursor glyphs: 1 full block, 2 underline, 3 bar, 4 outlined block |
 | 5 | The replacement glyph |
-| 6–7 | Reserved for other generated glyphs |
+| 6 | The "no glyph" glyph |
+| 7 | Reserved for another generated glyph |
 | 8–63 | Line glyphs: position 8 + 8 × style + flags |
 
 The replacement glyph is drawn where a wide glyph must fit one cell and its
 ink is wider than the cell, so that no fragment of a glyph is shown as though
 it were a character (LEXTER-D117 in
-[LEXTER-0017](Plan.CellModelRevision.md)). From position 64 the atlas holds
+[LEXTER-0017](Plan.CellModelRevision.md)). The "no glyph" glyph is drawn in
+each cell of a character that no font in the chain covers, so that a missing
+glyph is told apart from a space and from a glyph too wide for its cell
+(LEXTER-DRAFT-cell-model-revision-D23). From position 64 the atlas holds
 the fonts' glyphs, keyed by codepoint, width, and weight: the glyphs fitted
 to a width that their bitmaps lack, and the glyphs of bold fonts
 (LEXTER-D116), have entries of their own.
@@ -1639,8 +1644,8 @@ a host that changes palette entries by OSC 4 on every frame.
 1. **With the plan's Phase 1.** The atlas reserves positions 0–63 and names
    generated glyphs from 0x110000, and the cursor glyphs move from
    private-use codepoints to positions 1–4, the outlined block added beside
-   the three of today; the replacement glyph takes position 5, and 6–7 stay
-   reserved (LEXTER-D89). The atlas fits its glyphs to the width table's
+   the three of today; the replacement glyph takes position 5, the "no glyph"
+   glyph position 6, and 7 stays reserved (LEXTER-D89). The atlas fits its glyphs to the width table's
    widths (LEXTER-D117).
 2. **With the plan's Phase 2.** The palette store, sized by the
    configuration (LEXTER-D92), with the integer stores of

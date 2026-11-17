@@ -12,7 +12,7 @@ approved-by:   Andrew Sengul
 reviewed:      2026-11-05
 provenance:
   assistant:   opencode
-  session:     "Terminal fixes plan (2026-11-02)"
+  session:     "Terminal fixes plan (2026-11-02); the headless flag (2026-11-17)"
 relates-to:
   - LEXTER-0014
   - LEXTER-DRAFT-data-structures-1e
@@ -531,6 +531,11 @@ A pane with no PTY is fed by `process-output`, but its backend reports itself
 dead, and the compositor stops when every pane is. A headless flag on the
 compositor, or a pane that counts as alive when it was made without a
 command, are the candidates.
+
+**Resolution:** 2026-11-17 — accepted, recorded at the steward's direction:
+a headless flag on the compositor. A compositor made headless keeps running
+while its panes have no PTY, and the standalone terminal's `no-pty` mode sets
+it; a compositor that is not headless stops when every pane is dead, as now.
 
 ### LEXTER-O42 — How does a pane reach its window?
 

@@ -33,6 +33,7 @@ Table: Documents in the LEXTER namespace.
 | [LEXTER-DRAFT-data-structures-1e](Spec.DataStructures1e.md) | Data Structures, First Edition: Specification | Spec | project | Deprecated | — |
 | [LEXTER-DRAFT-mouse-reporting](Log.MouseReporting.md) | Mouse Reporting: Development Log | Log | component | Draft | vt |
 | [LEXTER-DRAFT-pane-profiles](Plan.PaneProfiles.md) | Pane Profiles and Scrollback Viewing: Development Plan | Plan | component | Accepted | panes |
+| [LEXTER-DRAFT-regression-suite](Log.RegressionSuite.md) | Regression Suite (Phase 0): Development Log | Log | project | Draft | — |
 
 Table: Decision, open-question, and memo records in the LEXTER namespace.
 
@@ -157,6 +158,9 @@ Table: Decision, open-question, and memo records in the LEXTER namespace.
 | [LEXTER-D117](Plan.CellModelRevision.md#lexter-d117--a-characters-width-is-decided-by-the-path-that-writes-it-once-and-stored) | Decision | A character's width is decided by the path that writes it, once, and stored | Proposed | LEXTER-0017 |
 | [LEXTER-D118](Plan.CellModelRevision.md#lexter-d118--history-keeps-text-and-styles-and-records-exist-only-for-the-rows-on-screen) | Decision | History keeps text and styles, and records exist only for the rows on screen | Proposed | LEXTER-0017 |
 | [LEXTER-D119](Plan.CellModelRevision.md#lexter-d119--the-text-grid-marks-every-cell-a-character-covers-and-a-terminal-row-lies-beside-it) | Decision | The text grid marks every cell a character covers, and a terminal row lies beside it | Proposed | LEXTER-0017 |
+| [LEXTER-DRAFT-cell-model-revision-D21](Plan.CellModelRevision.md#lexter-draft-cell-model-revision-d21--the-regression-suite-follows-square-and-stays-red-until-each-fix-lands) | Decision | The regression suite follows Square, and stays red until each fix lands | Proposed | LEXTER-0017 |
+| [LEXTER-DRAFT-cell-model-revision-D22](Plan.CellModelRevision.md#lexter-draft-cell-model-revision-d22--the-atlass-packing-is-separated-from-its-upload-in-phase-0-with-a-column-count-the-caller-fixes) | Decision | The atlas's packing is separated from its upload in Phase 0, with a column count the caller fixes | Proposed | LEXTER-0017 |
+| [LEXTER-DRAFT-cell-model-revision-D23](Plan.CellModelRevision.md#lexter-draft-cell-model-revision-d23--phase-1-takes-widths-from-unicode-170-draws-a-no-glyph-glyph-for-an-uncovered-codepoint-and-drops-zero-width-characters) | Decision | Phase 1 takes widths from Unicode 17.0, draws a "no glyph" glyph for an uncovered codepoint, and drops zero-width characters | Proposed | LEXTER-0017 |
 | [LEXTER-DRAFT-mouse-reporting-D1](Log.MouseReporting.md#lexter-draft-mouse-reporting-d1--coordinates-are-pane-content-relative) | Decision | Coordinates are pane-content-relative | Proposed | LEXTER-DRAFT-mouse-reporting |
 | [LEXTER-DRAFT-mouse-reporting-D2](Log.MouseReporting.md#lexter-draft-mouse-reporting-d2--drag-capture) | Decision | Drag capture | Proposed | LEXTER-DRAFT-mouse-reporting |
 | [LEXTER-DRAFT-mouse-reporting-D3](Log.MouseReporting.md#lexter-draft-mouse-reporting-d3--cell-granularity-motion) | Decision | Cell-granularity motion | Proposed | LEXTER-DRAFT-mouse-reporting |

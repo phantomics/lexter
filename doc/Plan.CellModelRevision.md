@@ -48,6 +48,9 @@ decisions:
   - LEXTER-D117
   - LEXTER-D118
   - LEXTER-D119
+  - LEXTER-DRAFT-cell-model-revision-D21
+  - LEXTER-DRAFT-cell-model-revision-D22
+  - LEXTER-DRAFT-cell-model-revision-D23
 open-questions:
   - LEXTER-O56
   - LEXTER-O57
@@ -508,7 +511,8 @@ Tests that must inspect first-edition internals, such as its wide and
 continuation flag vectors, are rewritten in Phase 3. A check that compares
 the swatch data the renderer last uploaded with its source needs a GL
 context, so it runs in the screenshot test rig's hidden window, not in the
-headless suite.
+headless suite. The suite's form is given by
+LEXTER-DRAFT-cell-model-revision-D21.
 
 **Alternatives:**
 - Screenshot fixtures alone. Rejected: they need a display, and cannot see
@@ -1053,6 +1057,144 @@ text grid holds codepoints and grapheme clusters remains open.
   each row serves moving between prompts and selecting output; zones for
   cells can be added if they prove needed.
 
+### LEXTER-DRAFT-cell-model-revision-D21 — The regression suite follows Square, and stays red until each fix lands
+
+**Status:** Proposed
+
+**Context:** LEXTER-D106 asks for a headless test system written with FiveAM
+and cl-hamcrest, as the Origin tests are; that pair is the stack of the
+Square testing standard, which fixes a test system's package, suites,
+runners, and `test-op`. Lexter has two test systems: `lexter/mouse-tests`
+defines its own `check` macro (`tests/mouse-tests.lisp`), which Square does
+not admit, and `lexter/origin-tests` is written with FiveAM and cl-hamcrest
+but has a package and root suite of its own
+(`tests/origin-impulse-tests.lisp`). FiveAM has no mark
+for a test expected to fail, and a test that reproduces a finding fails
+until the finding is repaired.
+
+**Decision:**
+
+- **Square.** The suite conforms to the Square standard: the system
+  `lexter/tests`, defined in `lexter.asd`, with its files in `tests/`; the
+  package `lexter-tests`; a root suite `lexter` with a child suite for each
+  subsystem, beginning with `atlas`, `handler`, `model`, `grid`, and
+  `swatches`, to which the terminal-fixes plan's tests add theirs
+  (LEXTER-D80); and the main system's `test-op` runs it. The Square block of
+  `AGENTS.md` names the standard for later sessions.
+- **Red until fixed.** A test that reproduces a finding asserts the
+  behaviour the repair gives, names the finding in its docstring, and fails
+  until the repair lands; the suite stays red until every such test passes.
+  The first edition's internals that a test must inspect are named as
+  LEXTER-D106 allows, and such tests are rewritten in Phase 3.
+- **Structural tests.** Findings about how the code is arranged rather than
+  how it behaves, constants defined more than once
+  (LEXTER-O36) and dirty bits that nothing reads
+  (LEXTER-O40), are tested structurally: for example,
+  that the model, the grid, and the renderer share one definition of a
+  constant.
+- **Fonts made in the tests.** Tests build their fonts in memory, so that no
+  font file is needed and every packing is the same on every machine.
+- **The existing tests.** `lexter/mouse-tests` and `lexter/origin-tests` are
+  left as they are, and move into `lexter/tests` in a later step: the mouse
+  tests converted from their `check` macro to FiveAM and cl-hamcrest, and the
+  Origin tests given a child suite of the root.
+
+**Alternatives:**
+- A suite of FiveAM tests outside Square's shape. Not chosen: Square gives
+  the suite a form that its skills can write, run, and review.
+- Reproduction tests kept apart in a suite of known faults, outside the
+  default run, until each is repaired. Not chosen by the steward: a red suite
+  shows plainly what remains to be repaired.
+- Tests that assert today's faulty behaviour, inverted when the repair
+  lands. Rejected: each repair would rewrite its test, and the test would not
+  state what is wanted.
+- Moving the existing tests into the suite now. Not chosen: it is not needed
+  to begin the repairs, and can be done at any time.
+
+### LEXTER-DRAFT-cell-model-revision-D22 — The atlas's packing is separated from its upload in Phase 0, with a column count the caller fixes
+
+**Status:** Proposed
+
+**Context:** LEXTER-D108 separates the atlas's packing from the upload of
+its texture, and fixes its column count from the fixture's configuration, so
+that the cell checksum needs no display; it places that change in Phase 3.
+`build-atlas` queries `GL_MAX_TEXTURE_SIZE` and uploads a texture
+(`src/atlas.lisp:build-atlas@2d4d743`), and `add-cursor-glyphs` uploads it
+again (`src/atlas.lisp:add-cursor-glyphs@2d4d743`), so no test can build an
+atlas without a GL context. The critique worked around this with an atlas
+struct built by hand ([LEXTER-0014](Eval.Critique.DataStructures1e.md),
+Method). The tests of Phase 1's findings, and of the width fitting of
+LEXTER-D117, need atlases packed from fonts.
+
+**Decision:** Phase 0 makes this part of LEXTER-D108.
+
+- **`pack-atlas`** assigns each glyph its position and keeps its pixels,
+  with no GL, and takes its column count from its caller.
+- **`upload-atlas`** creates the texture from a packed atlas.
+- **`build-atlas`** packs and uploads, choosing its column count from the
+  GPU's maximum texture size unless it is given one, as it does now.
+- **`add-cursor-glyphs`** adds its glyphs to the packing, and rebuilds the
+  texture only when the atlas has been uploaded.
+
+The change is a refactoring: positions, pixels, and the test rig's pixel
+checksums do not change, which the rig's fixtures confirm when replayed on a
+display. The rest of LEXTER-D108 stays in Phase 3.
+
+**Alternatives:**
+- An atlas struct built by hand in each test, as the critique did. Rejected:
+  the tests would not exercise the packing that Phase 1 changes, and every
+  change to the struct would break them.
+- The split in Phase 1, with the repairs. Not chosen by the steward: the
+  reproduction tests come first, and need it.
+
+### LEXTER-DRAFT-cell-model-revision-D23 — Phase 1 takes widths from Unicode 17.0, draws a "no glyph" glyph for an uncovered codepoint, and drops zero-width characters
+
+**Status:** Proposed
+
+**Context:** LEXTER-D117 has the VT handler take widths from a table
+generated from one version of Unicode's data, without naming the version.
+The C library's tables that programs use, and those of the terminals in the
+prior-art evaluation, are generated from recent versions: kitty's and
+Alacritty's from Unicode 17.0
+([LEXTER-0018](Eval.CellModels.PriorArt.md), R4). SBCL's own
+`sb-unicode:east-asian-width` is older: under SBCL 2.3.4 it reports U+1FAE8,
+added in Unicode 15.0, as narrow, and its version follows SBCL's. Today the
+handler skips a codepoint that no font covers without moving the cursor
+(`src/vt-handler.lisp:%print-codepoint@2d4d743`), so the program and the
+terminal disagree from that column on. The first edition has no text grid,
+so a zero-width character has no cell to join
+(LEXTER-D119).
+
+**Decision:**
+
+- **Unicode 17.0.** The width table is generated from the data files of
+  Unicode 17.0: East Asian Width, emoji presentation, and the general
+  categories that make a character zero-width. The generator and the files'
+  version are kept with the table, and moving to another version is a
+  deliberate step.
+- **A codepoint that no font covers** is written at its width from the
+  table, and moves the cursor by that width, like any other. Its cell draws
+  the "no glyph" glyph, generated glyph 6
+  (LEXTER-D89), narrow, in each cell of a wide
+  character. The text grid of Phase 3 keeps its codepoint, so that it is
+  copied as written.
+- **Zero-width characters** are dropped, and do not move the cursor, until
+  the text grid of Phase 3 gives them a cell to join; how they are then drawn
+  is LEXTER-O63.
+
+**Alternatives:**
+- SBCL's `sb-unicode`. Rejected: it is older than Unicode 15.0 in the SBCL
+  in use, and its version would change with SBCL's.
+- Skipping an uncovered codepoint, as now. Rejected: the cursor would no
+  longer follow the program's count.
+- Blank cells for an uncovered codepoint. Not chosen: the user could not
+  tell a missing glyph from a space.
+- The replacement glyph for an uncovered codepoint. Not chosen: it marks a
+  glyph too wide for its cell, which is another fault, and the two should be
+  told apart.
+- Each zero-width character as a cell of its own, as some are now. Rejected:
+  it moves every later character on the line out of place.
+
 ## The First Edition Repaired
 
 Phase 1 repairs the present structures in place
@@ -1062,10 +1204,10 @@ Table: First-edition repairs by finding.
 
 | Finding | Repair |
 |---|---|
-| LEXTER-O19 | The VT handler decides each character's width from the width table, writes pairs, and advances by two; the atlas fits its glyphs to the table's widths; the flush writes each pair once; the cursor keeps the wide flag (LEXTER-D98, LEXTER-D117, LEXTER-D101) |
+| LEXTER-O19 | The VT handler decides each character's width from the width table of Unicode 17.0, writes pairs, and advances by two, also for a codepoint no font covers, and drops zero-width characters; the atlas fits its glyphs to the table's widths; the flush writes each pair once; the cursor keeps the wide flag (LEXTER-D98, LEXTER-D117, LEXTER-D101) |
 | LEXTER-O26 | Per-cell helpers in every row and range operation, edge repair, `resize-grid` copying both flag vectors, and the row check (LEXTER-D98) |
 | LEXTER-O27 | The flush writes a layered cell's whole record, empty layers included; `write-char-at` on a layered cell honours its swatch and attributes; the cursor no longer rewrites the cell (LEXTER-D101) |
-| LEXTER-O28 | Atlas positions 0–63 are reserved at build time, position 0 for an empty glyph and the rest for generated glyphs, which the atlas names from 0x110000 instead of private-use codepoints, so the cursor glyphs move to positions 1–4, the outlined block added beside the three of today, and position 5 holds the replacement glyph of width fitting (LEXTER-D117), with 6–7 reserved (LEXTER-D89); every writer takes its blank from the atlas instead of writing codepoint 32 |
+| LEXTER-O28 | Atlas positions 0–63 are reserved at build time, position 0 for an empty glyph and the rest for generated glyphs, which the atlas names from 0x110000 instead of private-use codepoints, so the cursor glyphs move to positions 1–4, the outlined block added beside the three of today, position 5 holds the replacement glyph of width fitting (LEXTER-D117), and position 6 the "no glyph" glyph for a codepoint no font covers (LEXTER-DRAFT-cell-model-revision-D23), with 7 reserved (LEXTER-D89); every writer takes its blank from the atlas instead of writing codepoint 32 |
 | LEXTER-O36 | One home for the cell constants that the model, grid, and renderer share, one `+layered-stride+`, one default palette, one `setup-default-swatches`, and one name for each layer slot |
 | LEXTER-O40 | The grid's description is made true: `build-render-data` loses the unused `force-full` and its claim of incremental rebuilds, and the dirty bits stay for the second edition to upload by |
 | Review: the cursor writes into the model during the flush | The cursor exchanges slots (LEXTER-D101) |
@@ -1344,8 +1486,9 @@ indices (LEXTER-D118), so it need not be scanned.
   until the workspace switch schedules a repaint
   (LEXTER-O32), which
   LEXTER-D71 fixes before Phase 3. The pane-profiles
-  plan also changes `flush-to-display`, to draw the history, so its order with
-  Phase 1 is settled when the phases are scheduled.
+  plan also changes `flush-to-display`, to draw the history; the steward has
+  placed that change before Phase 1, so that Phase 1 repairs the flush as the
+  history drawing leaves it.
 - **A larger model.** A screen of 80×24 records is 61 KB, three times today's
   size; small, but it grows with every pane. History is kept as text and
   styles, not records (LEXTER-D118), so it does not
@@ -1617,15 +1760,19 @@ Table: Prior systems and what this plan draws from each.
 
 ## Roadmap
 
-1. **Phase 0: the regression suite.** A headless test system with a test for
-   each finding in scope, reproducing it before it is repaired
-   (LEXTER-D106).
+1. **Phase 0: the regression suite.** A headless test system, following
+   Square, with a test for each finding in scope, reproducing it before it is
+   repaired, and red until the repair lands (LEXTER-D106,
+   LEXTER-DRAFT-cell-model-revision-D21); and the atlas's packing separated
+   from its upload, so that tests pack atlases without GL
+   (LEXTER-DRAFT-cell-model-revision-D22). A short Log records the phase.
 2. **Phase 1: the first edition repaired.** It starts after the companion
-   plan's consolidation of the two terminal stacks (LEXTER-D67). The repairs
+   plan's consolidation of the two terminal stacks (LEXTER-D67), and after
+   the pane-profiles plan's history drawing. The repairs
    of The First Edition Repaired, finding by finding, each turning its test
-   green, with the width table and the atlas's fitting of glyphs to it
-   (LEXTER-D117), which settles
-   LEXTER-O79. Double-width text renders through the VT path. A Log records the
+   green, with the width table of Unicode 17.0 and the atlas's fitting of
+   glyphs to it (LEXTER-D117, LEXTER-DRAFT-cell-model-revision-D23), which
+   settles LEXTER-O79. Double-width text renders through the VT path. A Log records the
    phase.
 3. **Phase 2: swatch ranges.** The store, the allocator, interning by every
    writer, upload records that name their tables, and global indices stored by
@@ -1691,9 +1838,9 @@ Table: The order of work across the three plans.
 | 1 | This plan's Phase 0: the regression suite | — |
 | 2 | The terminal-fixes plan's tests, in that suite | 1 |
 | 3 | The terminal-fixes plan's consolidation of the two stacks (LEXTER-D67) | 2 |
-| 4 | This plan's Phase 1: the first edition repaired | 3 |
-| 5 | This plan's Phase 2: swatch ranges | 4 |
-| 6 | The terminal-fixes plan's workspace-switch repaint (LEXTER-D71) | 3 |
-| 7 | This plan's Phase 3 and later | 5, 6, and the gate's questions |
-| — | The pane-profiles plan's history drawing in `flush-to-display` | Its order relative to step 4 is settled when the phases are scheduled |
+| 4 | The pane-profiles plan's history drawing in `flush-to-display` | 3 |
+| 5 | This plan's Phase 1: the first edition repaired | 4 |
+| 6 | This plan's Phase 2: swatch ranges | 5 |
+| 7 | The terminal-fixes plan's workspace-switch repaint (LEXTER-D71) | 3 |
+| 8 | This plan's Phase 3 and later | 6, 7, and the gate's questions |
 | — | The terminal-fixes plan's protocol fixes (LEXTER-D72, LEXTER-D73) | Nothing; at any time |

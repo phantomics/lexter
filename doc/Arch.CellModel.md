@@ -49,6 +49,7 @@ open-questions:
   - LEXTER-O53
   - LEXTER-O54
   - LEXTER-O55
+  - LEXTER-DRAFT-cell-model-O12
 cites:
   - title:    "X Logical Font Description Conventions"
     locator:  "X Consortium, XLFD version 1.5, the font properties UNDERLINE_POSITION, UNDERLINE_THICKNESS, STRIKEOUT_ASCENT, and STRIKEOUT_DESCENT"
@@ -1323,6 +1324,37 @@ design this would need:
   operations for each pixel.
 
 It is left for a step after the first tiles, in the plan's Later Formats.
+
+### LEXTER-DRAFT-cell-model-O12 — May a cell address its swatches as a run?
+
+A table could intern swatches in runs of two or four in sequence, so that
+one index names them all. Two formats would use it:
+
+- **Tiles by pair.** Word 6 would hold the first swatch of A–B and the first
+  of C–D, each a run of two, and word 7 would be free: 32 bits, enough for a
+  fourth glyph word, whose type bit byte 1 has room for, or a third tile and
+  sixteen bits more. Runs of two keep what LEXTER-D91's common arrangement
+  needs, a top tile in A–B over a bottom tile in C–D, each chosen apart from
+  the other, and the pairs that LEXTER-D95 cycles. A single run of four would
+  free 48 bits, but every pairing of top and bottom palettes that a game uses
+  would need a run of its own.
+- **Glyphs in eight slots.** A glyph format whose swatch index names a run of
+  two would give each of six layers and the background a colour of its own.
+  The ink slot would grow into bit 27 of a layer's settings byte, which is
+  reserved, and the background slot's third bit would be a colour parameter,
+  since bits 0–25 of the header word mean the same in every format
+  (LEXTER-D87). It would be a format of its own rather than the plain
+  format's rule: most cells are text in two colours, and interning them in
+  runs of two would double what they take of the store and match fewer
+  swatches. Its colour parameters are the bits that glyph cycling would use
+  (LEXTER-O54), so the two are designed together.
+
+Both need a table that appends a run and interns it as a unit, which tables
+that only grow allow (LEXTER-D99). If swatch ranges come to cycle
+(LEXTER-DRAFT-host-protocol-O5), a run lies wholly inside or wholly outside
+a cycling range. Neither format is needed before the plan's Later Formats,
+and until tiles are built, format 4 may still change rather than gain a
+sibling.
 
 ## Roadmap
 

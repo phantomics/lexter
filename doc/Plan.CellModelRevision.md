@@ -848,6 +848,20 @@ edition, as LEXTER-D100 describes.
   the store's first 32,768 entries. Moving the flag into the instance's
   padding bytes would lift the limit sooner, at the cost of changing the
   first edition's shaders and attribute setup once more.
+- **Room for swatch reindexing.** Shifting a range of swatches on a clock,
+  as the host-protocol survey proposes (LEXTER-DRAFT-host-protocol-O5), is
+  designed after the cell model. Three things built from this phase on keep
+  it possible:
+  - *One swatch fetch.* Each renderer looks up swatches in one place: the
+    first edition's shader, and in Phases 3 and 5 one function, generated
+    from the descriptor (LEXTER-D104), through which glyph layers and tiles
+    alike read swatches, so that a remap is added once.
+  - *Entries outside interning.* A table can append swatches that its
+    interner never matches, and nothing assumes that every entry is in its
+    lookup map; eviction (Phase 7) leaves such entries alone.
+  - *Bits left unspent.* Bit 31 of a tile cell's header word and the glyph
+    formats' colour parameters are not spent without asking whether
+    reindexing needs them, in case a cell must opt in to it.
 
 When the phase is done, LEXTER-O20, LEXTER-O22, and LEXTER-O23 are resolved,
 and LEXTER-O24 is a limit per table with a policy for a full table.
@@ -996,6 +1010,7 @@ Table: The later additions and what each waits for.
 | Tiles and their texture, with flips, a top tile that may pass in front of the glyphs, and colour cycling by swatch pair on two clocks (LEXTER-D91, LEXTER-D95) | The cursor over a tile cell (LEXTER-O45), palette slots running out (LEXTER-O50), and the fitting of tile sets (LEXTER-O51) |
 | Colour cycling in glyph cells | How a cell of four slots cycles its colours (LEXTER-O54) |
 | Masks that cut a cell's tiles | The first tiles, and how masks reach into them (LEXTER-O55) |
+| Swatch runs: tile cells that name their swatches by pair, and a glyph format of eight slots | The design of runs (LEXTER-DRAFT-cell-model-O12); the glyph format also waits for glyph cycling (LEXTER-O54), whose bits it shares |
 | The void and effects (LEXTER-D82) | The survey of surfaces and effects, and what they carry (LEXTER-O53) |
 | Further underline styles (LEXTER-D89) | How their patterns meet from cell to cell (LEXTER-O48), and whether SGR 21, which the handler now reads as resetting bold, is the double underline that xterm and ECMA-48 make it |
 
@@ -1019,7 +1034,10 @@ whose bit is set when that clock moves. The mask is not maintained by
 writers: the renderer recomputes a row's bits whenever it uploads the row,
 from the blink flags and cycle fields of its records, so it cannot drift from
 the grid. The rows under the cursor, which shares the blink clock, are
-marked as moving or animating an instance marks them.
+marked as moving or animating an instance marks them. The mask is a set of
+bits that can grow rather than three fixed ones: a clock that shifts a range
+of swatches (LEXTER-DRAFT-host-protocol-O5) would add a bit, set for a row
+that holds a swatch index in the range.
 
 Phase 7, conditional, evicts unused swatches within a range, if
 LEXTER-O58 chooses eviction over a large range and a

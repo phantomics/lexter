@@ -12,9 +12,10 @@ approved-by:   Andrew Sengul
 reviewed:      2026-11-06
 provenance:
   assistant:   opencode
-  session:     "Cell model revision plan (2026-11-02), the dense cell model"
+  session:     "Cell model revision plan (2026-11-02), the dense cell model; widths, history, and rows (2026-11-17)"
 relates-to:
   - LEXTER-0017
+  - LEXTER-0018
   - LEXTER-DRAFT-cell-field-format
   - LEXTER-0013
   - LEXTER-DRAFT-data-structures-1e
@@ -37,6 +38,10 @@ decisions:
   - LEXTER-D93
   - LEXTER-D94
   - LEXTER-D95
+  - LEXTER-DRAFT-cell-model-D16
+  - LEXTER-DRAFT-cell-model-D17
+  - LEXTER-DRAFT-cell-model-D18
+  - LEXTER-DRAFT-cell-model-D19
 open-questions:
   - LEXTER-O45
   - LEXTER-O46
@@ -83,15 +88,17 @@ built from it. It refines the layout that
 [LEXTER-DRAFT-cell-field-format](Survey.CellFieldFormat.md) proposed, as
 [LEXTER-0017](Plan.CellModelRevision.md) left it to be
 refined. A record begins with a format word, which says how its other words
-are arranged, whether the cell is half of a double-width glyph, and whether
-its text blinks, and a header word, which holds the cell's colours and which
+are arranged, whether the cell is half of a double-width glyph, whether
+its text blinks, and the size of its line, and a header word, which holds the cell's colours and which
 every format reads the same way. Cells of the glyph formats hold up to six
 glyph words, each carrying its glyph and its settings, in which layers and
 masks are interleaved and each mask cuts one or more of the layers before it.
 A layer inks some of its pixels and leaves the rest transparent, and what no
 layer inks takes the cell's background slot. The cursor and line attributes
 leave the header, the cursor for the overlay list and the lines for generated
-glyphs, and the palette slot widens to eight bits. Nothing here is built. Each
+glyphs, and the palette slot widens to eight bits. Beside its records, each
+grid keeps a drawn row for each of its rows, which tells renderers when the
+row changed and which clocks change its pixels. Nothing here is built. Each
 part is placed in the plan's phases under Roadmap.
 
 ## Canonical Terms
@@ -103,7 +110,8 @@ Table: Terms used in this design, with their definitions.
 | Record | The 32 bytes, eight 32-bit words, that describe one cell |
 | Format | The arrangement of a record's words, selected by the record's first byte |
 | Format word | Word 0: the format in byte 0, the format's structure in byte 1, flags common to every format in byte 2, and the format's parameters in byte 3 |
-| Drawing flags | Bits 16–18 of the format word, at the same place in every format: wide, right half, and blink |
+| Drawing flags | Bits 16–21 of the format word, at the same place in every format: wide, right half, blink, line size, and magnified half |
+| Line size, magnified half | The DEC size of a cell's line, single, double width, or the top or bottom of double height, by which its glyphs are magnified two times; and which column of a magnified glyph the cell shows |
 | Header word | Word 1: the swatch index, the palette slot, and the background slot, read the same way in every format, and colour parameters the format defines |
 | Glyph format | A format whose cells hold glyph words: plain, void, inline colours, and tiles |
 | Glyph word | A word holding a 24-bit glyph and a settings byte, as a layer or as a mask |
@@ -117,6 +125,7 @@ Table: Terms used in this design, with their definitions.
 | Palette slot | The number of one 256-colour palette in the palette store |
 | Payload | The words after a cell's glyph words that its format defines, such as inline colours |
 | Generated glyph | A glyph that Lexter draws itself into a reserved atlas position, such as a line or a cursor |
+| Replacement glyph | The generated glyph drawn where a wide glyph must fit one cell and its ink is wider than the cell |
 | Line glyph | A generated glyph holding one combination of underline, strikethrough, and overline |
 | Tile | A cell-sized picture of colour values 0–15, kept in the tile texture; a tile cell draws two beneath its glyphs |
 | Transparency field, colour offset | In a tile cell, the field that makes one value of the top tile transparent, the first colour of a swatch; and for each tile the number of swatches by which its values are moved |
@@ -124,6 +133,10 @@ Table: Terms used in this design, with their definitions.
 | Blink, blink phase | A flag that makes a cell's topmost layer disappear while the window's blink phase is off, and the phase itself, a clock shared with the cursor |
 | Overlay instance | A record with a position and flags, drawn by the overlay pass over the grid |
 | Void | A cell of the void format, which references a surface and leaves its uncovered pixels undrawn |
+| Drawn row | What a grid keeps for each of its rows beside the records, for renderers: a change stamp and a clock mask |
+| Change stamp | A number from one counter global to Lexter, taken by a row whenever one of its records is written |
+| Clock mask | One bit for each clock, set when a row holds a cell whose pixels that clock changes |
+| Dirty, damaged | A row is dirty for a reader when its data changed since the reader last took it, and must be uploaded; it is damaged when its pixels may have changed, and must be redrawn |
 
 ## Thesis / Concerns
 
@@ -146,7 +159,10 @@ cell shows, which selection, copying, search, and screen readers need, are
 kept in a text grid of their own (LEXTER-O63), and
 hyperlink ids, protected cells, semantic zones, and the terminal's modes are
 likewise state that Lexter keeps apart from the cell model. Writers keep the
-two in step; this document specifies only the side that is drawn.
+two in step; this document specifies only the side that is drawn. The cell
+model holds the cells on screen: rows that scroll into history are kept as
+text and styles, and made into records again only to be shown
+(LEXTER-DRAFT-cell-model-revision-D19).
 
 The design serves these concerns:
 
@@ -208,16 +224,17 @@ Table: The bytes of the format word.
 |---|---|---|
 | 0 | 0–7 | The format (LEXTER-D82) |
 | 1 | 8–15 | The format's structure: in a glyph format, the glyph count and type bits (LEXTER-D83) |
-| 2 | 16–23 | Drawing flags common to every format: wide (16), right half (17), and blink (18, LEXTER-D94); 19–23 reserved |
+| 2 | 16–23 | Drawing flags common to every format: wide (16), right half (17), blink (18, LEXTER-D94), line size (19–20), and magnified half (21, LEXTER-DRAFT-cell-model-D17); 22–23 reserved |
 | 3 | 24–31 | The format's parameters, zero where it defines none |
 
-Byte 0 and bits 16–18 are at the same places in every format. The wide bit
+Byte 0 and bits 16–21 are at the same places in every format. The wide bit
 is 1 when the cell holds half of a double-width glyph, and the right-half bit,
 with wide set, is 0 for the left half and 1 for the right; both are zero
-where a format has no halves. Bits 19–23 are reserved: flags common to every
-format are allocated from bit 19 upwards, and a format whose parameters
+where a format has no halves. Bits 22–23 are reserved: flags common to every
+format are allocated from bit 22 upwards, and a format whose parameters
 outgrow byte 3 may claim bits from 23 downwards, so that a reader always
-finds the common flags at the bottom of byte 2. Word 1 is the header word
+finds the common flags at the bottom of byte 2. Which fields may take a
+common flag is governed by LEXTER-DRAFT-cell-model-D18. Word 1 is the header word
 (LEXTER-D87): its swatch index, palette slot, and background slot are read
 the same way in every record, and no format may redefine them; its last six
 bits are colour parameters that the format defines.
@@ -315,7 +332,9 @@ Table: Bits of the format word in a glyph format.
 | 16 | 1 | Wide | 1 = the cell holds half of a double-width glyph |
 | 17 | 1 | Right half | With wide set: 0 = left half, 1 = right half |
 | 18 | 1 | Blink | 1 = the topmost layer blinks (LEXTER-D94) |
-| 19–23 | 5 | Reserved | Common flags from bit 19 upwards (LEXTER-D81) |
+| 19–20 | 2 | Line size | 0 single, 1 double width, 2 top of double height, 3 bottom (LEXTER-DRAFT-cell-model-D17) |
+| 21 | 1 | Magnified half | With a line size other than 0: 0 = the left, 1 = the right of the two cells across which one cell's width of the glyph is magnified |
+| 22–23 | 2 | Reserved | Common flags from bit 22 upwards (LEXTER-D81) |
 | 24–31 | 8 | The format's parameters | Zero, except in tiles (LEXTER-D91) |
 
 A record of zeros is a plain cell with no glyphs and a background slot of 0:
@@ -609,8 +628,18 @@ Table: Reserved atlas positions.
 | Positions | Glyphs |
 |---|---|
 | 0 | The empty glyph |
-| 1–7 | Cursor glyphs: 1 full block, 2 underline, 3 bar, 4 outlined block; 5–7 reserved |
+| 1–4 | Cursor glyphs: 1 full block, 2 underline, 3 bar, 4 outlined block |
+| 5 | The replacement glyph |
+| 6–7 | Reserved for other generated glyphs |
 | 8–63 | Line glyphs: position 8 + 8 × style + flags |
+
+The replacement glyph is drawn where a wide glyph must fit one cell and its
+ink is wider than the cell, so that no fragment of a glyph is shown as though
+it were a character (LEXTER-DRAFT-cell-model-revision-D18 in
+[LEXTER-0017](Plan.CellModelRevision.md)). From position 64 the atlas holds
+the fonts' glyphs, keyed by codepoint, width, and weight: the glyphs fitted
+to a width that their bitmaps lack, and the glyphs of bold fonts
+(LEXTER-DRAFT-cell-model-D19), have entries of their own.
 
 The flags are bit 0 underline, bit 1 strikethrough, and bit 2 overline, and
 are never 0, so positions 8, 16, and so on up to 56 are unused. Style 0 is
@@ -679,7 +708,7 @@ Table: The record of a tile cell.
 
 | Word | Contents |
 |---|---|
-| 0 | Format 4; bits 8–10 the glyph count, 0–3; bits 11–12 the type bits of glyphs 1–2; bits 16–18 the drawing flags, for the glyphs; bit 23 the top tile above the glyphs; bits 24–25 the top tile's transparency field; bits 28–29 the bottom tile's colour offset; bits 30–31 the top tile's colour offset; the rest reserved |
+| 0 | Format 4; bits 8–10 the glyph count, 0–3; bits 11–12 the type bits of glyphs 1–2; bits 16–21 the drawing flags, for the glyphs; bit 23 the top tile above the glyphs; bits 24–25 the top tile's transparency field; bits 28–29 the bottom tile's colour offset; bits 30–31 the top tile's colour offset; the rest reserved |
 | 1 | The header word: the swatch for the glyph layers, the palette slot, and the background slot; bits 26–30 the colour cycles of swatches A–B and C–D (LEXTER-D95) |
 | 2–4 | Glyph words, as in any glyph format |
 | 5 | The bottom tile (bits 0–15) and the top tile (bits 16–31) |
@@ -1036,6 +1065,200 @@ it would with grouping off.
   grouping on. Not chosen for now by the steward: each could reverse one
   pair only while the other pair stays still, so the codes are reserved.
 
+### LEXTER-DRAFT-cell-model-D16 — Each grid keeps a drawn row for each row, with a change stamp and a clock mask, and dirty rows are told apart from damaged ones
+
+**Status:** Proposed
+
+**Context:** The plan uploads a grid's rows when they change, and records
+which grid it uploaded by an identity or an epoch from one global counter
+([LEXTER-0017](Plan.CellModelRevision.md), The Dense Cell Model). The first
+edition's grid keeps a dirty bit for each row that nothing reads
+(LEXTER-O40). A grid has more than one reader: the
+GPU's uploads, the CPU renderer (LEXTER-D111), and
+partial redraw. Some pixels change with a clock while no record does: a
+blinking cell at each change of the blink phase
+(LEXTER-D94), and a tile cell whose colours cycle
+(LEXTER-D95). The plan's partial redraw keeps a mask of
+clocks for each row, which the renderer derives from the records as it
+uploads them. Other facts about rows, such as soft wraps, prompt marks, and
+the DEC line size, are never read by renderers, and are kept beside the text
+grid (LEXTER-DRAFT-cell-model-revision-D20 in
+[LEXTER-0017](Plan.CellModelRevision.md)).
+
+**Decision:** Beside its array of records, each grid keeps an array of drawn
+rows, one for each of its rows. It is not in the array of records, so that
+the records stay the upload buffer, laid out row by row.
+
+Table: The fields of a drawn row.
+
+| Field | Contents | Written by |
+|---|---|---|
+| Change stamp | The value of one counter global to Lexter, taken whenever a record in the row is written | The record accessors generated from the descriptor (LEXTER-D104) |
+| Clock mask | One bit for each clock: the blink phase, the first cycle clock, and the second cycle clock, to begin with; set when the row holds a cell whose pixels that clock changes | Each renderer, which derives it from the row's records when it takes the row |
+
+- **Change stamps.** Each reader remembers, for each row, the stamp it last
+  took; a row whose stamp is newer is dirty for that reader. No reader clears
+  a flag that another still needs, and writers need not know who reads. A
+  screen's rows carry stamps of their own, which drive the copy of a pane's
+  rows into the composed grid (LEXTER-D107), and the copy stamps the grid's
+  rows. Replacing a grid, changing the workspace, or resizing makes every
+  row dirty, as the plan's identity or epoch of a grid does.
+- **Clock masks.** A row's blink bit is set when a cell in it has the blink
+  flag (LEXTER-D94), and its cycle bits when a tile cell in it has cycle
+  fields that the first or second clock drives
+  (LEXTER-D95). Writers never write the mask, so it cannot drift from the
+  records. Further clocks, such as one that shifts a range of swatches
+  (LEXTER-DRAFT-host-protocol-O5), add bits.
+- **Dirty and damaged.** A row is dirty when its data changed, and must be
+  uploaded, and redrawn. A row is damaged when its pixels may have changed,
+  and must be redrawn: every dirty row; every row whose clock bit is set when
+  that clock moves; and every row under an overlay instance that is added,
+  moved, removed, or animated (LEXTER-D93), the cursor's among them. A clock
+  never causes an upload, since no record changes. Until partial redraw
+  (the plan's Phase 6), every frame redraws every row, and damage is what
+  that phase redraws by.
+- **Only what renderers read.** The drawn row holds nothing that renderers
+  do not read; the terminal row beside the text grid holds the rest.
+
+**Alternatives:**
+- A dirty bit for each row, as the first edition keeps. Not chosen: a reader
+  that clears it clears it for the others, and a bit for each reader makes
+  writers know the readers.
+- A clock mask that writers maintain. Rejected: it can drift from the
+  records, which the derived mask cannot.
+- The drawn row kept in the array of records, as a record at the start of
+  each row. Rejected: the upload would no longer be a range of records, and a
+  cell's place would no longer follow from its instance number.
+- Soft wraps, prompt marks, and the line size in the drawn row. Rejected:
+  renderers never read them, and a row of the composed grid holds several
+  panes, whose rows differ in them.
+
+### LEXTER-DRAFT-cell-model-D17 — DEC double-size lines are drawn from flags in each cell, which magnify its glyphs two times
+
+**Status:** Proposed
+
+**Context:** DECDWL (`ESC # 6`) makes a line double width, and DECDHL
+(`ESC # 3` and `ESC # 4`) makes it the top or bottom half of double height,
+which is double width as well; DECSWL (`ESC # 5`) restores a single line.
+The VT220 manual defines them as attributes of a whole line, and xterm and
+WezTerm keep them for each row and draw them doubled
+([LEXTER-0018](Eval.CellModels.PriorArt.md)); kitty, Alacritty, Ghostty,
+and foot do not support them. In the composed grid
+(LEXTER-D107) one row holds several panes and their
+chrome, so a row of the grid cannot carry one pane's line attribute, and
+composing a pane is a plain copy of row segments. A bitmap glyph magnified
+by an integer is exact. The cell-field-format survey asked whether the wide
+bits should become a position within a larger object
+(LEXTER-DRAFT-cell-field-format-O3).
+
+**Decision:** Bits 19–20 of the format word are the line size, and bit 21 is
+the magnified half, in every format (LEXTER-D81).
+
+- **Line size.** 0 single, 1 double width, 2 the top of double height, 3 the
+  bottom. With a line size other than 0, every glyph that the cell reads,
+  its layers and its masks, line glyphs among them, is magnified two times
+  across, and for sizes 2 and 3 two times down as well.
+- **Which part a cell shows.** A cell of width *w* and height *h* shows,
+  at its pixel (*x*, *y*), column ⌊((2*r* + *m*) × *w* + *x*) / 2⌋ of the
+  glyph, where *r* is the right-half bit and *m* the magnified half; and row
+  ⌊(*v* × *h* + *y*) / 2⌋, where *v* is 0 for the top and 1 for the bottom,
+  for sizes 2 and 3, or row *y* for size 1. A narrow character on a
+  double-width line covers two cells, and a wide one covers four.
+- **Writers.** The terminal row's line size
+  (LEXTER-DRAFT-cell-model-revision-D20) decides how the writer writes the
+  row: each character across the cells it covers, with these flags, and
+  continuation markers in the text grid. Changing a row's line size rewrites
+  its records.
+- **Tiles** are not magnified: the flags apply to the glyphs only, as the
+  wide bits do (LEXTER-D91).
+- **When.** The bits are defined now, so that they are not spent on anything
+  else, and built as a later step of the plan; until then writers leave them
+  zero.
+
+**Alternatives:**
+- A line attribute for each row, read by the renderer, as xterm and WezTerm
+  keep it. Rejected: a row of the composed grid holds several panes, so the
+  attribute would need a table of segments, and composing would no longer be
+  a plain copy.
+- No double-size lines, as most terminals surveyed. Not chosen: three bits
+  give them exactly, at integer scale, which suits Lexter's bitmaps.
+- Separate bits for double width and double height. Not chosen: double
+  height is always double width in DEC's terminals, so two bits name every
+  size.
+- Larger sizes, as kitty's text-sizing protocol draws up to seven times.
+  Not chosen: they would need a position within a larger object, which a few
+  flags cannot hold; larger text is for tiles or a surface.
+
+### LEXTER-DRAFT-cell-model-D18 — A record's bits are spent by the reach of what they hold
+
+**Status:** Proposed
+
+**Context:** After the line size (LEXTER-DRAFT-cell-model-D17), the common
+flags of byte 2 have bits 22 and 23 left, and tiles claim bit 23
+(LEXTER-D91). The plain format's byte 1 is full. The header word's colour
+parameters are wanted by colour cycling in glyph cells
+(LEXTER-O54), by the background slot of eight-slot
+cells (LEXTER-DRAFT-cell-model-O12), and perhaps by a bit that opts a cell
+into swatch reindexing (the plan's Swatch Ranges). Byte 3 is free in the
+plain, void, and inline-colour formats; a layer's settings byte has five
+reserved bits and a mask's two (LEXTER-O49). The 24-bit atlas position needs
+about 21 bits in practice: a 16,384-by-16,384 texture holds about two million
+cells of 8 by 16.
+
+**Decision:** A new field takes the narrowest place that serves it.
+
+Table: Where a new field belongs, by what it applies to.
+
+| What it applies to | Place |
+|---|---|
+| One glyph | Its settings byte (LEXTER-D84) |
+| One format | Byte 3 of the format word, then bits claimed from bit 23 downwards (LEXTER-D81) |
+| The colours of the cell | The header word's colour parameters, which each format defines (LEXTER-D87) |
+| Every format, and needed by a renderer or the wide-pair helpers before they know the format | Byte 2 of the format word, from bit 22 upwards |
+| Read only on the CPU, such as the text, hyperlink ids, or protected cells | Beside the cell model, never in the record |
+| What moves or lasts a moment, such as cursors, selection highlighting, or a link lit by the pointer | The overlay list (LEXTER-D93) |
+
+- **A choice of glyph costs no bits.** What a different glyph can draw, such
+  as bold (LEXTER-DRAFT-cell-model-D19), the line styles
+  (LEXTER-D89), and generated glyphs, takes an atlas position, not a field.
+- **The last reserve.** The top bits of a glyph's 24-bit position are not
+  spent while another place serves; LEXTER-D84's range stands.
+
+**Alternatives:**
+- Bits given as needs arise. Rejected: the common flags, which every format
+  pays for, would run out first.
+- A larger record. Rejected: 32 bytes is one 256-bit register and two
+  `uvec4` attributes of an instance, which the design is built around.
+
+### LEXTER-DRAFT-cell-model-D19 — Bold is a choice of glyph, from a bold font in the chain
+
+**Status:** Proposed
+
+**Context:** The first edition records SGR 1 as an attribute
+(`src/model.lisp:+attr-bold+@2d4d743`) and offers bold-as-bright, which turns
+foreground colours 0–7 into 8–15 (`src/vt-handler.lisp:vt-handler@2d4d743`);
+it draws no bold shapes. Bitmap fonts often come with bold companions, such
+as Terminus and the X fonts whose names hold `bold`. Bold can also be faked
+by widening each glyph's ink by a pixel, which needs a renderer to read the
+neighbouring pixel of the glyph.
+
+**Decision:** A bold cell's text layer holds the glyph of a bold font in the
+chain: a font in the chain may have a bold companion, and the atlas keeps
+the bold glyphs at positions of their own, keyed by codepoint, width, and
+weight (LEXTER-D89). Where no bold font covers the codepoint, the regular
+glyph is drawn. Bold-as-bright stays a choice of the terminal's colours. A
+cell's boldness, for attribute reports and copying with formatting, is read
+from the terminal's style, not from the record
+(LEXTER-DRAFT-cell-model-revision-D19). Bold costs no bits of the record
+(LEXTER-DRAFT-cell-model-D18).
+
+**Alternatives:**
+- Bold faked by widening the ink, with a bit in a layer's settings. Not
+  chosen: it spends a settings bit, makes both renderers read neighbouring
+  pixels, and draws shapes that the font's designer did not.
+- Bold as colour alone. Not chosen as the meaning of bold: it stays an
+  option, as bold-as-bright.
+
 ## The Record
 
 Table: The record, by word, for each glyph format.
@@ -1130,7 +1353,7 @@ cycle(c):                                       // LEXTER-D95
     if a == 0 and b == 0:                        // none, or all sixteen
         return g ? (c + first_step) mod 16 : c
     if a == 3 and b == 3 and g:                  // all sixteen, in reverse
-        return (c + 16 - first_step mod 16) mod 16
+        return (c + 16 - (first_step mod 16)) mod 16
     base = c & 8; r = c & 7                      // the pair, the place in it
     N    = 1 << (base == 0 ? a : b)
     step = base == 0 ? first_step : second_step
@@ -1175,7 +1398,9 @@ Table: Mask operations, applied to the bits the mask reaches.
 | 3 Mask less coverage | The mask's pixel and not the coverage |
 
 The right half of a double-width glyph samples the second of the glyph's two
-atlas columns; tiles are cell-sized and have no halves. The colour is written
+atlas columns; tiles are cell-sized and have no halves. In a cell with a line
+size, `pixel` reads every glyph magnified, at the column and row that
+LEXTER-DRAFT-cell-model-D17 gives; tiles are read as they are. The colour is written
 as bytes, divided by 255 on the GPU, without blending
 (LEXTER-D110).
 
@@ -1211,6 +1436,7 @@ Table: Where each cursor and pointer effect is drawn.
 | Block cursor | An overlay instance that draws its background, copying the cell with its background slot and topmost layer's ink slot exchanged (LEXTER-D93) |
 | Underline and bar cursors | An overlay instance with a cursor glyph, not drawing its background |
 | A hyperlink lit by the pointer | An overlay instance with an underline glyph, not drawing its background |
+| Selection highlighting | Overlay instances over the selected cells; the record holds no bit for it (LEXTER-DRAFT-cell-model-D18) |
 
 ## Open Questions
 
@@ -1253,13 +1479,14 @@ reading lines back passes it over (LEXTER-D88).
 
 The header word's colour parameters are six bits that the plain, void, and
 inline-colour formats leave reserved, of which tiles use five for their
-cycles; the format word has thirteen reserved bits in those three formats,
-five common flags in byte 2 and all of byte 3, and six in tiles, bits 19–22
-and 26–27;
+cycles; the format word has ten reserved bits in those three formats, bits
+22–23 of byte 2 and all of byte 3, and three in tiles, bits 22 and 26–27;
 a layer's settings byte has five; and a mask's two. The candidates are
 effects for each layer, which need no payload and so could stand beside
-masks. The bits stay reserved until a use is chosen; state that only the CPU
-reads, such as the protected-cell bit of DECSCA
+masks, and flips of a glyph layer, as tiles flip, so that chrome can reuse
+its arrows and corners. The bits stay reserved until a use is chosen, and
+are spent by the rule of LEXTER-DRAFT-cell-model-D18; state that only the
+CPU reads, such as the protected-cell bit of DECSCA
 (LEXTER-DRAFT-cell-field-format-O7), belongs beside the cell model rather
 than in it.
 
@@ -1360,7 +1587,10 @@ sibling.
 
 1. **With the plan's Phase 1.** The atlas reserves positions 0–63 and names
    generated glyphs from 0x110000, and the cursor glyphs move from
-   private-use codepoints to positions 1–4 (LEXTER-D89).
+   private-use codepoints to positions 1–4, the outlined block added beside
+   the three of today; the replacement glyph takes position 5, and 6–7 stay
+   reserved (LEXTER-D89). The atlas fits its glyphs to the width table's
+   widths (LEXTER-DRAFT-cell-model-revision-D18).
 2. **With the plan's Phase 2.** The palette store, sized by the
    configuration (LEXTER-D92), with the integer stores of
    LEXTER-D109.
@@ -1369,16 +1599,19 @@ sibling.
    glyph words with their settings, the plain format with its glyph count and
    type bits, masks with their reach, lines as glyphs with the single
    underline, blinking text and the blink phase, the procedure of Drawing a
-   Pixel in the shader, and palette slots allocated to terminals.
-   The descriptor of LEXTER-D104 is written from
-   these tables.
+   Pixel in the shader, palette slots allocated to terminals, and the drawn
+   rows with their change stamps and clock masks
+   (LEXTER-DRAFT-cell-model-D16). The descriptor of LEXTER-D104 is written
+   from these tables.
 4. **With the plan's Phase 4.** The overlay instance and the block cursor's
    transformed copy (LEXTER-D93).
 5. **With the plan's Phase 5.** The CPU renderer follows the same procedure.
 6. **Later.** The inline-colour format; tiles and their texture, after
    LEXTER-O45 and LEXTER-O50, and the fitting of tile sets of
    LEXTER-O51; the void and effects, after the survey of
-   surfaces; further underline styles, after LEXTER-O48.
+   surfaces; further underline styles, after LEXTER-O48; DEC double-size
+   lines from the line-size flags (LEXTER-DRAFT-cell-model-D17); and bold
+   glyphs from bold fonts in the chain (LEXTER-DRAFT-cell-model-D19).
 7. **The second edition specified.** Spec.DataStructures2e takes its record
    from this document.
 

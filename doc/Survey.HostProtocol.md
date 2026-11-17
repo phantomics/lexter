@@ -8,7 +8,7 @@ language:      en
 status:        Draft
 provenance:
   assistant:   opencode
-  session:     "Host protocol survey (2026-11-16)"
+  session:     "Host protocol survey (2026-11-16); rich scrollback and 24-bit colour (2026-11-17)"
 relates-to:
   - LEXTER-0016
   - LEXTER-0017
@@ -24,6 +24,7 @@ open-questions:
   - LEXTER-DRAFT-host-protocol-O5
   - LEXTER-DRAFT-host-protocol-O6
   - LEXTER-DRAFT-host-protocol-O7
+  - LEXTER-DRAFT-host-protocol-O8
 cites:
   - title:    "ECMA-48"
     locator:  "ECMA-48, 5th edition (June 1991), section 8.3.54, GCC - Graphic Character Combination, and Annex A.2"
@@ -187,7 +188,8 @@ exact.
   exactly, through swatches, and Lexter's inline-colour format (LEXTER-D82)
   is a fallback rather than the common path. SyncTERM keeps a temporary
   palette for 24-bit colours in the same spirit, and warns that scrollback
-  may lose them (*CTerm Manual*, SGR, lines 1754–1781).
+  may lose them (*CTerm Manual*, SGR, lines 1754–1781). The steward has since
+  chosen inline colours instead (LEXTER-DRAFT-host-protocol-O3).
 - **Graphics made of characters.** Box drawing, block elements, and Unicode's
   Symbols for Legacy Computing, such as sextants and octants, are the cell
   graphics of today's tools, and Lexter draws them from its fonts or as
@@ -265,6 +267,13 @@ a candidate, not a design:
 - **Cycles.** The tile cycles of LEXTER-D95, and the cycling of swatch ranges,
   whose design waits for the cell model to be built
   (LEXTER-DRAFT-host-protocol-O5).
+- **Rich scrollback.** Lexter keeps history as text and styles, and makes
+  records only for the rows on screen
+  (LEXTER-DRAFT-cell-model-revision-D19), so layers, masks, and tiles do not
+  survive into history. A program whose interface wants its graphics kept,
+  such as a bulletin board written for Lexter, could ask that its rows be
+  kept as records while its interface runs, within limits the user sets
+  (LEXTER-DRAFT-host-protocol-O8).
 
 ## Tier 3: Native Front Ends and Bulletin Boards
 
@@ -415,6 +424,15 @@ The nearest palette colour; a palette slot kept for each terminal as a cache,
 with a rule for a full cache; or inline colours. The choice decides how
 exactly today's programs are drawn, and how scrollback keeps their colours.
 
+**Resolution:** 2026-11-17 — accepted, recorded at the steward's direction:
+inline colours. Once the inline-colour format (LEXTER-D82) is built, the
+handler writes 24-bit SGR colours as inline colours, and until then maps them
+to the nearest of the 256 palette colours, as it does today. History keeps
+24-bit colour in its styles from the start
+(LEXTER-DRAFT-cell-model-revision-D19). The details of the format's
+handling, such as a cell that mixes a palette colour with a 24-bit one, are
+worked out when it is built. The palette cache of Tier 0 is not pursued.
+
 ### LEXTER-DRAFT-host-protocol-O4 — How are styling variants named and chosen?
 
 Light and dark are reported by the existing query. A program that knows
@@ -442,3 +460,16 @@ Four-bit pixels in a DCS, as DEC's soft fonts carry one-bit ones, or base64
 as SyncTERM carries fonts; how many tiles a set holds; how a set is
 designated and its characters chosen as a fallback; and the quotas that
 bound what a host loads.
+
+### LEXTER-DRAFT-host-protocol-O8 — How does a host ask for rich scrollback?
+
+By default Lexter keeps history as text and styles, and records only for the
+rows on screen (LEXTER-DRAFT-cell-model-revision-D19), so the layers, masks,
+and tiles of an interface are lost when its rows scroll away. A host that
+wants them kept, such as a bulletin board written for Lexter, could ask that
+the rows it writes be kept as records while its interface runs, as a
+departure from Lexter's usual behaviour. Open: the sequence that asks and
+ends it; whether it applies to a region, a pane, or the rows written while it
+is set; the bound on how many rows are kept, which the user sets; how such
+rows are shown, copied, and reflowed beside rows of text; and that the
+alternate screen, which has no history, never keeps them.

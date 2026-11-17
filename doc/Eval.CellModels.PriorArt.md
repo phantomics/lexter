@@ -503,7 +503,7 @@ urgency:
    from the font; several add settings for ambiguous widths, a Unicode
    version, or grapheme clusters by mode 2027. LEXTER-D98 has the handler
    ask the atlas. Seed: settle
-   [LEXTER-DRAFT-cell-model-revision-O14](Plan.CellModelRevision.md) for
+   [LEXTER-O79](Plan.CellModelRevision.md) for
    Unicode's tables.
 2. **Information per row.** Every terminal but Alacritty keeps something per
    row: soft wrap for reflow (Ghostty, VTE, foot, xterm; the others on the

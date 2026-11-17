@@ -163,7 +163,7 @@ likewise state that Lexter keeps apart from the cell model. Writers keep the
 two in step; this document specifies only the side that is drawn. The cell
 model holds the cells on screen: rows that scroll into history are kept as
 text and styles, and made into records again only to be shown
-(LEXTER-DRAFT-cell-model-revision-D19).
+(LEXTER-D118).
 
 The design serves these concerns:
 
@@ -636,7 +636,7 @@ Table: Reserved atlas positions.
 
 The replacement glyph is drawn where a wide glyph must fit one cell and its
 ink is wider than the cell, so that no fragment of a glyph is shown as though
-it were a character (LEXTER-DRAFT-cell-model-revision-D18 in
+it were a character (LEXTER-D117 in
 [LEXTER-0017](Plan.CellModelRevision.md)). From position 64 the atlas holds
 the fonts' glyphs, keyed by codepoint, width, and weight: the glyphs fitted
 to a width that their bitmaps lack, and the glyphs of bold fonts
@@ -1086,7 +1086,7 @@ blinking cell at each change of the blink phase
 clocks for each row, which the renderer derives from the records as it
 uploads them. Other facts about rows, such as soft wraps, prompt marks, and
 the DEC line size, are never read by renderers, and are kept beside the text
-grid (LEXTER-DRAFT-cell-model-revision-D20 in
+grid (LEXTER-D119 in
 [LEXTER-0017](Plan.CellModelRevision.md)).
 
 **Decision:** Beside its array of records, each grid keeps an array of drawn
@@ -1185,7 +1185,7 @@ the magnified half, in every format (LEXTER-D81).
   for sizes 2 and 3, or row *y* for size 1. A narrow character on a
   double-width line covers two cells, and a wide one covers four.
 - **Writers.** The terminal row's line size
-  (LEXTER-DRAFT-cell-model-revision-D20) decides how the writer writes the
+  (LEXTER-D119) decides how the writer writes the
   row: each character across the cells it covers, with these flags, and
   continuation markers in the text grid. Changing a row's line size rewrites
   its records.
@@ -1268,12 +1268,12 @@ the bold glyphs at positions of their own, keyed by codepoint, width, and
 weight (LEXTER-D89). A bold companion has the same cell size as its regular
 font; a companion whose glyphs differ in width from the width a character is
 written at is fitted to it as the regular font's glyphs are
-(LEXTER-DRAFT-cell-model-revision-D18). Where no bold font covers the
+(LEXTER-D117). Where no bold font covers the
 codepoint, the regular glyph is drawn. Bold-as-bright stays a choice of the
 terminal's colours. A cell's boldness, for attribute reports and copying with
 formatting, is read from the style id that the text grid keeps for the cell,
-not from the record (LEXTER-DRAFT-cell-model-revision-D19,
-LEXTER-DRAFT-cell-model-revision-D20). Bold costs no bits of the record
+not from the record (LEXTER-D118,
+LEXTER-D119). Bold costs no bits of the record
 (LEXTER-D115).
 
 **Alternatives:**
@@ -1641,7 +1641,7 @@ a host that changes palette entries by OSC 4 on every frame.
    private-use codepoints to positions 1–4, the outlined block added beside
    the three of today; the replacement glyph takes position 5, and 6–7 stay
    reserved (LEXTER-D89). The atlas fits its glyphs to the width table's
-   widths (LEXTER-DRAFT-cell-model-revision-D18).
+   widths (LEXTER-D117).
 2. **With the plan's Phase 2.** The palette store, sized by the
    configuration (LEXTER-D92), with the integer stores of
    LEXTER-D109.

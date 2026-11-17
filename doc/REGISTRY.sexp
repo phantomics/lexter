@@ -214,3 +214,7 @@
 (:id "LEXTER-D116" :kind :decision :draft "LEXTER-DRAFT-cell-model-D19" :host "LEXTER-0016" :date "2026-11-17" :by "Andrew Sengul")
 (:id "LEXTER-O77" :kind :open-question :draft "LEXTER-DRAFT-cell-model-O12" :host "LEXTER-0016" :date "2026-11-17" :by "Andrew Sengul")
 (:id "LEXTER-O78" :kind :open-question :draft "LEXTER-DRAFT-cell-model-O13" :host "LEXTER-0016" :date "2026-11-17" :by "Andrew Sengul")
+(:id "LEXTER-D117" :kind :decision :draft "LEXTER-DRAFT-cell-model-revision-D18" :host "LEXTER-0017" :date "2026-11-17" :by "Andrew Sengul")
+(:id "LEXTER-D118" :kind :decision :draft "LEXTER-DRAFT-cell-model-revision-D19" :host "LEXTER-0017" :date "2026-11-17" :by "Andrew Sengul")
+(:id "LEXTER-D119" :kind :decision :draft "LEXTER-DRAFT-cell-model-revision-D20" :host "LEXTER-0017" :date "2026-11-17" :by "Andrew Sengul")
+(:id "LEXTER-O79" :kind :open-question :draft "LEXTER-DRAFT-cell-model-revision-O14" :host "LEXTER-0017" :date "2026-11-17" :by "Andrew Sengul")

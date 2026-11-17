@@ -273,7 +273,7 @@ a candidate, not a design:
   (LEXTER-O73).
 - **Rich scrollback.** Lexter keeps history as text and styles, and makes
   records only for the rows on screen
-  (LEXTER-DRAFT-cell-model-revision-D19), so layers, masks, and tiles do not
+  (LEXTER-D118), so layers, masks, and tiles do not
   survive into history. A program whose interface wants its graphics kept,
   such as a bulletin board written for Lexter, could ask that its rows be
   kept as records while its interface runs, within limits the user sets
@@ -433,7 +433,7 @@ exactly today's programs are drawn, and how scrollback keeps their colours.
 nothing. The plan's Later Formats has the handler write 24-bit SGR colours
 as inline colours once that format (LEXTER-D82) is built, and map them to
 the nearest of the 256 palette colours until then, as it does today; and
-LEXTER-DRAFT-cell-model-revision-D19 keeps 24-bit colour in history's
+LEXTER-D118 keeps 24-bit colour in history's
 styles from the start. The details of the format's handling, such as a cell
 that mixes a palette colour with a 24-bit one, are left to the step that
 builds it. The palette cache of Tier 0 is therefore not pursued.
@@ -469,7 +469,7 @@ bound what a host loads.
 ### LEXTER-O76 — How does a host ask for rich scrollback?
 
 By default Lexter keeps history as text and styles, and records only for the
-rows on screen (LEXTER-DRAFT-cell-model-revision-D19), so the layers, masks,
+rows on screen (LEXTER-D118), so the layers, masks,
 and tiles of an interface are lost when its rows scroll away. A host that
 wants them kept, such as a bulletin board written for Lexter, could ask that
 the rows it writes be kept as records while its interface runs, as a

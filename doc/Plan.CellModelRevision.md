@@ -45,9 +45,9 @@ decisions:
   - LEXTER-D110
   - LEXTER-D111
   - LEXTER-D112
-  - LEXTER-DRAFT-cell-model-revision-D18
-  - LEXTER-DRAFT-cell-model-revision-D19
-  - LEXTER-DRAFT-cell-model-revision-D20
+  - LEXTER-D117
+  - LEXTER-D118
+  - LEXTER-D119
 open-questions:
   - LEXTER-O56
   - LEXTER-O57
@@ -62,7 +62,7 @@ open-questions:
   - LEXTER-O66
   - LEXTER-O67
   - LEXTER-O68
-  - LEXTER-DRAFT-cell-model-revision-O14
+  - LEXTER-O79
 cites:
   - title:    "Session transcript ses_febe-LexterCritique"
     locator:  "session-ses_febe-LexterCritique.md, the closing review"
@@ -270,7 +270,7 @@ cursor keeps the grid's wide flag. As a safety net, the flush checks each
 dirty row before copying it and blanks any left half without its right half.
 
 Where the width comes from is amended by
-LEXTER-DRAFT-cell-model-revision-D18: the handler asks Lexter's width table,
+LEXTER-D117: the handler asks Lexter's width table,
 not the atlas, and the atlas fits its glyphs to the width. The rest of this
 decision stands.
 
@@ -793,7 +793,7 @@ disagree point to one of them, the shaders, or the uploads.
   off-by-one colours and misplaced pixels that the checksums exist to find,
   and exact shaders make it unnecessary.
 
-### LEXTER-DRAFT-cell-model-revision-D18 — A character's width is decided by the path that writes it, once, and stored
+### LEXTER-D117 — A character's width is decided by the path that writes it, once, and stored
 
 **Status:** Proposed
 
@@ -839,12 +839,12 @@ Table: Who decides a character's width, by the path that writes it.
   makes the same setting in the programs that run in the terminal. The table
   gives width 0 to combining marks and other zero-width characters, which
   join the cell of the character before them
-  (LEXTER-DRAFT-cell-model-revision-D20). The widths of grapheme clusters, as
+  (LEXTER-D119). The widths of grapheme clusters, as
   mode 2027 asks, are a later addition to the table.
 - **Decided once, and stored.** A character's width is decided when its cell
   is written, and stored: in the record's halves
   (LEXTER-D103) and in the text grid's wide bit
-  (LEXTER-DRAFT-cell-model-revision-D20). Copying, selection, cursor
+  (LEXTER-D119). Copying, selection, cursor
   movement, and reflow read the stored width and never decide it again, so
   content written under different rules keeps its widths.
 - **The atlas fits glyphs to widths.** Atlas entries are keyed by codepoint
@@ -867,7 +867,7 @@ Table: Who decides a character's width, by the path that writes it.
     (LEXTER-D89), so that no fragment of a glyph is shown
     as though it were a character.
 
-This decision settles LEXTER-DRAFT-cell-model-revision-O14 and amends
+This decision settles LEXTER-O79 and amends
 LEXTER-D98, whose handler now asks the width table.
 The width table, and the fitting, arrive with Phase 1, whose repair of the
 handler's wide writes (LEXTER-O19) uses them.
@@ -892,7 +892,7 @@ handler's wide writes (LEXTER-O19) uses them.
 - Deciding width again whenever it is read. Rejected: content written by one
   path would be read under another's rule.
 
-### LEXTER-DRAFT-cell-model-revision-D19 — History keeps text and styles, and records exist only for the rows on screen
+### LEXTER-D118 — History keeps text and styles, and records exist only for the rows on screen
 
 **Status:** Proposed
 
@@ -910,7 +910,7 @@ not what is remembered ([LEXTER-0016](Arch.CellModel.md), Thesis).
 a screen's top is kept in its history as text and styles.
 
 - **A history cell** holds its characters as the text grid does, with its
-  wide bit, and a style id (LEXTER-DRAFT-cell-model-revision-D20). The cells
+  wide bit, and a style id (LEXTER-D119). The cells
   that continue a character are dropped, since history's rows never change
   and are read from left to right. Each history row keeps its terminal row,
   so that soft wraps and prompt marks survive.
@@ -923,7 +923,7 @@ a screen's top is kept in its history as text and styles.
   once the inline-colour format writes it (see Later Formats).
 - **From the screen to history.** Each character's cell in the screen's
   text grid already holds its style id
-  (LEXTER-DRAFT-cell-model-revision-D20), so a row that leaves the screen is
+  (LEXTER-D119), so a row that leaves the screen is
   moved into history by copying its text, wide bits, style ids, and terminal
   row; nothing is read back from its records. A record cannot give back what
   a style holds: bold is a choice of glyph, which the record does not mark
@@ -947,7 +947,7 @@ a screen's top is kept in its history as text and styles.
   xterm.
 - **Reflow** rebuilds lines from the text and the soft wraps of the terminal
   rows, with the stored widths
-  (LEXTER-DRAFT-cell-model-revision-D18).
+  (LEXTER-D117).
 - **Rich scrollback,** rows kept as records while a program's interface asks
   for it, is a candidate for the host protocol
   (LEXTER-O76), and is not the default.
@@ -972,7 +972,7 @@ LEXTER-O57. This decision replaces Phase 3's scrollback of records.
 - History in a file on disk, as VTE keeps it. Not chosen now; it may follow,
   under the packing left open above.
 
-### LEXTER-DRAFT-cell-model-revision-D20 — The text grid marks every cell a character covers, and a terminal row lies beside it
+### LEXTER-D119 — The text grid marks every cell a character covers, and a terminal row lies beside it
 
 **Status:** Proposed
 
@@ -994,8 +994,8 @@ the first edition keeps none of them.
 
 - **The character's cell** in the screen's text grid holds its codepoints, a
   wide bit, the width that the writing path decided
-  (LEXTER-DRAFT-cell-model-revision-D18), and a style id, naming the style
-  in which the terminal wrote it (LEXTER-DRAFT-cell-model-revision-D19).
+  (LEXTER-D117), and a style id, naming the style
+  in which the terminal wrote it (LEXTER-D118).
   Attribute reports, copying with formatting, and the move of a row into
   history read a cell's attributes from its style, not from its record.
 - **Zero-width characters,** such as combining marks, the zero-width joiner,
@@ -1013,7 +1013,7 @@ the first edition keeps none of them.
   itself, and writers write and erase all of a character's cells together,
   as they do the halves of a record.
 - **History** keeps the wide bit and drops the continuations
-  (LEXTER-DRAFT-cell-model-revision-D19).
+  (LEXTER-D118).
 - **The terminal row.** Beside the text grid, each row of a screen and of its
   history has a terminal row:
 
@@ -1062,10 +1062,10 @@ Table: First-edition repairs by finding.
 
 | Finding | Repair |
 |---|---|
-| LEXTER-O19 | The VT handler decides each character's width from the width table, writes pairs, and advances by two; the atlas fits its glyphs to the table's widths; the flush writes each pair once; the cursor keeps the wide flag (LEXTER-D98, LEXTER-DRAFT-cell-model-revision-D18, LEXTER-D101) |
+| LEXTER-O19 | The VT handler decides each character's width from the width table, writes pairs, and advances by two; the atlas fits its glyphs to the table's widths; the flush writes each pair once; the cursor keeps the wide flag (LEXTER-D98, LEXTER-D117, LEXTER-D101) |
 | LEXTER-O26 | Per-cell helpers in every row and range operation, edge repair, `resize-grid` copying both flag vectors, and the row check (LEXTER-D98) |
 | LEXTER-O27 | The flush writes a layered cell's whole record, empty layers included; `write-char-at` on a layered cell honours its swatch and attributes; the cursor no longer rewrites the cell (LEXTER-D101) |
-| LEXTER-O28 | Atlas positions 0–63 are reserved at build time, position 0 for an empty glyph and the rest for generated glyphs, which the atlas names from 0x110000 instead of private-use codepoints, so the cursor glyphs move to positions 1–4, the outlined block added beside the three of today, and position 5 holds the replacement glyph of width fitting (LEXTER-DRAFT-cell-model-revision-D18), with 6–7 reserved (LEXTER-D89); every writer takes its blank from the atlas instead of writing codepoint 32 |
+| LEXTER-O28 | Atlas positions 0–63 are reserved at build time, position 0 for an empty glyph and the rest for generated glyphs, which the atlas names from 0x110000 instead of private-use codepoints, so the cursor glyphs move to positions 1–4, the outlined block added beside the three of today, and position 5 holds the replacement glyph of width fitting (LEXTER-D117), with 6–7 reserved (LEXTER-D89); every writer takes its blank from the atlas instead of writing codepoint 32 |
 | LEXTER-O36 | One home for the cell constants that the model, grid, and renderer share, one `+layered-stride+`, one default palette, one `setup-default-swatches`, and one name for each layer slot |
 | LEXTER-O40 | The grid's description is made true: `build-render-data` loses the unused `force-full` and its claim of incremental rebuilds, and the dirty bits stay for the second edition to upload by |
 | Review: the cursor writes into the model during the flush | The cursor exchanges slots (LEXTER-D101) |
@@ -1195,12 +1195,12 @@ Table: What Phase 3 builds from the architecture.
   writers keep the two in step. Each character's cell holds its wide bit and
   style id, the other cells it covers hold continuation markers, and a terminal row of
   soft wrap, prompt kind, and line size lies beside each row
-  (LEXTER-DRAFT-cell-model-revision-D20); how it holds codepoints and
+  (LEXTER-D119); how it holds codepoints and
   clusters is LEXTER-O63.
 - **History as text and styles.** Rows that leave the screen are kept as
   text, wide bits, style ids, and terminal rows, with styles that can hold
   24-bit colour, and records are rebuilt only for the rows shown
-  (LEXTER-DRAFT-cell-model-revision-D19).
+  (LEXTER-D118).
 - **Drawn rows.** Each grid keeps, beside its records, a change stamp and a
   clock mask for each row, as the architecture specifies
   (LEXTER-D113); uploads follow the change stamps.
@@ -1291,7 +1291,7 @@ Table: The later additions and what each waits for.
 | Swatch runs: tile cells that name their swatches by pair, and a glyph format of eight slots | The design of runs (LEXTER-O77); the glyph format also waits for glyph cycling (LEXTER-O54), whose bits it shares |
 | The void and effects (LEXTER-D82) | The survey of surfaces and effects, and what they carry (LEXTER-O53) |
 | Further underline styles (LEXTER-D89) | How their patterns meet from cell to cell (LEXTER-O48), and whether SGR 21, which the handler now reads as resetting bold, is the double underline that xterm and ECMA-48 make it |
-| DEC double-size lines: the line-size flags in both renderers, and the handler's DECSWL, DECDWL, and DECDHL writing the terminal row's line size (LEXTER-D114, LEXTER-DRAFT-cell-model-revision-D20) | Nothing beyond Phase 5 |
+| DEC double-size lines: the line-size flags in both renderers, and the handler's DECSWL, DECDWL, and DECDHL writing the terminal row's line size (LEXTER-D114, LEXTER-D119) | Nothing beyond Phase 5 |
 | Bold glyphs from a bold font in the chain (LEXTER-D116) | Nothing beyond Phase 5; until then bold is drawn with the regular glyph, or as bright colour where the terminal is set so |
 
 ## Partial Redraw and Eviction
@@ -1325,7 +1325,7 @@ Phase 7, conditional, evicts unused swatches within a range, if
 LEXTER-O58 chooses eviction over a large range and a
 fallback: mark the indices that a screen's cells still use, free the rest,
 and bump the table's version. History holds palette indices, not swatch
-indices (LEXTER-DRAFT-cell-model-revision-D19), so it need not be scanned.
+indices (LEXTER-D118), so it need not be scanned.
 
 ## Tensions and Risks
 
@@ -1348,7 +1348,7 @@ indices (LEXTER-DRAFT-cell-model-revision-D19), so it need not be scanned.
   Phase 1 is settled when the phases are scheduled.
 - **A larger model.** A screen of 80×24 records is 61 KB, three times today's
   size; small, but it grows with every pane. History is kept as text and
-  styles, not records (LEXTER-DRAFT-cell-model-revision-D19), so it does not
+  styles, not records (LEXTER-D118), so it does not
   grow with the record.
 - **Two renderers to keep in step.** The descriptor generates both
   renderers' decoders, but the coverage rule and the selection of an entry
@@ -1391,10 +1391,10 @@ assumes the records are at hand; a model that does not store them keeps each
 cell's SGR attributes itself.
 
 Since 2026-11-17 the question is narrower: history is kept as text and
-styles, not records (LEXTER-DRAFT-cell-model-revision-D19), so the compact
+styles, not records (LEXTER-D118), so the compact
 scrollback above no longer argues for storing records. The screen keeps each
 cell's attributes as a style id in its text grid
-(LEXTER-DRAFT-cell-model-revision-D20), so the model's attributes have their
+(LEXTER-D119), so the model's attributes have their
 place, and the records are not needed to report or copy them. What remains
 is whether a screen stores records for its rows on screen beside its text
 grid, or builds them as it copies its rows into the composed grid.
@@ -1405,7 +1405,7 @@ Fixed ranges, such as 2048 entries for each of 32 tables, or ranges allocated
 and relocated as tables grow. The steward leans to fixed ranges: screens store
 global indices (LEXTER-D100), so moving a range would
 mean rewriting a screen's cells and its scrollback; from Phase 3, history
-holds palette indices (LEXTER-DRAFT-cell-model-revision-D19), so only the
+holds palette indices (LEXTER-D118), so only the
 cells on screen would be rewritten. What remains open is their size. In Phase 2 only the store's first 32,768 entries are usable, because the
 first edition's instances carry the wide flag in bit 15 of their swatch field
 (see Swatch Ranges), so ranges of 2048 entries give 16 tables until Phase 3.
@@ -1478,7 +1478,7 @@ LEXTER-DRAFT-cell-field-format-O8.
 Since 2026-11-17 part of it is settled: a character's cell holds its wide
 bit and style id, the other cells it covers hold continuation markers, and a terminal row
 of soft wrap, prompt kind, and line size lies beside each row
-(LEXTER-DRAFT-cell-model-revision-D20). How the codepoints and grapheme
+(LEXTER-D119). How the codepoints and grapheme
 clusters of a cell are held remains open, and so does how the zero-width
 characters that join a cell are drawn.
 
@@ -1559,7 +1559,7 @@ glyph words keep their place within the glyph count
 Partial redraw finds the rows to redraw at a change of phase from a mask it
 derives as rows are uploaded (see Partial Redraw and Eviction).
 
-### LEXTER-DRAFT-cell-model-revision-O14 — Should a character's width come from Unicode's tables rather than the atlas?
+### LEXTER-O79 — Should a character's width come from Unicode's tables rather than the atlas?
 
 LEXTER-D98 has the VT handler ask the atlas whether a glyph is wide
 (`src/atlas.lisp:atlas-glyph-wide-p@2d4d743`), so a character's width is a
@@ -1596,7 +1596,7 @@ the 3270 data stream decides by its own addressing. Widths are decided once
 and stored, and the atlas fits its glyphs to them, centring a narrow glyph in
 a wide entry and cropping a wide one to its ink where the ink fits, or
 drawing the replacement glyph where it does not
-(LEXTER-DRAFT-cell-model-revision-D18).
+(LEXTER-D117).
 
 ## Prior Art
 
@@ -1624,8 +1624,8 @@ Table: Prior systems and what this plan draws from each.
    plan's consolidation of the two terminal stacks (LEXTER-D67). The repairs
    of The First Edition Repaired, finding by finding, each turning its test
    green, with the width table and the atlas's fitting of glyphs to it
-   (LEXTER-DRAFT-cell-model-revision-D18), which settles
-   LEXTER-DRAFT-cell-model-revision-O14. Double-width text renders through the VT path. A Log records the
+   (LEXTER-D117), which settles
+   LEXTER-O79. Double-width text renders through the VT path. A Log records the
    phase.
 3. **Phase 2: swatch ranges.** The store, the allocator, interning by every
    writer, upload records that name their tables, and global indices stored by
@@ -1650,8 +1650,8 @@ Table: Prior systems and what this plan draws from each.
    (LEXTER-D103), backgrounds, the single underline
    as a line glyph, invisible and blinking text, and palette slots allocated
    to terminals; the text grid with its terminal rows
-   (LEXTER-DRAFT-cell-model-revision-D20); history kept as text and styles
-   (LEXTER-DRAFT-cell-model-revision-D19); one composed grid drawn in one
+   (LEXTER-D119); history kept as text and styles
+   (LEXTER-D118); one composed grid drawn in one
    call (LEXTER-D107) by a shader that selects without
    blending (LEXTER-D110); and uploads that follow the drawn rows' change
    stamps (LEXTER-D113).

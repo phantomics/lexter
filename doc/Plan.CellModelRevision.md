@@ -950,7 +950,7 @@ a screen's top is kept in its history as text and styles.
   (LEXTER-DRAFT-cell-model-revision-D18).
 - **Rich scrollback,** rows kept as records while a program's interface asks
   for it, is a candidate for the host protocol
-  (LEXTER-DRAFT-host-protocol-O8), and is not the default.
+  (LEXTER-O76), and is not the default.
 - **Packing.** How history's rows are packed in memory, as runs of styles or
   as compressed pages, is not decided here.
 
@@ -1002,7 +1002,7 @@ the first edition keeps none of them.
   and variation selectors, to which the width table gives width 0, are added
   to the codepoints of the cell of the character before them. How they are
   drawn, as a layer, as a mask, or not at all, is open
-  (LEXTER-O63; for hosts, LEXTER-DRAFT-host-protocol-O6).
+  (LEXTER-O63; for hosts, LEXTER-O74).
 - **Every other cell the character covers** holds a continuation marker, a
   value beyond Unicode, distinct from the names of generated glyphs at
   0x110000 and above (LEXTER-D89). The columns a
@@ -1117,7 +1117,7 @@ edition, as LEXTER-D100 describes.
   padding bytes would lift the limit sooner, at the cost of changing the
   first edition's shaders and attribute setup once more.
 - **Room for swatch reindexing.** Shifting a range of swatches on a clock,
-  as the host-protocol survey proposes (LEXTER-DRAFT-host-protocol-O5), is
+  as the host-protocol survey proposes (LEXTER-O73), is
   designed after the cell model. Three things built from this phase on keep
   it possible:
   - *One swatch fetch.* Each renderer looks up swatches in one place: the
@@ -1318,7 +1318,7 @@ from the blink flags and cycle fields of its records, so it cannot drift from
 the grid. The rows under the cursor, which shares the blink clock, are
 marked as moving or animating an instance marks them. The mask is a set of
 bits that can grow rather than three fixed ones: a clock that shifts a range
-of swatches (LEXTER-DRAFT-host-protocol-O5) would add a bit, set for a row
+of swatches (LEXTER-O73) would add a bit, set for a row
 that holds a swatch index in the range.
 
 Phase 7, conditional, evicts unused swatches within a range, if

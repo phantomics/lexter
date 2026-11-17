@@ -1112,7 +1112,7 @@ Table: The fields of a drawn row.
   fields that the first or second clock drives
   (LEXTER-D95). Writers never write the mask, so it cannot drift from the
   records. Further clocks, such as one that shifts a range of swatches
-  (LEXTER-DRAFT-host-protocol-O5), add bits.
+  (LEXTER-O73), add bits.
 - **Dirty and damaged.** A row is dirty when its data changed, and must be
   uploaded, and redrawn. A row is damaged when its pixels may have changed,
   and must be redrawn: every dirty row; every row whose clock bit is set when
@@ -1616,7 +1616,7 @@ one index names them all. Two formats would use it:
 
 Both need a table that appends a run and interns it as a unit, which tables
 that only grow allow (LEXTER-D99). If swatch ranges come to cycle
-(LEXTER-DRAFT-host-protocol-O5), a run lies wholly inside or wholly outside
+(LEXTER-O73), a run lies wholly inside or wholly outside
 a cycling range. Neither format is needed before the plan's Later Formats,
 and until tiles are built, format 4 may still change rather than gain a
 sibling.

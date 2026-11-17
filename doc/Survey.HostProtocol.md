@@ -1,11 +1,15 @@
 ---
-id:            LEXTER-DRAFT-host-protocol
+id:            LEXTER-0019
 title:         "Exposing Lexter's Colour and Graphics to Hosts: Survey"
 genre:         Survey
 scope:         project
 project:       Lexter
 language:      en
-status:        Draft
+status:        Accepted
+authors:
+  - Andrew Sengul
+approved-by:   Andrew Sengul
+reviewed:      2026-11-17
 provenance:
   assistant:   opencode
   session:     "Host protocol survey (2026-11-16); rich scrollback and 24-bit colour (2026-11-17)"
@@ -17,14 +21,14 @@ relates-to:
   - LEXTER-0003
   - LEXTER-0004
 open-questions:
-  - LEXTER-DRAFT-host-protocol-O1
-  - LEXTER-DRAFT-host-protocol-O2
-  - LEXTER-DRAFT-host-protocol-O3
-  - LEXTER-DRAFT-host-protocol-O4
-  - LEXTER-DRAFT-host-protocol-O5
-  - LEXTER-DRAFT-host-protocol-O6
-  - LEXTER-DRAFT-host-protocol-O7
-  - LEXTER-DRAFT-host-protocol-O8
+  - LEXTER-O69
+  - LEXTER-O70
+  - LEXTER-O71
+  - LEXTER-O72
+  - LEXTER-O73
+  - LEXTER-O74
+  - LEXTER-O75
+  - LEXTER-O76
 cites:
   - title:    "ECMA-48"
     locator:  "ECMA-48, 5th edition (June 1991), section 8.3.54, GCC - Graphic Character Combination, and Annex A.2"
@@ -189,7 +193,7 @@ exact.
   is a fallback rather than the common path. SyncTERM keeps a temporary
   palette for 24-bit colours in the same spirit, and warns that scrollback
   may lose them (*CTerm Manual*, SGR, lines 1754–1781). The steward has since
-  chosen inline colours instead (LEXTER-DRAFT-host-protocol-O3).
+  chosen inline colours instead (LEXTER-O71).
 - **Graphics made of characters.** Box drawing, block elements, and Unicode's
   Symbols for Legacy Computing, such as sextants and octants, are the cell
   graphics of today's tools, and Lexter draws them from its fonts or as
@@ -228,7 +232,7 @@ Thin extensions, each answered or ignored:
 - **Identity.** XTVERSION answers `Lexter(version)`, and XTGETTCAP answers
   Lexter's terminfo and capabilities of its own, such as whether palettes,
   layers, tiles, and cycles are available, so that a program asks rather than
-  guesses (LEXTER-DRAFT-host-protocol-O2).
+  guesses (LEXTER-O70).
 - **Palettes in bulk.** Loading a whole palette at once, and choosing among
   palettes, beyond OSC 4's entry at a time.
 - **Clocks.** Setting the rates of the blink clock and the cycle clocks
@@ -238,7 +242,7 @@ Thin extensions, each answered or ignored:
 ## Tier 2: The Lexter Protocol
 
 Lexter's own model, in sequences of Lexter's namespace
-(LEXTER-DRAFT-host-protocol-O1), sent only after detection. Each element is
+(LEXTER-O69), sent only after detection. Each element is
 a candidate, not a design:
 
 - **Swatches.** A host defines swatches, each four palette indices, receives
@@ -249,7 +253,7 @@ a candidate, not a design:
   sends characters and the mode decides how they compose; or the same
   composition sent as GCC strings, or as combining sequences, which survive
   better elsewhere (see Degradation). Which forms are offered is
-  LEXTER-DRAFT-host-protocol-O6.
+  LEXTER-O74.
 - **Tiles as a character set the host loads.** DEC's soft fonts let a host
   load up to 94 or 96 glyphs and print them as a designated character set
   (*VT510 Video Terminal Programmer Information*, DECDLD), teletext's Level
@@ -263,17 +267,17 @@ a candidate, not a design:
   set, with flips, priority, offsets, and transparency set by the extended
   SGR. A terminal without Lexter prints the characters themselves, which a
   host can choose to be a readable fallback. The encoding is
-  LEXTER-DRAFT-host-protocol-O7.
+  LEXTER-O75.
 - **Cycles.** The tile cycles of LEXTER-D95, and the cycling of swatch ranges,
   whose design waits for the cell model to be built
-  (LEXTER-DRAFT-host-protocol-O5).
+  (LEXTER-O73).
 - **Rich scrollback.** Lexter keeps history as text and styles, and makes
   records only for the rows on screen
   (LEXTER-DRAFT-cell-model-revision-D19), so layers, masks, and tiles do not
   survive into history. A program whose interface wants its graphics kept,
   such as a bulletin board written for Lexter, could ask that its rows be
   kept as records while its interface runs, within limits the user sets
-  (LEXTER-DRAFT-host-protocol-O8).
+  (LEXTER-O76).
 
 ## Tier 3: Native Front Ends and Bulletin Boards
 
@@ -315,7 +319,7 @@ focus, or a set a bulletin board defines. A program that knows only light
 and dark should be answered by the existing query, as a projection of the
 active variant onto that axis; a program that knows Lexter could ask for the
 variant itself, by name, and be told when it changes. How variants are named,
-announced, and chosen is LEXTER-DRAFT-host-protocol-O4.
+announced, and chosen is LEXTER-O72.
 
 ## Degradation in Other Terminals and Under Multiplexers
 
@@ -403,7 +407,7 @@ photosensitive conditions.
 
 ## Open Questions
 
-### LEXTER-DRAFT-host-protocol-O1 — Which sequences carry the protocol?
+### LEXTER-O69 — Which sequences carry the protocol?
 
 OSC numbers in a range of Lexter's, a DCS with an introducer of Lexter's, or
 an APC, as kitty uses for graphics and SyncTERM for its own commands. Each
@@ -411,14 +415,14 @@ differs in how terminals that do not know it pass it over and in what tmux
 does with it. A version, reported with the identity, lets the protocol
 change.
 
-### LEXTER-DRAFT-host-protocol-O2 — Which capabilities does XTGETTCAP answer?
+### LEXTER-O70 — Which capabilities does XTGETTCAP answer?
 
 Lexter's terminfo, as foot and kitty answer theirs, and names of Lexter's
 own for its features, in a form that a program can test one at a time.
 Whether Lexter also answers a flag query, as SyncTERM does, is part of the
 question.
 
-### LEXTER-DRAFT-host-protocol-O3 — What is the policy for 24-bit colour?
+### LEXTER-O71 — What is the policy for 24-bit colour?
 
 The nearest palette colour; a palette slot kept for each terminal as a cache,
 with a rule for a full cache; or inline colours. The choice decides how
@@ -434,7 +438,7 @@ styles from the start. The details of the format's handling, such as a cell
 that mixes a palette colour with a 24-bit one, are left to the step that
 builds it. The palette cache of Tier 0 is therefore not pursued.
 
-### LEXTER-DRAFT-host-protocol-O4 — How are styling variants named and chosen?
+### LEXTER-O72 — How are styling variants named and chosen?
 
 Light and dark are reported by the existing query. A program that knows
 Lexter could ask for the active variant by name, be told when it changes,
@@ -442,27 +446,27 @@ and offer palettes for variants of its own; whether variants are a list the
 user defines, or axes such as contrast and focus beside light and dark, is
 open.
 
-### LEXTER-DRAFT-host-protocol-O5 — How are swatch ranges cycled?
+### LEXTER-O73 — How are swatch ranges cycled?
 
 The cycling of a range of swatches, rotated as a renderer looks them up, is
 a candidate for Tier 2, but its design, with reserved swatches and its
 clocks, waits for the cell model to be built.
 
-### LEXTER-DRAFT-host-protocol-O6 — Which forms of overprinting are offered?
+### LEXTER-O74 — Which forms of overprinting are offered?
 
 GCC strings, combining sequences, a mode that directs characters to layers
 and masks, and a mode of backspace overstrike each say how characters
 compose; which of them Lexter honours, and which a host is told to prefer,
 is open.
 
-### LEXTER-DRAFT-host-protocol-O7 — How are tile sets encoded and designated?
+### LEXTER-O75 — How are tile sets encoded and designated?
 
 Four-bit pixels in a DCS, as DEC's soft fonts carry one-bit ones, or base64
 as SyncTERM carries fonts; how many tiles a set holds; how a set is
 designated and its characters chosen as a fallback; and the quotas that
 bound what a host loads.
 
-### LEXTER-DRAFT-host-protocol-O8 — How does a host ask for rich scrollback?
+### LEXTER-O76 — How does a host ask for rich scrollback?
 
 By default Lexter keeps history as text and styles, and records only for the
 rows on screen (LEXTER-DRAFT-cell-model-revision-D19), so the layers, masks,

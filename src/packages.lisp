@@ -20,6 +20,9 @@
 (defpackage #:lexter/atlas
   (:use #:cl #:lexter/pcf)
   (:export #:build-atlas
+           #:pack-atlas
+           #:upload-atlas
+           #:atlas-columns-for
            #:add-cursor-glyphs
            #:atlas
            #:atlas-texture-id

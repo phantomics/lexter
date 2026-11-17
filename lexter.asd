@@ -3,6 +3,7 @@
   :license "BSD"
   :version "0.1.0"
   :depends-on ("cl-glfw3" "cl-opengl" "cffi" "alexandria" "babel" "chipz" "flexi-streams")
+  :in-order-to ((asdf:test-op (asdf:test-op #:lexter/tests)))
   :serial t
   :components ((:file "src/packages")
                (:file "src/pcf")
@@ -51,7 +52,32 @@
                (:file "src/panes/workspace")
                (:file "src/panes/compositor")))
 
-;;; Mouse-reporting + routing unit tests (pure: no GL / display required)
+;;; Regression suite (Square: FiveAM + cl-hamcrest; headless, no GL or display).
+;;; Reproduction tests fail until their repairs land
+;;; (LEXTER-DRAFT-cell-model-revision-D21).
+(asdf:defsystem #:lexter/tests
+  :description "Regression suite for Lexter (FiveAM + cl-hamcrest), headless"
+  :license "BSD"
+  :version "0.1.0"
+  :depends-on (#:lexter #:lexter/unix #:lexter/panes #:babel #:sb-introspect
+               #:fiveam #:hamcrest/fiveam)
+  :serial t
+  :components ((:module "tests"
+                :serial t
+                :components ((:file "package")
+                             (:file "helpers")
+                             (:file "test-atlas")
+                             (:file "test-handler")
+                             (:file "test-model")
+                             (:file "test-grid")
+                             (:file "test-swatches")
+                             (:file "test-structure"))))
+  :perform (asdf:test-op (o s)
+             (uiop:symbol-call '#:lexter-tests '#:run-all-tests)))
+
+;;; Mouse-reporting + routing unit tests (pure: no GL / display required).
+;;; Predates the suite and uses its own check macro; moves into lexter/tests
+;;; later (LEXTER-DRAFT-cell-model-revision-D21).
 (asdf:defsystem #:lexter/mouse-tests
   :description "Unit tests for Lexter mouse reporting and pointer routing"
   :license "BSD"

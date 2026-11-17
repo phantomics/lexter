@@ -233,7 +233,16 @@ Table: The terminal-fixes plan's reproduction tests, by finding.
   into the pane. A recording from a real server can replace the scripted
   peer when one is made.
 - **Slow tests.** The two tests that fork `/bin/true` on a PTY are in the
-  suite `pty-slow`, which `run-all-tests` omits when given `:skip-slow`.
+  suite `pty-slow`, which `run-all-tests` omits when given `:skip-slow`
+  (`tests/helpers.lisp:run-all-tests@7de1459`).
+- **Where the pieces are.** The loopback helpers are
+  `tests/helpers.lisp:with-loopback-listener@7de1459` and
+  `tests/helpers.lisp:exchange@7de1459`; the sessions are
+  `tests/test-tn3270.lisp:with-tn3270-session@7de1459` and
+  `tests/test-telnet.lisp:with-telnet-pane@7de1459`; the PTY fixture is
+  `tests/test-pty.lisp:with-finished-child@7de1459`. The EBCDIC repair is in
+  `src/tn3270/parser.lisp:ebcdic-to-char@7de1459` and
+  `src/tn3270/client.lisp:char-to-ebcdic@7de1459`.
 - **Exports.** The test of LEXTER-O31 found that `lexter/tn3270` exports
   `screen-attributes`, which nothing defines; the screen's per-cell arrays are
   `buffer`, `field-attrs`, `colors`, and `highlights`. It is one of the
@@ -253,7 +262,7 @@ Table: The terminal-fixes plan's reproduction tests, by finding.
 - `lexter/mouse-tests` still passes, 32 checks, and `lexter/origin-tests`
   gives the same 23 passes and 28 failures as before.
 
-Table: Files added or changed in this update.
+Table: Files added or changed in this update, in commit `7de1459`.
 
 | File | Action | Description |
 |---|---|---|

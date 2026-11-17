@@ -31,6 +31,7 @@ Table: Documents in the LEXTER namespace.
 | [LEXTER-0019](Survey.HostProtocol.md) | Exposing Lexter's Colour and Graphics to Hosts: Survey | Survey | project | Accepted | — |
 | [LEXTER-DRAFT-cell-field-format](Survey.CellFieldFormat.md) | Cell Field Format: Survey | Survey | component | Deprecated | renderer |
 | [LEXTER-DRAFT-data-structures-1e](Spec.DataStructures1e.md) | Data Structures, First Edition: Specification | Spec | project | Deprecated | — |
+| [LEXTER-DRAFT-first-edition-repairs](Log.FirstEditionRepairs.md) | The First Edition Repaired (Phase 1): Development Log | Log | project | Draft | — |
 | [LEXTER-DRAFT-mouse-reporting](Log.MouseReporting.md) | Mouse Reporting: Development Log | Log | component | Draft | vt |
 | [LEXTER-DRAFT-pane-profiles](Plan.PaneProfiles.md) | Pane Profiles and Scrollback Viewing: Development Plan | Plan | component | Accepted | panes |
 | [LEXTER-DRAFT-pane-profiles-log](Log.PaneProfiles.md) | Pane Profiles and Scrollback Viewing: Development Log | Log | component | Draft | panes |

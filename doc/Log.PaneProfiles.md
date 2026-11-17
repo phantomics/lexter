@@ -78,9 +78,10 @@ its compositor through a `workspace-compositor` slot
 
 The registry of settings, each with its type and default; the lookup through
 a profile's chain of parents, passing over profiles whose class lacks the
-setting; `resolve-pane-setting`, which tries the pane's chain, then the
+setting; `src/panes/profile.lisp:resolve-pane-setting@6bac50d`, which tries the pane's chain, then the
 workspace's, then the compositor's, and then the default; the generic
-`own-profile`; `unset-setting`; the macro `define-pane-profile`; and Lexter's
+`own-profile`; `src/panes/profile.lisp:unset-setting@6bac50d`; the macro
+`src/panes/profile.lisp:define-pane-profile@6bac50d`; and Lexter's
 `pane-profile`, with `wheel-scroll-lines` (an integer of at least 1, default
 3), `snap-on-input` (default true), and `snap-on-output` (default false).
 
@@ -89,24 +90,27 @@ workspace's, then the compositor's, and then the default; the generic
 The pane class gains a private profile, read by `pane-profile`; the workspace
 gains one, read by `workspace-profile`, and the `workspace-compositor` slot;
 the compositor struct gains one, read by `compositor-profile`. Each has an
-`own-profile` method. `make-paned-compositor` sets each workspace's
-compositor.
+`own-profile` method. `src/panes/compositor.lisp:make-paned-compositor@6bac50d`
+sets each workspace's compositor.
 
 ### `src/model.lisp`
 
 `flush-to-display` reads the screen's viewport. At 0 it copies the dirty rows
 and draws the cursor as before. Above 0, row D of the pane shows history line
 V − 1 − D while that is 0 or more, and otherwise the screen's row D − V; every
-row is repainted, and no cursor is drawn. The copy of one live cell becomes
-`%flush-cell`, shared by both cases, and `%flush-history-row` writes a history
+row is repainted, and no cursor is drawn (`src/model.lisp:flush-to-display@6bac50d`).
+The copy of one live cell becomes `src/model.lisp:%flush-cell@6bac50d`, shared by
+both cases, and `src/model.lisp:%flush-history-row@6bac50d` writes a history
 line as simple cells, padding a line narrower than the screen with blanks.
 
 ### `src/panes/vt-pane.lisp`, `chrome-mixin.lisp`
 
-`%vt-pane-scroll-local` multiplies the notches by `pane-wheel-scroll-lines`,
+`src/panes/vt-pane.lisp:%vt-pane-scroll-local@6bac50d` multiplies the notches by `pane-wheel-scroll-lines`,
 sets the viewport within the history, and marks the screen dirty when the view
 moves; the alternate screen's arrow keys are multiplied by the same setting.
-The thumb's row is `(bar-height − thumb-height) × (1 − offset / max-offset)`,
+The thumb's row
+(`src/panes/chrome-mixin.lisp:scroll-bar-thumb-geometry@6bac50d`) is
+`(bar-height − thumb-height) × (1 − offset / max-offset)`,
 at the bottom of the bar for the live screen.
 
 ### Tests
@@ -136,7 +140,7 @@ taken for a blank.
 
 ## Files
 
-Table: Files added or changed in the first two steps.
+Table: Files added or changed in the first two steps, in commit `6bac50d`.
 
 | File | Action | Description |
 |---|---|---|

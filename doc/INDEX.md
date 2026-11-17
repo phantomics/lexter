@@ -27,8 +27,8 @@ Table: Documents in the LEXTER namespace.
 | [LEXTER-0015](Plan.TerminalFixes1e.md) | Terminal Fixes, First Edition: Development Plan | Plan | project | Accepted | — |
 | [LEXTER-0016](Arch.CellModel.md) | The Cell Model Architecture | Architecture | project | Accepted | — |
 | [LEXTER-0017](Plan.CellModelRevision.md) | Cell Model Revision: Development Plan | Plan | project | Accepted | — |
+| [LEXTER-0018](Eval.CellModels.PriorArt.md) | Cell Models: Prior-Art Evaluation | Eval (prior-art) | project | Accepted | — |
 | [LEXTER-DRAFT-cell-field-format](Survey.CellFieldFormat.md) | Cell Field Format: Survey | Survey | component | Deprecated | renderer |
-| [LEXTER-DRAFT-cell-models-prior-art](Eval.CellModels.PriorArt.md) | Cell Models: Prior-Art Evaluation | Eval (prior-art) | project | Draft | — |
 | [LEXTER-DRAFT-data-structures-1e](Spec.DataStructures1e.md) | Data Structures, First Edition: Specification | Spec | project | Deprecated | — |
 | [LEXTER-DRAFT-host-protocol](Survey.HostProtocol.md) | Exposing Lexter's Colour and Graphics to Hosts: Survey | Survey | project | Draft | — |
 | [LEXTER-DRAFT-mouse-reporting](Log.MouseReporting.md) | Mouse Reporting: Development Log | Log | component | Draft | vt |

@@ -198,3 +198,4 @@
 (:id "LEXTER-O66" :kind :open-question :draft "LEXTER-DRAFT-cell-model-revision-O11" :host "LEXTER-0017" :date "2026-11-06" :by "Andrew Sengul")
 (:id "LEXTER-O67" :kind :open-question :draft "LEXTER-DRAFT-cell-model-revision-O12" :host "LEXTER-0017" :date "2026-11-06" :by "Andrew Sengul")
 (:id "LEXTER-O68" :kind :open-question :draft "LEXTER-DRAFT-cell-model-revision-O13" :host "LEXTER-0017" :date "2026-11-06" :by "Andrew Sengul")
+(:id "LEXTER-0018" :kind :document :draft "LEXTER-DRAFT-cell-models-prior-art" :path "doc/Eval.CellModels.PriorArt.md" :date "2026-11-16" :by "Andrew Sengul")

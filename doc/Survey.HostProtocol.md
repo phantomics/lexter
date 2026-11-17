@@ -12,7 +12,7 @@ provenance:
 relates-to:
   - LEXTER-0016
   - LEXTER-0017
-  - LEXTER-DRAFT-cell-models-prior-art
+  - LEXTER-0018
   - LEXTER-0002
   - LEXTER-0003
   - LEXTER-0004
@@ -99,7 +99,7 @@ the means into tiers, from what existing standards already carry to a
 protocol of Lexter's own, and asks of every element how it degrades in
 another terminal and under a multiplexer. It draws on the prior-art
 evaluation of other terminals
-([LEXTER-DRAFT-cell-models-prior-art](Eval.CellModels.PriorArt.md)). It
+([LEXTER-0018](Eval.CellModels.PriorArt.md)). It
 decides nothing. **This work follows the new cell model**: it is a secondary
 priority, to be taken up once LEXTER-0017's phases have built the record
 and its renderers, and the evaluation that would weigh its options comes
@@ -381,7 +381,7 @@ photosensitive conditions.
 - [LEXTER-0016](Arch.CellModel.md) specifies the record whose features this
   survey would expose; [LEXTER-0017](Plan.CellModelRevision.md) builds it,
   and this work follows.
-- [LEXTER-DRAFT-cell-models-prior-art](Eval.CellModels.PriorArt.md) compares
+- [LEXTER-0018](Eval.CellModels.PriorArt.md) compares
   the screen models of other terminals; this survey asks how Lexter's model
   reaches the programs those terminals serve.
 - [LEXTER-0002](Log.InputRedirect.md) is the native channel's input path;

@@ -320,26 +320,33 @@
          (when button
            (%vt-pane-send-mouse
             pane (lexter/vt-handler:mouse-report-bytes handler col row button :press mods)))))
-      ;; (2) Alternate screen, no mode: wheel -> arrow keys (one per notch).
+      ;; (2) Alternate screen, no mode: wheel -> arrow keys, the pane's
+      ;; lines-per-notch for each notch (LEXTER-DRAFT-pane-profiles-D7).
       ((and handler (lexter/vt-handler:vt-handler-in-alt-screen handler)
             (vt-pane-backend-alive-p pane))
        (let* ((key (cond ((plusp dy) :up) ((minusp dy) :down) (t nil)))
               (seq (and key (cdr (assoc key *key-sequences*)))))
          (when seq
-           (dotimes (i (abs dy) t)
+           (dotimes (i (* (abs dy) (pane-wheel-scroll-lines pane)) t)
              (vt-pane-write-bytes pane seq :end (length seq))))))
       ;; (3) Primary screen, no mode: local scrollback.
       (t
        (%vt-pane-scroll-local pane dy)))))
 
 (defun %vt-pane-scroll-local (pane dy)
-  "Adjust the pane's scrollback viewport by DY lines (positive = back in
-   history). Returns T if anything could change."
+  "Move the pane's view DY wheel notches through its history (positive = back
+   in history), the pane's lines-per-notch for each notch, within the history.
+   When the view moves, every row of the screen is marked for redrawing, since
+   the flush draws a shifted view (LEXTER-DRAFT-pane-profiles-D5). Returns T if
+   the view moved."
   (let ((screen (vt-pane-active-screen pane)))
     (when screen
-      (let ((offset (lexter/model:scrollback-viewport-offset screen)))
-        (lexter/model:set-scrollback-viewport screen (+ offset dy))
-        t))))
+      (let* ((offset (lexter/model:scrollback-viewport-offset screen))
+             (new (lexter/model:set-scrollback-viewport
+                   screen (+ offset (* dy (pane-wheel-scroll-lines pane))))))
+        (when (/= new offset)
+          (lexter/model:mark-screen-dirty screen)
+          t)))))
 
 (defmethod pane-process-output ((pane vt-pane))
   "Read and process any available backend output."

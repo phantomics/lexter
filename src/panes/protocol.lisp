@@ -38,6 +38,10 @@
    (workspace :accessor pane-workspace
               :initform nil
               :documentation "Back-reference to containing workspace, if any.")
+   (profile   :reader pane-profile
+              :initform (make-instance 'pane-profile)
+              :documentation "The pane's private profile of settings, empty until
+               written; its parent may name a shared profile (profile.lisp).")
    (input-redirect :accessor pane-input-redirect
                    :initform nil
                     :documentation "Function to redirect input to, or NIL for normal routing.

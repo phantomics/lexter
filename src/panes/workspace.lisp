@@ -34,17 +34,31 @@
    (focus-index :accessor workspace-focus-index
                 :initform 0
                 :type fixnum
-                :documentation "Index into panes of the focused pane."))
+                :documentation "Index into panes of the focused pane.")
+   (profile     :reader workspace-profile
+                :initform (make-instance 'pane-profile)
+                :documentation "The workspace's private profile of settings, which
+                 its panes inherit (profile.lisp).")
+   (compositor  :accessor workspace-compositor
+                :initform nil
+                :documentation "The compositor holding this workspace, set when the
+                 compositor is made, so that panes find its profile."))
   (:documentation "A named collection of panes with focus management."))
+
+(defmethod own-profile ((workspace workspace))
+  (workspace-profile workspace))
 
 ;;; --------------------------------------------------------------------------
 ;;; Initialization
 ;;; --------------------------------------------------------------------------
 
-(defmethod initialize-instance :after ((ws workspace) &key)
-  "Set back-references from panes to their workspace."
+(defmethod initialize-instance :after ((ws workspace) &key profile-parent)
+  "Set back-references from panes to their workspace, and give the workspace's
+private profile PROFILE-PARENT as its parent, when one is given."
   (dolist (pane (workspace-panes ws))
-    (setf (pane-workspace pane) ws)))
+    (setf (pane-workspace pane) ws))
+  (when profile-parent
+    (setf (profile-parent (workspace-profile ws)) profile-parent)))
 
 ;;; --------------------------------------------------------------------------
 ;;; Focus management

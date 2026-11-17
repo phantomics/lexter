@@ -27,6 +27,31 @@
    #:pane-palette
    #:pane-workspace
    #:pane-input-redirect
+   ;; Pane profiles
+   #:define-pane-profile
+   #:pane-profile
+   #:profile-parent
+   #:own-profile
+   #:unset-setting
+   #:resolve-pane-setting
+   #:workspace-profile
+   #:workspace-compositor
+   #:compositor-profile
+   #:wheel-scroll-lines
+   #:snap-on-input
+   #:snap-on-output
+   #:pane-wheel-scroll-lines
+   #:pane-snap-on-input
+   #:pane-snap-on-output
+   #:workspace-wheel-scroll-lines
+   #:workspace-snap-on-input
+   #:workspace-snap-on-output
+   #:compositor-wheel-scroll-lines
+   #:compositor-snap-on-input
+   #:compositor-snap-on-output
+   #:profile-wheel-scroll-lines
+   #:profile-snap-on-input
+   #:profile-snap-on-output
    #:pane-forward-key
    #:pane-forward-char
    #:pane-forward-mouse-button

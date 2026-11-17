@@ -89,11 +89,12 @@
              (thumb-h (max 1 (round (* bar-height (/ visible (max 1 total))))))
              ;; Maximum scroll offset
              (max-offset (max 0 (- total visible)))
-             ;; Thumb position: 0 when at bottom (offset=0), top when at max
+             ;; Thumb position: at the bottom of the bar for the live screen
+             ;; (offset 0), rising to the top for the oldest history (LEXTER-O30)
              (thumb-pos (if (zerop max-offset)
-                            0
+                            (- bar-height thumb-h)
                             (round (* (- bar-height thumb-h)
-                                       (/ offset max-offset))))))
+                                       (- 1 (/ offset max-offset)))))))
         (values thumb-pos thumb-h)))))
 
 ;;; --------------------------------------------------------------------------

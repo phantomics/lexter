@@ -54,6 +54,14 @@
   :description "Terminals without a PTY: input events that have no backend to reach"
   :in lexter)
 
+(def-suite profiles
+  :description "Pane profiles: settings looked up through parent profiles, then workspace and compositor"
+  :in lexter)
+
+(def-suite scrollback
+  :description "Viewing a pane's history: the wheel, the flush of a scrolled-back view, and the scroll-bar thumb"
+  :in lexter)
+
 (def-suite pty-slow
   :description "The PTY's descriptor and child after the child exits; spawns a process (excluded by :skip-slow)"
   :in lexter)
@@ -63,7 +71,8 @@
 ;;; ============================================================
 
 (defparameter *fast-suites*
-  '(atlas handler model grid swatches structure tn3270 telnet pty)
+  '(atlas handler model grid swatches structure tn3270 telnet pty
+    profiles scrollback)
   "The child suites run when slow tests are skipped.")
 
 (defun run-all-tests (&key skip-slow)

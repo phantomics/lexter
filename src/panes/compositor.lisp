@@ -76,7 +76,13 @@
   (headless     nil :type boolean)
   ;; Called with the compositor and the new columns and rows after the window
   ;; is resized, to lay out the panes; NIL leaves the panes as they are.
-  (layout-fn    nil :type (or null function)))
+  (layout-fn    nil :type (or null function))
+  ;; The compositor's private profile of settings, which every pane inherits
+  ;; through its workspace (profile.lisp)
+  (profile      (make-instance 'pane-profile)))
+
+(defmethod own-profile ((comp compositor))
+  (compositor-profile comp))
 
 (defun active-workspace (comp)
   "Return the currently active workspace."
@@ -410,18 +416,23 @@ LAYOUT-FN:  a function of the compositor, columns, and rows, called after the
             window is resized to lay out the panes; NIL leaves them as they are"
   (unless workspaces
     (error "At least one workspace is required"))
-  (make-compositor :workspaces workspaces
-                   :active-index 0
-                   :cols cols
-                   :rows rows
-                   :pixel-scale (or pixel-scale 1)
-                   :fonts fonts
-                   :font-path font-path
-                   :title title
-                   :prefix-key prefix-key
-                   :visible visible
-                   :headless headless
-                   :layout-fn layout-fn))
+  (let ((comp (make-compositor :workspaces workspaces
+                               :active-index 0
+                               :cols cols
+                               :rows rows
+                               :pixel-scale (or pixel-scale 1)
+                               :fonts fonts
+                               :font-path font-path
+                               :title title
+                               :prefix-key prefix-key
+                               :visible visible
+                               :headless headless
+                               :layout-fn layout-fn)))
+    ;; Each workspace refers back to its compositor, so that its panes find
+    ;; the compositor's profile (LEXTER-DRAFT-pane-profiles-O2).
+    (dolist (ws workspaces)
+      (setf (workspace-compositor ws) comp))
+    comp))
 
 (defmethod gui-initialize ((comp compositor))
   "Create COMP's GLFW window, OpenGL context, renderer, and initialize all panes.

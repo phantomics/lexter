@@ -865,6 +865,53 @@
 ;;; Flush to display grid
 ;;; --------------------------------------------------------------------------
 
+(defun %flush-cell (screen display-grid col row grid-col grid-row space-glyph)
+  "Copy the cell at COL, ROW of SCREEN to GRID-COL, GRID-ROW of DISPLAY-GRID,
+   with its layers, or as a simple cell whose glyph 0 is drawn as SPACE-GLYPH."
+  (let ((layers (%get-layered screen col row)))
+    (if layers
+        ;; Layered cell
+        (let ((sw-idx (model-cell-layers-swatch-idx layers)))
+          (lexter/grid:set-cell-swatch display-grid grid-col grid-row sw-idx)
+          (loop :for ln :from 0 :below +max-layers+
+                :for lobj = (aref (model-cell-layers-layers layers) ln)
+                :when lobj
+                :do (lexter/grid:set-cell-layer
+                     display-grid grid-col grid-row ln
+                     (model-layer-glyph-idx lobj)
+                     (model-layer-ink-slot lobj)
+                     :bg-idx (model-layer-bg-slot lobj)
+                     :transparent-side (model-layer-transparent-side lobj))))
+        ;; Simple cell - clear any overlay layers first
+        (progn
+          (lexter/grid:clear-cell-layers display-grid grid-col grid-row)
+          (let ((i (%idx screen col row)))
+            (lexter/grid:set-simple-cell
+             display-grid grid-col grid-row
+             (let ((g (aref (screen-glyphs screen) i)))
+               (if (zerop g) space-glyph g))
+             (aref (screen-swatch-indices screen) i)
+             :wide (= 1 (sbit (screen-wide-flags screen) i))))))))
+
+(defun %flush-history-row (screen display-grid line grid-row col-offset space-glyph)
+  "Write the history LINE, a vector of (glyph swatch attrs) for each cell as
+   %SAVE-TO-SCROLLBACK keeps it, to GRID-ROW of DISPLAY-GRID from COL-OFFSET, as
+   simple cells, a glyph 0 drawn as SPACE-GLYPH. A line narrower than SCREEN,
+   left by a resize, is padded with blanks in the screen's default swatch."
+  (let ((grid-cols (lexter/grid:display-grid-cols display-grid))
+        (width (if line (length line) 0)))
+    (loop :for col :from 0 :below (screen-cols screen)
+          :for grid-col = (+ col col-offset)
+          :when (< grid-col grid-cols)
+          :do (destructuring-bind (glyph swatch &rest attrs)
+                  (if (< col width)
+                      (aref line col)
+                      (list 0 (screen-default-swatch screen) 0))
+                (declare (ignore attrs))
+                (lexter/grid:set-simple-cell display-grid grid-col grid-row
+                                             (if (zerop glyph) space-glyph glyph)
+                                             swatch)))))
+
 (defun flush-to-display (screen display-grid &key (atlas nil) (space-glyph 32)
                                                    (cursor-blink-on t)
                                                    (col-offset 0) (row-offset 0))
@@ -872,7 +919,10 @@
    ATLAS is used to look up cursor glyph indices.
    SPACE-GLYPH is the atlas index for space character.
    CURSOR-BLINK-ON controls whether a blinking cursor is currently visible.
-   COL-OFFSET and ROW-OFFSET position the screen within the grid (for panes)."
+   COL-OFFSET and ROW-OFFSET position the screen within the grid (for panes).
+   While the screen's scrollback viewport is above 0, the grid shows history
+   above the top rows of the screen, every row is repainted, and no cursor is
+   drawn."
   (declare (ignore atlas))
   (let ((cols (screen-cols screen))
         (rows (screen-rows screen))
@@ -899,40 +949,34 @@
                                             (aref sw-data (+ base 2))
                                             (aref sw-data (+ base 3)))))
         (setf (lexter/grid:swatch-generation display-grid) model-gen)))
-    ;; Copy cells (including clearing old cursor position)
+    ;; Copy cells (including clearing old cursor position). Row D of the pane
+    ;; shows, with the viewport V lines back, history line V-1-D while that is
+    ;; 0 or more, and otherwise the screen's row D-V. At V = 0 that is the
+    ;; screen itself, and only its dirty rows are copied; above 0 the view is
+    ;; shifted, so every row is repainted (LEXTER-DRAFT-pane-profiles-D5).
     ;; Bounds: iterate screen coords, but clip to grid bounds after offset
-    (loop :for row :from 0 :below rows
-          :for grid-row = (+ row row-offset)
-          :when (and (= 1 (sbit (screen-row-dirty screen) row))
-                     (< grid-row grid-rows))
-          :do (loop :for col :from 0 :below cols
-                    :for grid-col = (+ col col-offset)
-                    :when (< grid-col grid-cols)
-                    :do (let ((layers (%get-layered screen col row)))
-                          (if layers
-                              ;; Layered cell
-                              (let ((sw-idx (model-cell-layers-swatch-idx layers)))
-                                (lexter/grid:set-cell-swatch display-grid grid-col grid-row sw-idx)
-                                (loop :for ln :from 0 :below +max-layers+
-                                      :for lobj = (aref (model-cell-layers-layers layers) ln)
-                                      :when lobj
-                                      :do (lexter/grid:set-cell-layer
-                                           display-grid grid-col grid-row ln
-                                           (model-layer-glyph-idx lobj)
-                                           (model-layer-ink-slot lobj)
-                                           :bg-idx (model-layer-bg-slot lobj)
-                                           :transparent-side (model-layer-transparent-side lobj))))
-                              ;; Simple cell - clear any overlay layers first
-                              (progn
-                                (lexter/grid:clear-cell-layers display-grid grid-col grid-row)
-                                (let ((i (%idx screen col row)))
-                                  (lexter/grid:set-simple-cell
-                                   display-grid grid-col grid-row
-                                   (let ((g (aref (screen-glyphs screen) i)))
-                                     (if (zerop g) space-glyph g))
-                                   (aref (screen-swatch-indices screen) i)
-                                   :wide (= 1 (sbit (screen-wide-flags screen) i)))))))))
-    ;; Handle cursor rendering using reverse video (swap fg/bg)
+    (let ((viewport (screen-scrollback-viewport screen)))
+      (loop :for row :from 0 :below rows
+            :for grid-row = (+ row row-offset)
+            :for history-line = (- viewport 1 row)
+            :when (and (or (plusp viewport)
+                           (= 1 (sbit (screen-row-dirty screen) row)))
+                       (< grid-row grid-rows))
+            :do (if (and (plusp viewport) (>= history-line 0))
+                    (%flush-history-row screen display-grid
+                                        (scrollback-line screen history-line)
+                                        grid-row col-offset space-glyph)
+                    (loop :with source-row = (- row viewport)
+                          :for col :from 0 :below cols
+                          :for grid-col = (+ col col-offset)
+                          :when (< grid-col grid-cols)
+                          :do (%flush-cell screen display-grid col source-row
+                                           grid-col grid-row space-glyph)))))
+    ;; Handle cursor rendering using reverse video (swap fg/bg); no cursor is
+    ;; drawn while the view is scrolled back into the history.
+    (when (plusp (screen-scrollback-viewport screen))
+      (fill (screen-row-dirty screen) 0)
+      (return-from flush-to-display nil))
     (let ((cursor-visible (and (screen-cursor-visible screen)
                                (or (not (screen-cursor-blink screen))
                                    cursor-blink-on)))

@@ -46,6 +46,7 @@
   :serial t
   :components ((:file "src/panes/packages")
                (:file "src/panes/protocol")
+               (:file "src/panes/profile")
                (:file "src/panes/chrome-mixin")
                (:file "src/panes/vt-pane")
                (:file "src/panes/uterm-pane")
@@ -78,7 +79,9 @@
                              (:file "test-structure")
                              (:file "test-tn3270")
                              (:file "test-telnet")
-                             (:file "test-pty"))))
+                             (:file "test-pty")
+                             (:file "test-profiles")
+                             (:file "test-scrollback"))))
   :perform (asdf:test-op (o s)
              (uiop:symbol-call '#:lexter-tests '#:run-all-tests)))
 

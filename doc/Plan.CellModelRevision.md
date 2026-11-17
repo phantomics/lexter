@@ -927,7 +927,7 @@ a screen's top is kept in its history as text and styles.
   moved into history by copying its text, wide bits, style ids, and terminal
   row; nothing is read back from its records. A record cannot give back what
   a style holds: bold is a choice of glyph, which the record does not mark
-  (LEXTER-DRAFT-cell-model-D19 in [LEXTER-0016](Arch.CellModel.md)); an
+  (LEXTER-D116 in [LEXTER-0016](Arch.CellModel.md)); an
   invisible cell has no glyphs, as a blank one has; and reverse video is only
   a pair of exchanged slots. Layers, masks, and tiles beyond what a style
   holds are not kept.
@@ -1027,10 +1027,10 @@ Table: The fields of a terminal row.
 
 - **Not drawn.** Renderers never read the terminal row. The writer turns its
   line size into the records' line-size flags
-  (LEXTER-DRAFT-cell-model-D17 in [LEXTER-0016](Arch.CellModel.md)), so that
+  (LEXTER-D114 in [LEXTER-0016](Arch.CellModel.md)), so that
   a pane's double-size lines survive composition into the shared grid, and
   the grid's own rows carry only what renderers read
-  (LEXTER-DRAFT-cell-model-D16).
+  (LEXTER-D113).
 - **Left for later.** Which operations clear the soft wrap follows xterm's
   behaviour, settled in Phase 3. The exit codes that OSC 133 reports, and a
   list of commands, may be kept in a table beside the rows.
@@ -1047,7 +1047,7 @@ text grid holds codepoints and grapheme clusters remains open.
   grid must stand alone in history, where there are no records, and the cells
   a character covers on a double-size line are not its width.
 - Line size as an attribute of the composed grid's rows. Rejected in the
-  architecture (LEXTER-DRAFT-cell-model-D17): one row of the grid holds
+  architecture (LEXTER-D114): one row of the grid holds
   several panes.
 - OSC 133 zones for each cell, as WezTerm keeps them. Not chosen: a zone for
   each row serves moving between prompts and selecting output; zones for
@@ -1203,7 +1203,7 @@ Table: What Phase 3 builds from the architecture.
   (LEXTER-DRAFT-cell-model-revision-D19).
 - **Drawn rows.** Each grid keeps, beside its records, a change stamp and a
   clock mask for each row, as the architecture specifies
-  (LEXTER-DRAFT-cell-model-D16); uploads follow the change stamps.
+  (LEXTER-D113); uploads follow the change stamps.
 - **The model's storage** is LEXTER-O57, settled
   before the phase begins. Panes are copied into the one composed grid by row
   segments (LEXTER-D107).
@@ -1239,7 +1239,7 @@ cursors as its first use.
   changes (LEXTER-D93). The underline and bar cursors, and a hyperlink lit
   by the pointer, are instances that do not draw their background.
 - **Selection highlighting** is drawn by overlay instances over the selected
-  cells, and costs no bits of the record (LEXTER-DRAFT-cell-model-D18).
+  cells, and costs no bits of the record (LEXTER-D115).
 - **Redraw.** Moving, adding, removing, or animating an instance marks the
   rows under its old and new positions for redraw.
 - **Time.** Animation reads a time uniform that the test rig can fix, and
@@ -1288,17 +1288,17 @@ Table: The later additions and what each waits for.
 | Tiles and their texture, with flips, a top tile that may pass in front of the glyphs, and colour cycling by swatch pair on two clocks (LEXTER-D91, LEXTER-D95) | The cursor over a tile cell (LEXTER-O45), palette slots running out (LEXTER-O50), and the fitting of tile sets (LEXTER-O51) |
 | Colour cycling in glyph cells | How a cell of four slots cycles its colours (LEXTER-O54) |
 | Masks that cut a cell's tiles | The first tiles, and how masks reach into them (LEXTER-O55) |
-| Swatch runs: tile cells that name their swatches by pair, and a glyph format of eight slots | The design of runs (LEXTER-DRAFT-cell-model-O12); the glyph format also waits for glyph cycling (LEXTER-O54), whose bits it shares |
+| Swatch runs: tile cells that name their swatches by pair, and a glyph format of eight slots | The design of runs (LEXTER-O77); the glyph format also waits for glyph cycling (LEXTER-O54), whose bits it shares |
 | The void and effects (LEXTER-D82) | The survey of surfaces and effects, and what they carry (LEXTER-O53) |
 | Further underline styles (LEXTER-D89) | How their patterns meet from cell to cell (LEXTER-O48), and whether SGR 21, which the handler now reads as resetting bold, is the double underline that xterm and ECMA-48 make it |
-| DEC double-size lines: the line-size flags in both renderers, and the handler's DECSWL, DECDWL, and DECDHL writing the terminal row's line size (LEXTER-DRAFT-cell-model-D17, LEXTER-DRAFT-cell-model-revision-D20) | Nothing beyond Phase 5 |
-| Bold glyphs from a bold font in the chain (LEXTER-DRAFT-cell-model-D19) | Nothing beyond Phase 5; until then bold is drawn with the regular glyph, or as bright colour where the terminal is set so |
+| DEC double-size lines: the line-size flags in both renderers, and the handler's DECSWL, DECDWL, and DECDHL writing the terminal row's line size (LEXTER-D114, LEXTER-DRAFT-cell-model-revision-D20) | Nothing beyond Phase 5 |
+| Bold glyphs from a bold font in the chain (LEXTER-D116) | Nothing beyond Phase 5; until then bold is drawn with the regular glyph, or as bright colour where the terminal is set so |
 
 ## Partial Redraw and Eviction
 
 Phase 6, optional, redraws only the damaged rows, which are the dirty rows,
 the rows that a clock changes, and the rows under changed overlays
-(LEXTER-DRAFT-cell-model-D16): rows by instance range, with the record's attribute pointers moved
+(LEXTER-D113): rows by instance range, with the record's attribute pointers moved
 to the first row, since OpenGL 3.3 has no base instance. It needs either the
 offscreen target kept on, which overturns LEXTER-D39 and leaves one
 full-window blit per presented frame, or the buffer-age extensions cited
@@ -1309,7 +1309,7 @@ blinking cells at each change of the blink phase
 (LEXTER-D94), and tile cells whose colours cycle at each
 step of the first or second cycle clock, which drive the swatch pairs A–B
 and C–D (LEXTER-D95). So
-each drawn row carries a clock mask (LEXTER-DRAFT-cell-model-D16), of
+each drawn row carries a clock mask (LEXTER-D113), of
 three bits to begin with, one for each clock,
 set when the row holds a cell that the clock changes, and redraws the rows
 whose bit is set when that clock moves. The mask is not maintained by
@@ -1654,7 +1654,7 @@ Table: Prior systems and what this plan draws from each.
    (LEXTER-DRAFT-cell-model-revision-D19); one composed grid drawn in one
    call (LEXTER-D107) by a shader that selects without
    blending (LEXTER-D110); and uploads that follow the drawn rows' change
-   stamps (LEXTER-DRAFT-cell-model-D16).
+   stamps (LEXTER-D113).
    The suite passes on the new model, and fixtures are re-authored on a
    pinned llvmpipe with a cell checksum beside each pixel checksum
    (LEXTER-D108,

@@ -379,6 +379,12 @@
   (let ((screen (vt-pane-active-screen pane)))
     (and screen (lexter/model:any-row-dirty-p screen))))
 
+(defmethod pane-mark-dirty ((pane vt-pane))
+  "Mark every row of the active terminal screen dirty."
+  (let ((screen (vt-pane-active-screen pane)))
+    (when screen
+      (lexter/model:mark-screen-dirty screen))))
+
 (defmethod pane-destroy ((pane vt-pane))
   "Destroy the terminal's backend connection."
   (vt-pane-backend-destroy pane))

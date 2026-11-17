@@ -149,13 +149,13 @@ terminal when one is running, else from its stored build spec (so a stopped
 terminal still reports its declared geometry)."
   (let ((term (%live-terminal orbital)))
     (if term
-        (let ((screen (lexter/unix-term::unix-terminal-screen term))
-              (pty    (lexter/unix-term::unix-terminal-pty term)))
-          (list :command          (lexter/unix-term::unix-terminal-command term)
-                :cols             (lexter/unix-term::unix-terminal-cols term)
-                :rows             (lexter/unix-term::unix-terminal-rows term)
-                :pixel-scale      (lexter/unix-term::unix-terminal-pixel-scale term)
-                :title            (lexter/unix-term::unix-terminal-title term)
+        (let ((screen (lexter/unix-term:terminal-screen term))
+              (pty    (lexter/unix-term:terminal-pty term)))
+          (list :command          (lexter/unix-term:unix-terminal-command term)
+                :cols             (lexter/unix-term:unix-terminal-cols term)
+                :rows             (lexter/unix-term:unix-terminal-rows term)
+                :pixel-scale      (lexter/unix-term:unix-terminal-pixel-scale term)
+                :title            (lexter/unix-term:unix-terminal-title term)
                 :window-alive     (and (lexter/gui:gui-alive-p term) t)
                 :scrollback-lines (and screen (lexter/model:scrollback-lines screen))
                 :cursor           (and screen (list :col (lexter/model:cursor-col screen)
@@ -249,8 +249,8 @@ the terminal with the new value."
         ;; :font-path take effect on the next restart (spec already updated).
         (when term
           (case k
-            (:title       (setf (lexter/unix-term::unix-terminal-title term) v))
-            (:pixel-scale (setf (lexter/unix-term::unix-terminal-pixel-scale term) v))))))
+            (:title       (setf (lexter/unix-term:unix-terminal-title term) v))
+            (:pixel-scale (setf (lexter/unix-term:unix-terminal-pixel-scale term) v))))))
     (impulse:commit-spec :generic orbital gen))
   spec)
 
@@ -269,12 +269,12 @@ the terminal with the new value."
 (defmethod impulse:export-state ((type (eql :lexter-host)) orbital)
   (let ((term (%live-terminal orbital)))
     (when term
-      (let ((screen (lexter/unix-term::unix-terminal-screen term)))
+      (let ((screen (lexter/unix-term:terminal-screen term)))
         (impulse:make-handoff-state :lexter-host
           (append
            (list :application
-                 (list :cols (lexter/unix-term::unix-terminal-cols term)
-                       :rows (lexter/unix-term::unix-terminal-rows term)
+                 (list :cols (lexter/unix-term:unix-terminal-cols term)
+                       :rows (lexter/unix-term:unix-terminal-rows term)
                        :scrollback-lines (if screen
                                              (lexter/model:scrollback-lines screen)
                                              0)))
@@ -288,7 +288,7 @@ the terminal with the new value."
     (let ((term (%live-terminal orbital))
           (session (impulse:handoff-stratum state :session)))
       (when (and term session)
-        (let ((screen (lexter/unix-term::unix-terminal-screen term)))
+        (let ((screen (lexter/unix-term:terminal-screen term)))
           (when screen
             (lexter/model:set-cursor-position screen
                                               (getf session :cursor-col)

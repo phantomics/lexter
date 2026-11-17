@@ -78,6 +78,10 @@
   "Return the dirty flag."
   (function-pane-dirty pane))
 
+(defmethod pane-mark-dirty ((pane function-pane))
+  "Set the dirty flag, so the render function runs at the next flush."
+  (setf (function-pane-dirty pane) t))
+
 (defmethod pane-resize ((pane function-pane) new-width new-height)
   "Update dimensions and mark dirty."
   (setf (pane-width pane) new-width

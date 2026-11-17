@@ -54,28 +54,3 @@
            #:encode-mouse-x10
            ;; Debug
            #:*debug-vt*))
-
-(defpackage #:lexter/unix-term
-  (:use #:cl #:lexter/pcf #:lexter/atlas #:lexter/grid
-        #:lexter/renderer #:lexter/model #:lexter/pty #:lexter/vt-handler
-        #:lexter/gui)
-  (:export #:run-terminal
-           #:make-terminal
-           #:terminal-capture
-           #:terminal-start-recording
-           #:terminal-stop-recording
-           #:terminal-reset
-           #:terminal-config-plist
-           #:unix-terminal
-           #:unix-terminal-window
-           #:unix-terminal-renderer
-           #:unix-terminal-vt-handler
-           #:terminal-screen
-           #:terminal-pty
-           ;; GUI protocol (re-exported for convenience)
-           #:gui-initialize
-           #:gui-tick
-           #:gui-destroy
-           #:gui-window
-           #:gui-alive-p
-           #:run-gui-loop))

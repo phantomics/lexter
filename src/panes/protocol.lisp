@@ -110,6 +110,11 @@
   (:documentation
    "Return T if this pane has changes that need re-flushing."))
 
+(defgeneric pane-mark-dirty (pane)
+  (:documentation
+   "Mark all of this pane's content as needing re-flushing, so that the next
+    flush repaints it whole (a capture, or a grid that was replaced)."))
+
 (defgeneric pane-destroy (pane)
   (:documentation
    "Clean up resources owned by this pane.
@@ -204,6 +209,10 @@
 
 (defmethod pane-dirty-p ((pane pane))
   "Default: not dirty."
+  nil)
+
+(defmethod pane-mark-dirty ((pane pane))
+  "Default: nothing to mark."
   nil)
 
 (defmethod pane-destroy ((pane pane))

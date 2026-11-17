@@ -200,11 +200,12 @@ handler through the mailbox and still returns correct results."
   "define-terminal NAME and place a headless terminal carrying a fresh model
 SCREEN into *gui-objects*. Returns the screen."
   (apply #'lexter/origin:define-terminal name "/bin/bash" (list :cols cols :rows rows))
-  (let ((term (lexter/unix-term:make-terminal "/bin/bash" :cols cols :rows rows))
-        (screen (lexter/model:make-screen :cols cols :rows rows)))
-    (setf (lexter/unix-term::unix-terminal-screen term) screen)
+  (let ((term (lexter/unix-term:make-terminal "/bin/bash" :cols cols :rows rows)))
+    ;; Give the terminal's pane its screen and VT handler, with no atlas and so
+    ;; no GL; readers find the screen through the handler (LEXTER-D70).
+    (lexter/panes:vt-pane-init-screen (lexter/unix-term:unix-terminal-pane term) nil)
     (push (cons (%canon name) term) lexter/origin::*gui-objects*)
-    screen))
+    (lexter/unix-term:terminal-screen term)))
 
 (def-test handoff-advertised-in-describe ()
   "describe advertises the strata a Lexter terminal can hand off."

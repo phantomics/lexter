@@ -65,9 +65,18 @@
   (fonts        nil :type list)
   (font-path    "../terminus-18n.pcf")
   (title        "lexter panes" :type string)
+  ;; Key that activates meta-mode; NIL disables meta-mode, so every key
+  ;; reaches the focused pane (the standalone terminal).
   (prefix-key   :f12)
   ;; When NIL, the GLFW window is created hidden (offscreen capture / testing).
-  (visible      t   :type boolean))
+  (visible      t   :type boolean)
+  ;; When T, the compositor keeps running although no pane has a live backend:
+  ;; a headless replay terminal is fed through its VT handler instead
+  ;; (LEXTER-O41).
+  (headless     nil :type boolean)
+  ;; Called with the compositor and the new columns and rows after the window
+  ;; is resized, to lay out the panes; NIL leaves the panes as they are.
+  (layout-fn    nil :type (or null function)))
 
 (defun active-workspace (comp)
   "Return the currently active workspace."
@@ -92,11 +101,13 @@
 ;;; --------------------------------------------------------------------------
 
 (defun handle-compositor-key (comp key scancode action mods)
-  "Route key events: prefix mode or to focused pane."
+  "Route key events: prefix mode or to focused pane. The prefix key is COMP's
+   own, so that compositors in one image do not share it; a compositor whose
+   prefix key is NIL has no meta mode."
   (when (eq action :press)
     (cond
       ;; Prefix key activates meta mode
-      ((eq key *prefix-key*)
+      ((and (compositor-prefix-key comp) (eq key (compositor-prefix-key comp)))
        (setf (compositor-prefix-active comp) t)
        (return-from handle-compositor-key))
       ;; In meta mode: interpret as compositor command
@@ -287,8 +298,11 @@
     ;; Mark all workspaces' decorations dirty (layout changed)
     (dolist (ws (compositor-workspaces comp))
       (mark-decorations-dirty ws))
-    ;; Note: Pane resizing is the user's responsibility since they provide
-    ;; the layout. We mark everything dirty so it gets redrawn.
+    ;; Lay out the panes for the new size when a layout function is given;
+    ;; otherwise pane sizes are the user's responsibility, since they provide
+    ;; the layout. Everything is marked dirty so it gets redrawn.
+    (when (compositor-layout-fn comp)
+      (funcall (compositor-layout-fn comp) comp new-cols new-rows))
     (lexter/grid:mark-all-dirty (compositor-display comp))))
 
 ;;; --------------------------------------------------------------------------
@@ -314,10 +328,11 @@
       ;; 1. Process I/O for ALL panes in ALL workspaces
       (dolist (ws (compositor-workspaces comp))
         (workspace-process-output ws))
-      ;; 2. Check if any terminal died (stop if all are dead)
+      ;; 2. Check if any terminal died (stop if all are dead, unless headless)
       (cond
-        ((not (some #'workspace-any-terminal-alive-p
-                    (compositor-workspaces comp)))
+        ((and (not (compositor-headless comp))
+              (not (some #'workspace-any-terminal-alive-p
+                         (compositor-workspaces comp))))
          (setf (compositor-running comp) nil))
         (t
          ;; 3. Handle pending resize
@@ -371,7 +386,9 @@
                                    (pixel-scale nil)
                                    (title "lexter panes")
                                    (prefix-key :f12)
-                                   (visible t))
+                                   (visible t)
+                                   (headless nil)
+                                   (layout-fn nil))
   "Create an uninitialized COMPOSITOR for the given WORKSPACES.
 
 The window, OpenGL context, and renderer are NOT created yet -- call
@@ -386,7 +403,11 @@ FONTS:      list of pre-loaded bitmap-font structs (overrides FONT-PATH)
 COLS, ROWS: grid dimensions in characters
 PIXEL-SCALE: integer scaling factor (nil = 1x)
 TITLE:      window title
-PREFIX-KEY: key that activates meta-mode (default :f12)"
+PREFIX-KEY: key that activates meta-mode (default :f12); NIL disables it
+HEADLESS:   when T, keep running although no pane has a live backend (a
+            replay terminal fed through its VT handler)
+LAYOUT-FN:  a function of the compositor, columns, and rows, called after the
+            window is resized to lay out the panes; NIL leaves them as they are"
   (unless workspaces
     (error "At least one workspace is required"))
   (make-compositor :workspaces workspaces
@@ -398,7 +419,9 @@ PREFIX-KEY: key that activates meta-mode (default :f12)"
                    :font-path font-path
                    :title title
                    :prefix-key prefix-key
-                   :visible visible))
+                   :visible visible
+                   :headless headless
+                   :layout-fn layout-fn))
 
 (defmethod gui-initialize ((comp compositor))
   "Create COMP's GLFW window, OpenGL context, renderer, and initialize all panes.
@@ -584,10 +607,15 @@ new context current, so the atlas/renderer GL objects belong to it."
    its GL context is made current here."
   (let ((window   (compositor-window comp))
         (renderer (compositor-renderer comp))
-        (ws       (active-workspace comp)))
+        (ws       (active-workspace comp))
+        (*cursor-blink-on* (compositor-cursor-blink-on comp)))
     (when window (glfw:make-context-current window))
     (lexter/renderer:enable-offscreen renderer)
     (when ws
+      ;; Force a full repaint, whatever was flushed before.
+      (dolist (pane (workspace-panes ws))
+        (pane-mark-dirty pane))
+      (mark-decorations-dirty ws)
       (flush-workspace ws (compositor-display comp))
       (let ((pane (focused-pane ws)))
         (when pane
@@ -599,8 +627,17 @@ new context current, so the atlas/renderer GL objects belong to it."
     (lexter/renderer:render-frame renderer (compositor-display comp))
     (lexter/renderer:capture-pixels renderer)))
 
+(defun compositor-reset-display (comp)
+  "Give COMP a fresh display grid of its size, with the default swatches,
+   keeping its window, atlas, and renderer. Used by the standalone terminal's
+   TERMINAL-RESET between replayed fixtures. Returns the new grid."
+  (let ((display (lexter/grid:make-display-grid :cols (compositor-cols comp)
+                                                :rows (compositor-rows comp))))
+    (setup-default-swatches display)
+    (setf (compositor-display comp) display)))
+
 ;;; --------------------------------------------------------------------------
-;;; Helper functions (duplicated from unix-term for independence)
+;;; Helper functions
 ;;; --------------------------------------------------------------------------
 
 (defun make-xterm-palette ()

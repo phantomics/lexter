@@ -21,6 +21,7 @@
    #:pane-process-output
    #:pane-resize
    #:pane-dirty-p
+   #:pane-mark-dirty
    #:pane-destroy
    #:pane-alive-p
    #:pane-palette
@@ -103,6 +104,17 @@
    #:compositor
    #:compositor-window
    #:compositor-renderer
+   #:compositor-atlas
+   #:compositor-display
+   #:compositor-cols
+   #:compositor-rows
+   #:compositor-cell-w
+   #:compositor-cell-h
+   #:compositor-pixel-scale
+   #:compositor-title
+   #:compositor-font-path
+   #:compositor-headless
+   #:compositor-reset-display
    #:*prefix-key*
    ;; GUI protocol (re-exported for convenience)
    #:gui-initialize

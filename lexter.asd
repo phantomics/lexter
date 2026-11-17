@@ -15,30 +15,31 @@
                (:file "src/model")
                (:file "src/demo")))
 
-;;; Unix terminal subsystem (requires cl-vt)
+;;; Unix terminal backend: the PTY and the VT handler (requires cl-vt). The
+;;; standalone terminal, a compositor with one pane, is in lexter/panes
+;;; (LEXTER-D67).
 (asdf:defsystem #:lexter/unix
-  :description "Unix terminal backend for Lexter"
+  :description "Unix terminal backend for Lexter: PTY and VT handler"
   :license "BSD"
   :version "0.1.0"
   :depends-on (#:lexter #:lexter/telnet #:cl-vt #:babel)
   :serial t
   :components ((:file "src/packages-unix")
                (:file "src/pty")
-               (:file "src/vt-handler")
-               (:file "src/unix-term")))
+               (:file "src/vt-handler")))
 
 ;;; Screenshot-based test rig (raw-input recording + deterministic replay)
 (asdf:defsystem #:lexter/test
   :description "Screenshot-based test rig for Lexter (record + replay + checksum)"
   :license "BSD"
   :version "0.1.0"
-  :depends-on (#:lexter/unix #:cl-glfw3)
+  :depends-on (#:lexter/panes #:cl-glfw3)
   :serial t
   :components ((:file "src/test-rig")))
 
-;;; Pane multiplexer subsystem
+;;; Pane multiplexer subsystem, and the standalone terminal built on it
 (asdf:defsystem #:lexter/panes
-  :description "Pane multiplexer for Lexter"
+  :description "Pane multiplexer for Lexter, and the standalone terminal"
   :license "BSD"
   :version "0.1.0"
   :depends-on (#:lexter/unix)
@@ -50,7 +51,9 @@
                (:file "src/panes/uterm-pane")
                (:file "src/panes/function-pane")
                (:file "src/panes/workspace")
-               (:file "src/panes/compositor")))
+               (:file "src/panes/compositor")
+               (:file "src/packages-unix-term")
+               (:file "src/unix-term")))
 
 ;;; Regression suite (Square: FiveAM + cl-hamcrest; headless, no GL or display).
 ;;; Reproduction tests fail until their repairs land
@@ -150,7 +153,7 @@
   :description "Origin process manager integration for Lexter"
   :license "BSD"
   :version "0.1.0"
-  :depends-on ("lexter/unix" "origin" "impulse" "alexandria" "slynk")
+  :depends-on ("lexter/panes" "origin" "impulse" "alexandria" "slynk")
   :serial t
   :components ((:file "src/packages-origin")
                (:file "src/origin")

@@ -1,11 +1,11 @@
 ;;;; tests/test-pty.lisp — Terminals without a PTY, and a PTY after its child.
 ;;;;
-;;;; The pty suite is pure: a standalone terminal made with :no-pty and no
-;;;; window. The pty-slow suite forks /bin/true on a real PTY, and is excluded
-;;;; by :skip-slow. Tests of LEXTER-O35 fail until the terminal-fixes plan
-;;;; separates the child's life from the descriptor's (LEXTER-D74); the
-;;;; consolidation of the two terminal stacks (LEXTER-D67) moves key handling
-;;;; into the compositor, and the input tests are rewritten against it then.
+;;;; The pty suite is pure: a standalone terminal made with :no-pty and never
+;;;; given a window; its input is routed as the compositor routes a GLFW
+;;;; callback's. The pty-slow suite forks /bin/true on a real PTY, and is
+;;;; excluded by :skip-slow. The PTY tests of LEXTER-O35 fail until the
+;;;; terminal-fixes plan separates the child's life from the descriptor's
+;;;; (LEXTER-D74).
 
 (in-package #:lexter-tests)
 
@@ -23,13 +23,15 @@
   "LEXTER-O35: a key pressed on a terminal with no PTY has nowhere to go, and
 is ignored without error."
   (let ((term (make-headless-terminal)))
-    (finishes (lexter/unix-term::handle-key-press term :a 0 :press nil))))
+    (finishes (lexter/panes::handle-compositor-key
+               (lexter/unix-term:unix-terminal-compositor term) :a 0 :press nil))))
 
 (def-test character-on-headless-terminal-is-ignored ()
   "LEXTER-O35: a character typed on a terminal with no PTY has nowhere to go,
 and is ignored without error."
   (let ((term (make-headless-terminal)))
-    (finishes (lexter/unix-term::handle-char-input term 65))))
+    (finishes (lexter/panes::handle-compositor-char
+               (lexter/unix-term:unix-terminal-compositor term) 65))))
 
 ;;; ------------------------------------------------------------
 ;;; The descriptor and the child  (LEXTER-O35)

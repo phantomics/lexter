@@ -36,6 +36,7 @@ Table: Documents in the LEXTER namespace.
 | [LEXTER-DRAFT-pane-profiles](Plan.PaneProfiles.md) | Pane Profiles and Scrollback Viewing: Development Plan | Plan | component | Accepted | panes |
 | [LEXTER-DRAFT-pane-profiles-log](Log.PaneProfiles.md) | Pane Profiles and Scrollback Viewing: Development Log | Log | component | Draft | panes |
 | [LEXTER-DRAFT-regression-suite](Log.RegressionSuite.md) | Regression Suite (Phase 0): Development Log | Log | project | Draft | — |
+| [LEXTER-DRAFT-swatch-ranges](Log.SwatchRanges.md) | Swatch Ranges (Phase 2): Development Log | Log | project | Draft | — |
 | [LEXTER-DRAFT-terminal-stacks](Log.TerminalStacks.md) | Consolidating the Terminal Stacks: Development Log | Log | project | Draft | — |
 
 Table: Decision, open-question, and memo records in the LEXTER namespace.

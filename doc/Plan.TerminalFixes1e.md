@@ -406,7 +406,8 @@ received the key, or from its profile once the pane-profiles plan provides
 one. The blink state reaches the flush as an argument, or a binding around
 the flush, from the compositor that is drawing. A title change is applied to
 the window that owns the pane. The 3270 pane's global swatch cache is
-replaced by the cell plan's Phase 2. How a pane reaches its window is
+replaced by the cell plan's Phase 2, which gives the pane a swatch table of
+its own ([LEXTER-DRAFT-swatch-ranges](Log.SwatchRanges.md)). How a pane reaches its window is
 LEXTER-O42.
 
 **Alternatives:**

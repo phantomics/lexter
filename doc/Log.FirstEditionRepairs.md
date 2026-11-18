@@ -249,7 +249,8 @@ Table: Files added or changed in Phase 1, in commit `3627e50`.
 
 - **Phase 2.** The swatch ranges, which the reproduction tests of
   LEXTER-O22, LEXTER-O23, and LEXTER-O24 wait for, after LEXTER-O58 and
-  LEXTER-O59 are settled.
+  LEXTER-O59 are settled. Since done
+  ([LEXTER-DRAFT-swatch-ranges](Log.SwatchRanges.md)).
 - **Autowrap and the scrolling region.** A pair that wraps uses the same
   wrapping as a narrow character, which still ignores the region
   (LEXTER-O33); the terminal-fixes plan's LEXTER-D69 repairs both together.

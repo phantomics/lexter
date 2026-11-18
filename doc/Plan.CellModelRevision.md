@@ -12,7 +12,7 @@ approved-by:   Andrew Sengul
 reviewed:      2026-11-06
 provenance:
   assistant:   opencode
-  session:     "Cell model revision plan (2026-11-02); widths, history, and rows (2026-11-17)"
+  session:     "Cell model revision plan (2026-11-02); widths, history, and rows (2026-11-17); swatch ranges built (2026-11-17)"
 relates-to:
   - LEXTER-0018
   - LEXTER-0016
@@ -1243,6 +1243,11 @@ and a terminal's alternate screen has a table of its own.
   (LEXTER-D83). The 3270 pane is a pane, and its cache becomes a table of its
   own; an overlay that belongs to a pane takes its colours from the pane's
   table.
+- **Function panes** draw in the display's table too, though they are panes:
+  they have no screen and draw straight into the grid, as decorators do, so a
+  range of their own would spend the store on a status bar. Amended at the
+  steward's direction while Phase 2 was built
+  ([LEXTER-DRAFT-swatch-ranges](Log.SwatchRanges.md)).
 
 **Alternatives:**
 - Fixed ranges, one per table. Not chosen: a table that outgrows one range has
@@ -1259,6 +1264,8 @@ and a terminal's alternate screen has a table of its own.
   second range for each full-screen program.
 - Chrome in the table of the pane it borders. Not chosen: chrome and the
   workspace belong to the display, and some of it borders no pane.
+- A table for each function pane, as the 3270 pane has. Not chosen: with 16
+  ranges until Phase 3, each status bar or widget would take one.
 
 ## The First Edition Repaired
 
@@ -1298,7 +1305,11 @@ edition, as LEXTER-D100 describes.
   bytes (LEXTER-D109). The configuration sets how
   many slots the store holds, 128 by default (LEXTER-D92). The first
   edition still chooses a slot for each draw; allocating slots to terminals
-  waits for the record's palette slot in Phase 3.
+  waits for the record's palette slot in Phase 3. Two parts of LEXTER-D92 come
+  early, at the steward's direction: slot 0 holds the default palette and is
+  never written after the renderer is made, so a pane that names no slot draws
+  in slot 1, and the renderer records each slot's upload by owner and
+  generation.
 - **Ranges.** An allocator hands each table a range of 2048 swatches when it
   is made, and another when it fills, up to four, and takes them back when
   its terminal goes away, because its pane is destroyed or `terminal-reset`
@@ -1311,8 +1322,8 @@ edition, as LEXTER-D100 describes.
   the display's table the first range
   (LEXTER-DRAFT-cell-model-revision-D24).
 - **Writers.** The 3270 pane's global cache becomes a table of its own;
-  chrome, decorators, workspace clears, and the demo intern into the
-  display's table (LEXTER-DRAFT-cell-model-revision-D24).
+  chrome, decorators, workspace clears, function panes, and the demo intern
+  into the display's table (LEXTER-DRAFT-cell-model-revision-D24).
 - **Uploads.** The renderer records, for each range, the table it uploaded
   and the count, and uploads the new tail of a table that has grown, or the
   whole range for a table that is new or has bumped its version.

@@ -85,7 +85,8 @@
                              (:file "test-pty")
                              (:file "test-width")
                              (:file "test-profiles")
-                             (:file "test-scrollback"))))
+                             (:file "test-scrollback")
+                             (:file "test-workspaces"))))
   :perform (asdf:test-op (o s)
              (uiop:symbol-call '#:lexter-tests '#:run-all-tests)))
 

@@ -159,11 +159,17 @@
       (otherwise nil))))
 
 (defun switch-workspace (comp index)
-  "Switch to workspace at INDEX if it exists."
+  "Switch to workspace at INDEX if it exists. The grid is cleared, and every
+   pane of the new workspace and its decorations are marked dirty, so that the
+   next frame repaints the workspace whole, as an alternate-screen swap does
+   (LEXTER-D71)."
   (when (< index (length (compositor-workspaces comp)))
     (setf (compositor-active-index comp) index)
-    ;; Clear grid and mark for full redraw
-    (clear-grid (compositor-display comp))))
+    (clear-grid (compositor-display comp))
+    (let ((ws (active-workspace comp)))
+      (dolist (pane (workspace-panes ws))
+        (pane-mark-dirty pane))
+      (mark-decorations-dirty ws))))
 
 (defun handle-compositor-char (comp codepoint)
   "Route character input to focused pane."

@@ -247,8 +247,8 @@ OSC 4 changes made before it existed are lost inside it
 **Decision:** The cached screen slot is removed, or replaced by a function
 of the handler, and every reader, the Origin integration included, asks the
 handler for the active screen. The alternate screen is created with a copy of
-the primary's palette. Whether the two screens also share a swatch table is
-the cell plan's LEXTER-O58.
+the primary's palette. The two screens also share one swatch table, as the cell
+plan's LEXTER-O58 resolves (LEXTER-DRAFT-cell-model-revision-D24).
 
 **Alternatives:**
 - Keep the slot and update it on every swap. Rejected: it is a second copy

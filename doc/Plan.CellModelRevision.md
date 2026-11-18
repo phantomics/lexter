@@ -51,6 +51,7 @@ decisions:
   - LEXTER-DRAFT-cell-model-revision-D21
   - LEXTER-DRAFT-cell-model-revision-D22
   - LEXTER-DRAFT-cell-model-revision-D23
+  - LEXTER-DRAFT-cell-model-revision-D24
 open-questions:
   - LEXTER-O56
   - LEXTER-O57
@@ -1195,6 +1196,70 @@ so a zero-width character has no cell to join
 - Each zero-width character as a cell of its own, as some are now. Rejected:
   it moves every later character on the line out of place.
 
+### LEXTER-DRAFT-cell-model-revision-D24 — Tables take ranges of 2048 swatches as they grow, and the display has a table of its own
+
+**Status:** Proposed
+
+**Context:** LEXTER-D99 gives each swatch table a range of one GPU store, and
+LEXTER-D100 has screens store global indices, so a range cannot move once its
+indices are in cells. How ranges are sized, how many a table may take, and
+what a full table does were LEXTER-O58; which table holds the swatches of
+writers without a screen of their own was LEXTER-O59. Until Phase 3 only the
+store's first 32,768 entries are usable, because the first edition's
+instances carry the wide flag in bit 15 of their swatch field. Today chrome,
+decorators, and workspace clears write swatch indices into the grid
+directly, the 3270 pane keeps a global cache of swatches it sets on the grid,
+and a terminal's alternate screen has a table of its own.
+
+**Decision:**
+
+- **Ranges of 2048 swatches.** The store is divided into ranges of 2048
+  entries: 16 in Phase 2, 32 once Phase 3 opens the whole store of 65,536. A
+  table takes one range when it is made, and another when it fills, so most
+  tables hold one range and some hold several, not necessarily adjacent. A
+  table's local number N is held in its range N / 2048, at offset N mod 2048,
+  and the global index it hands out is that range's base plus the offset.
+  Ranges never move.
+- **Four ranges at most** for one table, 8192 swatches, so that a pane drawing
+  many colours cannot take the whole store from the others. The limit may be
+  raised when Phase 3 doubles the store.
+- **A full table** — one at its limit, or one that needs a range when none is
+  free — interns no new swatch: it returns its existing swatch whose colours
+  are nearest, by the distance between the RGB values of their slots in the
+  palette they are drawn in. Drawing never fails, and colours degrade only
+  when the store is exhausted. Whether eviction (Phase 7) is added remains
+  open.
+- **Release.** A table's ranges return to the free list when its terminal goes
+  away, because its pane is destroyed or `terminal-reset` replaces its
+  screens.
+- **One table for a terminal's two screens.** The primary and alternate
+  screens share a table, as they share palette changes, so a full-screen
+  program takes no range of its own and colours keep their indices across the
+  switch.
+- **The display's table.** The compositor owns one table for everything drawn
+  at the level of Lexter's display rather than of a pane: chrome, decorators,
+  workspace clears, and the demo. It takes the first range, so global swatch 0
+  is its local 0, the default colours, which the allocator reserves
+  (LEXTER-D83). The 3270 pane is a pane, and its cache becomes a table of its
+  own; an overlay that belongs to a pane takes its colours from the pane's
+  table.
+
+**Alternatives:**
+- Fixed ranges, one per table. Not chosen: a table that outgrows one range has
+  nowhere to go, and a large fixed range wastes the store on tables that need
+  little.
+- Ranges relocated as tables grow. Rejected: screens store global indices, so
+  moving a range would mean rewriting a screen's cells.
+- No limit on a table's ranges. Not chosen: one pane could exhaust the store.
+- Falling back to the table's default swatch. Not chosen: text written after
+  the store fills would lose its colours entirely.
+- Eviction in Phase 2. Not chosen: it is Phase 7's, and the fallback keeps
+  drawing correct until then.
+- A table for each screen, the alternate included. Not chosen: it spends a
+  second range for each full-screen program.
+- Chrome in the table of the pane it borders. Not chosen: chrome and the
+  workspace belong to the display, and some of it borders no pane.
+
 ## The First Edition Repaired
 
 Phase 1 repairs the present structures in place
@@ -1234,17 +1299,20 @@ edition, as LEXTER-D100 describes.
   many slots the store holds, 128 by default (LEXTER-D92). The first
   edition still chooses a slot for each draw; allocating slots to terminals
   waits for the record's palette slot in Phase 3.
-- **Ranges.** An allocator hands each table a range and takes it back when
-  its screen goes away, because its pane is destroyed or `terminal-reset`
-  replaces it. Sizing, the alternate screen, and what a full table does are
-  LEXTER-O58.
+- **Ranges.** An allocator hands each table a range of 2048 swatches when it
+  is made, and another when it fills, up to four, and takes them back when
+  its terminal goes away, because its pane is destroyed or `terminal-reset`
+  replaces its screens. A terminal's two screens share one table, and a full
+  table returns its nearest existing swatch
+  (LEXTER-DRAFT-cell-model-revision-D24).
 - **Defaults at zero.** Global swatch 0 and palette slot 0 always hold valid
   default colours, so that a record of zeros in the second edition is a
-  blank cell (LEXTER-D83); the allocator reserves them, for the table that
-  LEXTER-O59 decides.
-- **Writers.** The 3270 pane's global cache becomes a table; chrome,
-  decorators, and the demo intern into tables
-  (LEXTER-O59).
+  blank cell (LEXTER-D83); the allocator reserves global swatch 0 by giving
+  the display's table the first range
+  (LEXTER-DRAFT-cell-model-revision-D24).
+- **Writers.** The 3270 pane's global cache becomes a table of its own;
+  chrome, decorators, workspace clears, and the demo intern into the
+  display's table (LEXTER-DRAFT-cell-model-revision-D24).
 - **Uploads.** The renderer records, for each range, the table it uploaded
   and the count, and uploads the new tail of a table that has grown, or the
   whole range for a table that is new or has bumped its version.
@@ -1255,7 +1323,7 @@ edition, as LEXTER-D100 describes.
   15 of their swatch field (`src/grid.lisp:build-render-data@2d4d743`), so a
   global index must stay below 32,768. Until Phase 3 gives the swatch
   index 16 bits and the wide flag a bit of its own, the allocator uses only
-  the store's first 32,768 entries. Moving the flag into the instance's
+  the store's first 32,768 entries, 16 ranges. Moving the flag into the instance's
   padding bytes would lift the limit sooner, at the cost of changing the
   first edition's shaders and attribute setup once more.
 - **Room for swatch reindexing.** Shifting a range of swatches on a clock,
@@ -1463,9 +1531,9 @@ bits that can grow rather than three fixed ones: a clock that shifts a range
 of swatches (LEXTER-O73) would add a bit, set for a row
 that holds a swatch index in the range.
 
-Phase 7, conditional, evicts unused swatches within a range, if
-LEXTER-O58 chooses eviction over a large range and a
-fallback: mark the indices that a screen's cells still use, free the rest,
+Phase 7, conditional, evicts unused swatches within a table's ranges, if the
+steward chooses to add eviction to the fallback to the nearest swatch
+(LEXTER-DRAFT-cell-model-revision-D24): mark the indices that a screen's cells still use, free the rest,
 and bump the table's version. History holds palette indices, not swatch
 indices (LEXTER-D118), so it need not be scanned.
 
@@ -1548,21 +1616,35 @@ Fixed ranges, such as 2048 entries for each of 32 tables, or ranges allocated
 and relocated as tables grow. The steward leans to fixed ranges: screens store
 global indices (LEXTER-D100), so moving a range would
 mean rewriting a screen's cells and its scrollback; from Phase 3, history
-holds palette indices (LEXTER-D118), so only the
-cells on screen would be rewritten. What remains open is their size. In Phase 2 only the store's first 32,768 entries are usable, because the
-first edition's instances carry the wide flag in bit 15 of their swatch field
-(see Swatch Ranges), so ranges of 2048 entries give 16 tables until Phase 3.
-Ranges are fixed in place, so those allocated in Phase 2 carry into Phase 3
-unchanged, and Phase 3 opens the rest of the store. Also open: whether the
-primary and alternate screens share one table, and whether a full table
-evicts unused swatches (Phase 7) or falls back to the nearest existing one.
-It is LEXTER-O15.
+holds palette indices (LEXTER-D118), so only the cells on screen would be
+rewritten. What remains open is their size. In Phase 2 only the store's first
+32,768 entries are usable, because the first edition's instances carry the
+wide flag in bit 15 of their swatch field (see Swatch Ranges), so ranges of
+2048 entries give 16 tables until Phase 3. Ranges are fixed in place, so
+those allocated in Phase 2 carry into Phase 3 unchanged, and Phase 3 opens
+the rest of the store. Also open: whether the primary and alternate screens
+share one table, and whether a full table evicts unused swatches (Phase 7)
+or falls back to the nearest existing one. It is LEXTER-O15.
+
+**Resolution:** 2026-11-17 — accepted, recorded at the steward's direction:
+ranges of 2048 entries, allocated to a table as it grows, so that most tables
+hold one range and some several, at most four; 16 ranges in Phase 2 and 32
+once Phase 3 is complete. A terminal's primary and alternate screens share a
+table, and a full table falls back to its nearest existing swatch. Whether
+Phase 7 adds eviction remains open
+(LEXTER-DRAFT-cell-model-revision-D24).
 
 ### LEXTER-O59 — Where do the swatches of writers without a screen live?
 
 Chrome, decorators, the overlay list, and the 3270 pane need tables: one
 chrome table with a range of its own, or the table of the pane each belongs
 to. It is LEXTER-O16.
+
+**Resolution:** 2026-11-17 — accepted, recorded at the steward's direction:
+one table with a range of its own, for chrome and everything else drawn at
+the level of Lexter's display rather than of a pane, decoration and content
+alike. The 3270 pane, being a pane, has a table of its own
+(LEXTER-DRAFT-cell-model-revision-D24).
 
 ### LEXTER-O60 — How does the block cursor learn the cell beneath it?
 
@@ -1780,7 +1862,8 @@ Table: Prior systems and what this plan draws from each.
    LEXTER-D100), with palettes and swatches in integer
    stores after a check of cl-opengl (LEXTER-D109).
    Fixtures replay the same in any order. LEXTER-O58
-   and LEXTER-O59 are settled first. A Log records
+   and LEXTER-O59 are settled first
+   (LEXTER-DRAFT-cell-model-revision-D24). A Log records
    the phase. Every later phase waits for it.
 4. **Gate.** Phase 2 is complete, as Swatch Ranges defines;
    LEXTER-O57, LEXTER-O61,
@@ -1819,8 +1902,8 @@ Table: Prior systems and what this plan draws from each.
    (see Later Formats). A Log records each.
 9. **Phase 6, optional: partial redraw**, after
    LEXTER-O64 is settled.
-10. **Phase 7, conditional: eviction within a range**, if
-    LEXTER-O58 chooses it.
+10. **Phase 7, conditional: eviction within a range**, if the steward adds
+    it to the fallback of LEXTER-DRAFT-cell-model-revision-D24.
 11. **The second edition specified.** A specification of the new data model,
     Spec.DataStructures2e, superseding
     [LEXTER-DRAFT-data-structures-1e](Spec.DataStructures1e.md), and README.md

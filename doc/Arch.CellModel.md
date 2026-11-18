@@ -342,8 +342,9 @@ Table: Bits of the format word in a glyph format.
 A record of zeros is a plain cell with no glyphs and a background slot of 0:
 every pixel takes slot 0 of global swatch 0 in palette slot 0
 (LEXTER-D90). Global swatch 0 and palette slot 0 must
-always hold valid default colours; which table owns swatch 0 is
-LEXTER-O59.
+always hold valid default colours; swatch 0 is owned by the display's table,
+which takes the store's first range (LEXTER-O59,
+LEXTER-DRAFT-cell-model-revision-D24).
 
 Writers never produce a glyph count beyond the format's glyph words.
 Renderers still clamp it, so that a bad record cannot read past them.

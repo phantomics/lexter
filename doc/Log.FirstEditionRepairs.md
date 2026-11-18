@@ -106,19 +106,23 @@ LEXTER-D89. Choices made while building:
 - `tools/gen-width-table.lisp` (new) downloads and checks the three data
   files of Unicode 17.0 and writes `src/width-data.lisp` (new), 673 ranges of
   code points whose width is not 1, by class: 0, 2, or ambiguous.
-- `src/width.lisp` (new) and the package `lexter/width`: `width-policy`, with
+- `src/width.lisp` (new) and the package `lexter/width`:
+  `src/width.lisp:width-policy@3627e50`, with
   the width of ambiguous characters and overrides of single code points or
-  ranges; `*default-width-policy*`; `unicode-width-class`; and `char-width`,
+  ranges; `*default-width-policy*`; `unicode-width-class`; and
+  `src/width.lisp:char-width@3627e50`,
   which bisects the table. It needs no GL and no font.
 
 ### The atlas, `src/atlas.lisp`
 
-`pack-atlas` reserves positions 0–63 and packs font glyphs from position 64.
+`src/atlas.lisp:pack-atlas@3627e50` reserves positions 0–63 and packs font glyphs
+from position 64.
 It generates the empty glyph, the full block, underline, bar, and outlined
 block cursors, the replacement glyph, and the "no glyph" glyph at positions 0
 to 6, named from 0x110000 in the codepoint table, in place of the private-use
 codepoints the cursor glyphs had. It plans the fitting of glyphs to the width
-policy (`%plan-atlas`, `%fit-glyph`): a glyph of the right width from the
+policy (`src/atlas.lisp:%plan-atlas@3627e50`, `src/atlas.lisp:%fit-glyph@3627e50`): a
+glyph of the right width from the
 chain, or a narrow glyph centred at column cell-width / 2 (`%pad-glyph`), or a
 wide glyph cropped to the window centred on its ink (`%crop-glyph`), or the
 replacement glyph. The atlas records its width policy and a table of fitted
@@ -126,16 +130,18 @@ glyphs; `build-atlas` and `atlas-columns-for` take the policy.
 
 ### The VT handler, `src/vt-handler.lisp`
 
-`%print-codepoint` decides each character's width from the table through the
+`src/vt-handler.lisp:%print-codepoint@3627e50` decides each character's width from
+the table through the
 atlas's policy: a character of width 0 is dropped; a pair that would begin in
-the last column wraps first; and `%write-printed-char` writes the character
+the last column wraps first; and `src/vt-handler.lisp:%write-printed-char@3627e50`
+writes the character
 with the glyph fitted to its width, or the "no glyph" glyph, as a pair when it
 is wide, and advances by its width. The screen's blank is the empty glyph.
 
 ### The model, `src/model.lisp`
 
 - Every range operation repairs a pair it cuts at its edges
-  (`%repair-pair-edges`): the erases, through `%erase-range`; `insert-chars`
+  (`src/model.lisp:%repair-pair-edges@3627e50`): the erases, through `%erase-range`; `insert-chars`
   and `delete-chars`, which move cells whole (`%move-cell`), layered entries
   included; and `resize-screen`, at a narrower right edge. `%copy-row` and
   `%clear-row` carry the wide flags. `%erase-cell` clears the wide flag.
@@ -143,10 +149,11 @@ is wide, and advances by its width. The screen's blank is the empty glyph.
   cell takes the swatch and attributes as a simple cell does; `cell-swatch`
   reads a layered cell's swatch.
 - The flush checks each row it copies for a left half without its right half
-  (`%check-row-pairs`), writes each pair once from its left half, clips a pair
+  (`src/model.lisp:%check-row-pairs@3627e50`, called from
+  `src/model.lisp:flush-to-display@3627e50`), writes each pair once from its left half, clips a pair
   at the grid's right edge, rebuilds a layered cell whole so that a cleared
   layer is cleared in the grid, and draws the cursor with
-  `exchange-cell-slots`.
+  `src/grid.lisp:exchange-cell-slots@3627e50`.
 - The blank is the empty glyph: a fresh screen, `delete-char`, and an absent
   layer's glyph. `+max-layers+` and `+swatch-slots+` are imported from the
   grid; the screen's struct default for `cursor-blink` matches its
@@ -213,7 +220,7 @@ line.
 
 ## Files
 
-Table: Files added or changed in Phase 1.
+Table: Files added or changed in Phase 1, in commit `3627e50`.
 
 | File | Action | Description |
 |---|---|---|

@@ -12,7 +12,7 @@ approved-by:   Andrew Sengul
 reviewed:      2026-11-06
 provenance:
   assistant:   opencode
-  session:     "Cell model revision plan (2026-11-02); widths, history, and rows (2026-11-17); swatch ranges built (2026-11-17)"
+  session:     "Cell model revision plan (2026-11-02); widths, history, and rows (2026-11-17); swatch ranges built (2026-11-17); the gate's questions settled (2026-11-18)"
 relates-to:
   - LEXTER-0018
   - LEXTER-0016
@@ -52,6 +52,12 @@ decisions:
   - LEXTER-DRAFT-cell-model-revision-D22
   - LEXTER-DRAFT-cell-model-revision-D23
   - LEXTER-DRAFT-cell-model-revision-D24
+  - LEXTER-DRAFT-cell-model-revision-D25
+  - LEXTER-DRAFT-cell-model-revision-D26
+  - LEXTER-DRAFT-cell-model-revision-D27
+  - LEXTER-DRAFT-cell-model-revision-D28
+  - LEXTER-DRAFT-cell-model-revision-D29
+  - LEXTER-DRAFT-cell-model-revision-D30
 open-questions:
   - LEXTER-O56
   - LEXTER-O57
@@ -344,6 +350,10 @@ indices, moving a range would mean rewriting a screen's cells and
 scrollback, so ranges are fixed in place
 (LEXTER-O58).
 
+A terminal pane's rows are built into the grid rather than copied, as
+LEXTER-DRAFT-cell-model-revision-D25 amends; the global indices stand, and
+are what the build writes.
+
 **Alternatives:**
 - Store local indices and translate them in the flush, adding each table's
   base as cells are written. Rejected: the copy is no longer plain, every
@@ -434,6 +444,11 @@ shows half a glyph instead of corrupting state. Writers still write and
 erase both halves together, as a terminal must. The atlas keeps each wide
 glyph in two adjacent columns, as [LEXTER-0007](Log.EnhancedDualWidth.md)
 packs them, and the right half samples the second.
+
+How the right half finds the second column is amended by
+LEXTER-DRAFT-cell-model-revision-D27: each half's glyph word names the column
+it draws, so the right half holds the glyph's position plus 1. The rest of
+this decision stands.
 
 **Alternatives:**
 - Keep one double-width instance. Rejected: it is how wide characters are
@@ -545,6 +560,10 @@ surface: cells of the void format, which reference a surface drawn in their
 area (LEXTER-D82). A surface may hold a video, an image, or a
 sub-terminal with a grid and font of its own. Surfaces and effects are left
 to a later survey.
+
+A terminal pane's rows are built into the grid from its text and styles,
+and only surfaces that keep records are copied
+(LEXTER-DRAFT-cell-model-revision-D25).
 
 **Alternatives:**
 - A grid per pane. Rejected: its unique abilities are exceptions, better
@@ -959,8 +978,12 @@ a screen's top is kept in its history as text and styles.
 - **Packing.** How history's rows are packed in memory, as runs of styles or
   as compressed pages, is not decided here.
 
-Whether a screen stores records for its rows on screen remains
-LEXTER-O57. This decision replaces Phase 3's scrollback of records.
+Whether a screen stores records for its rows on screen was
+LEXTER-O57: it stores none, and the function that builds history's rows
+builds the screen's too, so it is the function that builds every terminal row
+rather than the one by which the handler writes a cell
+(LEXTER-DRAFT-cell-model-revision-D25). This decision replaces Phase 3's
+scrollback of records.
 
 **Alternatives:**
 - Rows of records, as Phase 3 had them. Rejected: they cost a record for
@@ -1267,6 +1290,298 @@ and a terminal's alternate screen has a table of its own.
 - A table for each function pane, as the 3270 pane has. Not chosen: with 16
   ranges until Phase 3, each status bar or widget would take one.
 
+### LEXTER-DRAFT-cell-model-revision-D25 — A terminal's screen keeps text and styles, and its records are built as its rows are composed
+
+**Status:** Proposed
+
+**Context:** LEXTER-O57 asked whether a screen stores records for its rows on
+screen beside its text grid, or builds them as it copies its rows into the
+composed grid. Stored records would be a second structure for each cell,
+which every operation that writes, erases, inserts, deletes, scrolls,
+resizes, or reflows must keep in step with the text grid; the critique found
+that rules kept by one writer are broken by others
+([LEXTER-0014](Eval.Critique.DataStructures1e.md), LEXTER-O26). History
+already rebuilds records from text and styles
+(LEXTER-D118), so stored records would give a cell
+two paths to its record, one taken at every write and one only when history
+is viewed. Some of a record's inputs change after the text is written: the
+atlas, when the font or the width policy changes; the terminal's palette
+slot; the swatches, under eviction (Phase 7); and the presentation settings
+of LEXTER-DRAFT-cell-model-revision-D26. Chrome, decorators, function panes,
+and Common Lisp applications write layers, masks, and tiles through the API,
+which have no text and style to be rebuilt from.
+
+**Decision:** The cell model holds only the content on screen, and a
+terminal's screen holds no records.
+
+- **Terminal screens** — the VT, telnet, and 3270 panes
+  (LEXTER-DRAFT-cell-model-revision-D29) — keep the text grid, styles, and
+  terminal rows (LEXTER-D118, LEXTER-D119).
+- **One function builds every terminal row.** Each dirty row of a screen is
+  built into its segment of the composed grid from its text cells, their
+  styles, its terminal row, and the terminal's settings, by the function that
+  also builds the history rows a viewport shows. A fault found on either path
+  is repaired for both.
+- **Decided at the write, and stored.** Everything the handler decides when a
+  cell is written is stored in its text cell or its style: the width
+  (LEXTER-D117), the codepoints
+  (LEXTER-DRAFT-cell-model-revision-D28), and the style. Everything else is a
+  presentation rule (LEXTER-DRAFT-cell-model-revision-D26), so that a row
+  built again draws what was written. A change to an input of the build, such
+  as the atlas or a setting, marks the terminal's rows dirty.
+- **Surfaces that write records** — chrome, decorators, function panes, and
+  Common Lisp applications writing through the API — keep their records, since
+  nothing else describes their content; the call that writes a record writes
+  the text grid beside it.
+- **Rich scrollback by request.** An application that wants its layers,
+  masks, and tiles kept in history, such as a Lexter bulletin board with a long
+  scrolling menu drawn with graphical effects, asks Lexter for it; how is left
+  to the host protocol (LEXTER-O76). Until then history keeps text and styles
+  alone.
+- **Cost.** Building a cell costs a lookup from style to swatch, which the
+  style table caches for each terminal, and a lookup in the atlas, for the
+  dirty rows only.
+
+This settles LEXTER-O57. It amends LEXTER-D100 and
+LEXTER-D107, under which composing a pane is a plain
+copy of row segments: a terminal pane's rows are built into the grid, and
+only surfaces that keep records are copied. It amends
+LEXTER-D118's "the function by which the handler
+writes a cell" to the function that builds every terminal row.
+
+**Alternatives:**
+- Records stored beside the text grid. Rejected: two structures to keep in
+  step through every operation, two paths to a record, and an invalidation for
+  every input that changes after a write.
+- Records stored and built again only when an input changes, as a cache. Not
+  chosen: invalidation is where a cache drifts; one can be added if the build
+  is measured to be too slow.
+- Records for API surfaces rebuilt from a description of their own. Rejected:
+  the records are that description.
+
+### LEXTER-DRAFT-cell-model-revision-D26 — A style holds the attributes as the host sent them, and presentation rules are applied as records are built
+
+**Status:** Proposed
+
+**Context:** The first edition's handler decides bold-as-bright when it
+writes a cell, promoting a foreground of 0–7 to 8–15 and interning the
+promoted colour (`src/vt-handler.lisp:%write-printed-char@8451a08`).
+LEXTER-D118 keeps 24-bit colour in styles so that
+history keeps it once the inline-colour format draws it, which assumes that
+a colour is mapped to what is drawn when a record is built, not when a cell
+is written. LEXTER-D116 in [LEXTER-0016](Arch.CellModel.md) leaves bold-as-bright a choice of the terminal's colours,
+beside bold glyphs from a bold font. Attribute reports and copying with
+formatting read a cell's style (LEXTER-D116). xterm (`boldColors`),
+Alacritty (`draw_bold_text_with_bright_colors`), and VTE (Show bold text in
+bright colours) make bold-as-bright a setting of the terminal, applied when
+text is drawn. Once records are built from styles
+(LEXTER-DRAFT-cell-model-revision-D25), every rule
+that turns a style into a record must either be stored or be applied by the
+build.
+
+**Decision:** A style holds the attributes as the host sent them: colours as
+the default, a palette index, or 24-bit values, and bold and the other
+attributes as flags. Presentation rules are applied, from the terminal's
+settings, when a record is built.
+
+- **Bold-as-bright.** A bold cell whose foreground is palette colour 0–7 is
+  drawn in colour 8–15. The default foreground (SGR 39) is left alone, as in
+  xterm.
+- **Screen reverse video.** DECSCNM exchanges the colours of every cell as
+  records are built.
+- **24-bit colour** is mapped to the 256-colour palette until the
+  inline-colour format draws it (see Later Formats).
+- **Bold glyphs** from a bold font in the chain (LEXTER-D116), when they
+  arrive, are chosen by the build as bold-as-bright is.
+- **Changing a setting** marks the terminal's rows dirty, so that the screen
+  and the history it shows are drawn under the new rule.
+- **Reports and copying** read the style, so that they give what the host
+  sent.
+- **Fixtures.** The settings that presentation rules read are part of a
+  fixture's configuration, as its font is, so that the cell checksum
+  (LEXTER-D108) holds.
+
+The first edition keeps its write-time promotion until Phase 3 replaces its
+swatch path.
+
+**Alternatives:**
+- The effective colour stored in the style, as the first edition stores it in
+  the swatch. Rejected: reports and copying would give the promoted colour,
+  history written under one setting would be drawn under another, and 24-bit
+  colour could not be kept for inline colours.
+- Bold-as-bright for the default foreground too. Not chosen: the steward
+  follows xterm.
+
+### LEXTER-DRAFT-cell-model-revision-D27 — Each half of a double-width glyph names its own atlas column, and masks apply half to half
+
+**Status:** Proposed
+
+**Context:** LEXTER-D103 stores a double-width glyph in
+both cells and has the right half sample the second of its two atlas
+columns, and the architecture's procedure for drawing a pixel applies the
+right-half bit to every glyph the cell holds
+([LEXTER-0016](Arch.CellModel.md), Drawing a Pixel). Line glyphs are narrow
+and are applied to each half's cell as they are (LEXTER-O52), and so would be
+a narrow mask over half of a wide character; in a right half, a narrow glyph
+would sample the column after its own, which belongs to another glyph.
+LEXTER-O61 asked how a mask applies to a wide display glyph.
+
+**Decision:** Masks apply half to half: a double-width circle over a
+double-width ideograph is its left half over the ideograph's left half and
+its right half over the right.
+
+- **Each glyph word names the column its cell draws.** In the right half of a
+  wide glyph, the word holds the glyph's position plus 1, the second of its
+  two adjacent atlas columns; a narrow glyph names itself, in either half,
+  and is drawn whole in that cell. Renderers no longer read the right-half bit
+  to sample a glyph; writers, the wide-pair helpers, and the text grid still
+  read it.
+- **The split is the API's.** An application asks for one character over
+  another; the API writes the two halves, so that callers never write halves
+  by hand and the cell model stays uniform. Whether a narrow mask over a wide
+  character applies to one half or both is the API's choice.
+- **Halves match.** The two halves of a pair have the same glyph count and
+  type bits, and the debugging builds' assertions check it.
+- **The atlas** packs each wide glyph so that its second column is its
+  position plus 1, as [LEXTER-0007](Log.EnhancedDualWidth.md) packs them.
+
+This settles LEXTER-O61, and with it the architecture's LEXTER-O52, and amends
+LEXTER-D103, whose right half no longer holds the
+same glyph as its left. The architecture's procedure for drawing a pixel, and
+its formula for double-size lines (LEXTER-D114), are amended to match.
+
+**Alternatives:**
+- A bit in each glyph's settings byte that makes it sample its second column
+  in a right half. Not chosen: it spends a settings bit for what the glyph
+  word can say.
+- A table of wide glyphs read by the shader. Rejected: a lookup for every
+  glyph of every pixel.
+- The right-half bit applied to every glyph, as LEXTER-D103 had it.
+  Rejected: narrow glyphs in a right half would draw the wrong glyph.
+
+### LEXTER-DRAFT-cell-model-revision-D28 — A text cell is eight bytes, with its base codepoint inline and the rest of a cluster beside it
+
+**Status:** Proposed
+
+**Context:** LEXTER-D119 settles what a text cell
+marks, its wide bit, its width, its style id, and continuation markers, and
+leaves how it holds codepoints and grapheme clusters open
+(LEXTER-O63). A cluster can be one codepoint, a
+letter with combining marks, a flag made of two regional indicators, or an
+emoji sequence of several codepoints joined by U+200D. The terminals of the
+prior-art evaluation hold them in fixed planes (xterm, Alacritty), as an index
+into an interned table (kitty, VTE), as a string in the cell (WezTerm), or as
+the first codepoint in the cell and the rest in storage owned by the page
+(Ghostty) ([LEXTER-0018](Eval.CellModels.PriorArt.md), R3).
+
+**Decision:** A text cell is eight bytes, as Ghostty's is.
+
+- **A content word** of 32 bits: a codepoint, 0 to U+10FFFF; or the
+  continuation marker, a value above U+10FFFF that names no generated glyph
+  (LEXTER-D89).
+- **A style id** of 16 bits (LEXTER-D118).
+- **Flags** of 16 bits: the wide bit, the width the writing path decided
+  (LEXTER-D117), and a flag that the cell holds more codepoints than its
+  first; the rest reserved.
+- **Clusters.** The base codepoint is always in the cell, where the atlas
+  lookup reads it. The codepoints after it are kept in storage owned by the
+  screen, and by each page of history when its row moves there, and are freed
+  with it.
+- **Segmentation.** A character of width 0 joins the cell of the character
+  before it (LEXTER-D119); segmentation by UAX #29
+  and mode 2027 are later additions.
+- **History** keeps the same cells, without continuations
+  (LEXTER-D118).
+
+How many styles a terminal may hold, and when they are freed, is settled with
+the packing of history (LEXTER-D118). This settles
+part of LEXTER-O63; how the characters that join a
+cell are drawn remains open.
+
+**Alternatives:**
+- A fixed number of planes for combining characters. Not chosen: characters
+  beyond the planes are lost.
+- An index into a table of interned clusters in every cell of several
+  codepoints. Not chosen: the base codepoint, which every build reads, would
+  be one lookup away, and an interned table needs a lifetime that storage
+  owned by the screen and the page has.
+- The whole cluster in each cell. Not chosen: a larger cell for what most
+  cells do not hold.
+
+### LEXTER-DRAFT-cell-model-revision-D29 — The 3270 pane's screen is a Lexter screen, with its field state beside it
+
+**Status:** Proposed
+
+**Context:** The 3270 pane keeps a screen of its own, of codepoints, colours,
+highlights, and field attributes, and writes the display grid directly with
+swatches of its own (`src/tn3270-pane/tn3270-pane.lisp:pane-swatch@8451a08`); the review found
+that it never touches the model, and LEXTER-O66 asked whether it is rewritten
+to the record or keeps its own path. The client library `lexter/tn3270` has
+no dependency on Lexter.
+
+**Decision:** The 3270 pane works as the other terminals do, so that a
+fragile special case is brought into line with them.
+
+- **Its screen is a Lexter screen**: a text grid, styles, and terminal rows,
+  built into the composed grid as every terminal screen is
+  (LEXTER-DRAFT-cell-model-revision-D25), with a cursor, selection, and the CPU
+  renderer as the others have.
+- **Field state beside it.** For each buffer address the 3270 screen keeps
+  what the model has no place for: where field attributes stand, protection,
+  intensity, the modified-data tag, and extended attributes.
+- **Writes through the model.** The data stream's orders write through the
+  model's operations. A field attribute's position is a blank cell; a change
+  to a field attribute restyles the cells of its field; widths come from the
+  data stream (LEXTER-D117).
+- **One copy.** `lexter/tn3270` depends on Lexter's model, so that the
+  screen's characters are held once.
+
+This settles LEXTER-O66. The work is done in Phase 3.
+
+**Alternatives:**
+- The pane mirroring the 3270 buffer into a Lexter screen, keeping the client
+  library free of Lexter. Rejected: two copies of the screen kept in step,
+  the arrangement this plan removes elsewhere.
+- The 3270 screen writing records into its region of the composed grid.
+  Rejected: it keeps a path of its own to the grid.
+
+### LEXTER-DRAFT-cell-model-revision-D30 — The composed grid lives in a Lisp array, behind generated accessors
+
+**Status:** Proposed
+
+**Context:** LEXTER-O65 asked where the grid lives, in the Lisp heap with
+records offset by 16 bytes, in foreign memory, or in mapped GPU memory, and
+which route kernels take; where it lives decides how rows are uploaded, and is
+settled before Phase 3. Phase 2 uploads its swatch and palette stores from
+pinned Lisp arrays (`src/renderer.lisp:upload-swatches@8451a08`). SBCL's
+`sb-simd` loads and stores through accessors of specialized Lisp arrays, such
+as `u32.8-aref`, and has none for foreign pointers. Foreign memory has no
+bounds checks and is freed by hand; CFFI makes it portable, but access to it
+is slower than to a specialized array in some implementations. Persistent
+mapping of a GPU buffer needs OpenGL 4.4.
+
+**Decision:**
+
+- **A Lisp array.** The composed grid's records are a simple array of
+  `(unsigned-byte 32)`, eight words to a record and row by row, pinned while
+  it is uploaded.
+- **Behind the accessors.** Only the accessors generated from the descriptor
+  (LEXTER-D104) read and write it, and they hide its
+  storage, so that a foreign backend can be put in its place if a need for one
+  is measured.
+- **Alignment.** Records may straddle cache lines where the array's data is
+  16-byte aligned; this is accepted until it is measured.
+
+Which route kernels take remains LEXTER-O65; typed Lisp loops come first
+(see The Dense Cell Model).
+
+**Alternatives:**
+- Foreign memory, for SIMD kernels and a grid the collector never moves. Not
+  chosen now: it would take kernels away from `sb-simd` to custom VOPs, an
+  index out of range would corrupt memory without an error, and its lifetime
+  is managed by hand.
+- Mapped GPU memory. Not chosen: OpenGL 3.3 has no persistent mapping.
+
 ## The First Edition Repaired
 
 Phase 1 repairs the present structures in place
@@ -1386,16 +1701,17 @@ Table: What Phase 3 builds from the architecture.
 | Backgrounds | The cell's background slot in place of fills; reverse video through the background slot, so the handler no longer interns a reversed swatch | LEXTER-D86, LEXTER-D90 |
 | Lines | The single underline as a generated glyph, the text's last mask in its colour; the handler already records it, though the first edition never draws it. The other line styles are Later Formats | LEXTER-D88, LEXTER-D89 |
 | Invisible and blinking text | An invisible cell (SGR 8) is written with a glyph count of 0, its characters kept in the text grid. A blinking cell (SGR 5) carries the blink flag, and both renderers hide its topmost layer, the text, while the blink phase is off; the phase is set by the configuration and shares the cursor's clock, and nothing in the record changes as the cell blinks | LEXTER-D83, LEXTER-D94 |
-| Palette slots | An allocator that gives each terminal a palette slot and records each upload by owner, replacing slots chosen by hand and generations compared by slot | LEXTER-D92 |
+| Palette slots | An allocator that gives each terminal a palette slot, replacing slots chosen by hand; Phase 2 already records each upload by owner and keeps slot 0 for the default palette | LEXTER-D92 |
 | The shader | The procedure of Drawing a Pixel, with selection and no blending | LEXTER-0016, Drawing a Pixel |
 
 - **Swatch ownership comes first.** The phase begins only when Phase 2 is
   complete (see Swatch Ranges): the record holds swatch indices but cannot
   make them mean the same in every copy, nor tell the renderer where an upload
   came from.
-- **The 3270 pane.** It keeps a screen of its own and writes the grid
-  directly; whether it is rewritten to write records or keeps a path of its
-  own is LEXTER-O66.
+- **The 3270 pane** is rewritten so that its screen is a Lexter screen of
+  text, styles, and terminal rows, with its field state beside it, written
+  through the model and built into the grid as every terminal's is; its own
+  path to the grid is removed (LEXTER-DRAFT-cell-model-revision-D29).
 - **The grid's array is its upload buffer.** Cells are stored row by row, so
   each dirty row is one contiguous range, uploaded by itself. The renderer
   records which grid it uploaded, by an identity or an epoch from one global
@@ -1407,17 +1723,20 @@ Table: What Phase 3 builds from the architecture.
   its masks, or the cell's background slot, writing it without blending
   (LEXTER-D110), so there are no passes per layer.
 - **Halves.** Double-width glyphs are stored as halves
-  (LEXTER-D103). How a mask applies to a half is
-  LEXTER-O61.
+  (LEXTER-D103), each half's glyph words naming the
+  atlas columns it draws, and masks apply half to half; an API call writes
+  both halves of a character with its layers and masks
+  (LEXTER-DRAFT-cell-model-revision-D27).
 - **Text beside the record.** The characters each cell shows are kept in a
-  side array, not in the record, for selection, copying, search, and screen
+  text grid, not in the record, for selection, copying, search, and screen
   readers. The architecture leaves this text grid, like hyperlink ids and
-  protected cells, to state that Lexter keeps apart from the cell model, and
-  writers keep the two in step. Each character's cell holds its wide bit and
-  style id, the other cells it covers hold continuation markers, and a terminal row of
-  soft wrap, prompt kind, and line size lies beside each row
-  (LEXTER-D119); how it holds codepoints and
-  clusters is LEXTER-O63.
+  protected cells, to state that Lexter keeps apart from the cell model. Each
+  character's cell holds its wide bit and style id, the other cells it covers
+  hold continuation markers, and a terminal row of soft wrap, prompt kind, and
+  line size lies beside each row (LEXTER-D119). A
+  text cell is eight bytes, its base codepoint inline and the rest of a
+  cluster beside it (LEXTER-DRAFT-cell-model-revision-D28); how the
+  characters that join a cell are drawn is LEXTER-O63.
 - **History as text and styles.** Rows that leave the screen are kept as
   text, wide bits, style ids, and terminal rows, with styles that can hold
   24-bit colour, and records are rebuilt only for the rows shown
@@ -1425,14 +1744,18 @@ Table: What Phase 3 builds from the architecture.
 - **Drawn rows.** Each grid keeps, beside its records, a change stamp and a
   clock mask for each row, as the architecture specifies
   (LEXTER-D113); uploads follow the change stamps.
-- **The model's storage** is LEXTER-O57, settled
-  before the phase begins. Panes are copied into the one composed grid by row
-  segments (LEXTER-D107).
+- **Terminal rows are built, not stored.** A terminal's screen holds its text
+  grid, styles, and terminal rows and no records; its dirty rows are built
+  into its segment of the composed grid by the function that builds history's
+  rows, and surfaces written through the API keep records that are copied
+  (LEXTER-DRAFT-cell-model-revision-D25). The build applies the presentation
+  rules, bold-as-bright, screen reverse video, and the mapping of 24-bit colour
+  to the palette, from the terminal's settings, to styles that hold what the
+  host sent (LEXTER-DRAFT-cell-model-revision-D26).
 - **Kernels follow correctness.** Typed Lisp loops over the record come first;
-  generated kernels, and where the grid lives in memory, are
-  LEXTER-O65. Where the grid lives is settled before
-  the phase, because it decides how rows are uploaded; the route for kernels
-  can wait.
+  generated kernels are LEXTER-O65. The grid is a
+  Lisp array of `(unsigned-byte 32)`, read and written only through the
+  descriptor's accessors (LEXTER-DRAFT-cell-model-revision-D30).
 - **The plain format first.** The phase builds the plain format, which every
   text cell uses; the void, inline-colour, effect, and tile formats are added
   after it, each as its own step (see Later Formats), since a renderer draws
@@ -1621,6 +1944,16 @@ place, and the records are not needed to report or copy them. What remains
 is whether a screen stores records for its rows on screen beside its text
 grid, or builds them as it copies its rows into the composed grid.
 
+**Resolution:** 2026-11-18 — accepted, recorded at the steward's direction:
+a terminal's screen stores no records. Its rows are built into the composed
+grid from its text and styles by the function that builds history's rows, so
+that the two share one path and a repair to either serves both. The cell
+model holds only the content on screen; surfaces written through the API
+keep their records, and an application that wants its layers and tiles in
+history asks for it, by means the host protocol will settle
+(LEXTER-DRAFT-cell-model-revision-D25). Presentation rules, bold-as-bright
+first, are applied by the build (LEXTER-DRAFT-cell-model-revision-D26).
+
 ### LEXTER-O58 — How are swatch ranges sized and released, and what does a full table do?
 
 Fixed ranges, such as 2048 entries for each of 32 tables, or ranges allocated
@@ -1680,6 +2013,14 @@ architecture carries as LEXTER-O52: its line glyphs are narrow and applied to
 each half's cell, so the rule chosen must let a narrow mask apply to one
 half.
 
+**Resolution:** 2026-11-18 — accepted, recorded at the steward's direction:
+masks apply half to half, the left half of a wide mask over the left half of
+a wide glyph and the right over the right, and the API splits a request for
+one character over another into the halves. Each half's glyph word names the
+atlas column it draws, the right half's the glyph's position plus 1, so that a
+narrow glyph in either half draws itself
+(LEXTER-DRAFT-cell-model-revision-D27).
+
 ### LEXTER-O62 — Which tail types are there, and what do the six payload bits carry?
 
 The layout this plan first adopted fixed how a tail type was found, in the
@@ -1718,6 +2059,22 @@ of soft wrap, prompt kind, and line size lies beside each row
 clusters of a cell are held remains open, and so does how the zero-width
 characters that join a cell are drawn.
 
+Since 2026-11-18 the holding is settled, at the steward's direction: a text
+cell of eight bytes, its base codepoint inline, the rest of a cluster in
+storage owned by the screen or the page of history, and a flag that says
+there is more (LEXTER-DRAFT-cell-model-revision-D28). How the characters that
+join a cell are drawn remains open. The candidates suit a renderer of bitmap
+fonts that cannot shape text but can overprint:
+
+- **A precomposed glyph.** Where the cluster's normal form NFC is one
+  character that the font covers, as e and U+0301 compose to é, its glyph is
+  drawn.
+- **Marks as layers.** Otherwise each combining mark that the font has a
+  glyph for is drawn as a further layer over the base, as far as the record's
+  glyph words allow.
+- **The first codepoint.** An emoji sequence or a flag draws its first
+  codepoint's glyph at the cluster's width.
+
 ### LEXTER-O64 — A persistent target or buffer age for partial redraw?
 
 The offscreen target works everywhere but overturns LEXTER-D39 and costs a
@@ -1730,6 +2087,13 @@ The Lisp heap with records offset by 16 bytes, foreign memory, or mapped GPU
 memory; and custom VOPs, sb-simd, or typed Lisp. It is
 LEXTER-O10.
 
+Since 2026-11-18 where the grid lives is settled, at the steward's direction:
+in a Lisp array of `(unsigned-byte 32)`, behind the descriptor's accessors,
+which hide its storage so that a foreign backend can replace it later
+(LEXTER-DRAFT-cell-model-revision-D30). Which route kernels take remains
+open; `sb-simd`, whose loads and stores act on specialized Lisp arrays, stays
+available to them.
+
 ### LEXTER-O66 — Is the 3270 pane rewritten to the record, or does it keep its own path?
 
 The 3270 pane keeps a screen of its own, of codepoints and field attributes,
@@ -1740,6 +2104,13 @@ rewritten to keep its screen as records, or keep its own screen and write
 records into its region of the composed grid
 (LEXTER-D107). Either way, Phase 2 gives it a swatch
 table in place of its global cache. It is settled before Phase 3.
+
+**Resolution:** 2026-11-18 — accepted, recorded at the steward's direction:
+the 3270 pane is rewritten to work as the other terminals do. Its screen is a
+Lexter screen of text, styles, and terminal rows, with the 3270 field state
+kept beside it; the data stream writes through the model, and
+`lexter/tn3270` depends on Lexter's model so that the screen is held once
+(LEXTER-DRAFT-cell-model-revision-D29).
 
 ### LEXTER-O67 — Does the CPU renderer draw with more than one thread?
 
@@ -1883,16 +2254,24 @@ Table: Prior systems and what this plan draws from each.
    LEXTER-O65 that decides where the grid lives; and
    the companion plan's workspace-switch repaint (LEXTER-D71) has landed. The
    formats other than the plain format (LEXTER-O62)
-   may wait until after Phase 3.
+   may wait until after Phase 3, and so may how the characters that join a
+   cell are drawn, the part of LEXTER-O63 left open. The questions were
+   settled on 2026-11-18 (LEXTER-DRAFT-cell-model-revision-D25 to
+   LEXTER-DRAFT-cell-model-revision-D30).
 5. **Phase 3: the dense cell model.** The descriptor
    (LEXTER-D104); the record of
    [LEXTER-0016](Arch.CellModel.md) in its plain format
    (LEXTER-D102), with halves
    (LEXTER-D103), backgrounds, the single underline
    as a line glyph, invisible and blinking text, and palette slots allocated
-   to terminals; the text grid with its terminal rows
-   (LEXTER-D119); history kept as text and styles
-   (LEXTER-D118); one composed grid drawn in one
+   to terminals; the text grid of eight-byte cells with its terminal rows
+   (LEXTER-D119, LEXTER-DRAFT-cell-model-revision-D28), from which terminal
+   rows are built with the presentation rules
+   (LEXTER-DRAFT-cell-model-revision-D25, LEXTER-DRAFT-cell-model-revision-D26);
+   the 3270 pane on a Lexter screen (LEXTER-DRAFT-cell-model-revision-D29);
+   history kept as text and styles
+   (LEXTER-D118); one composed grid, in a Lisp array
+   (LEXTER-DRAFT-cell-model-revision-D30), drawn in one
    call (LEXTER-D107) by a shader that selects without
    blending (LEXTER-D110); and uploads that follow the drawn rows' change
    stamps (LEXTER-D113).

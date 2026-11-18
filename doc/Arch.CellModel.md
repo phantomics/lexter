@@ -12,7 +12,7 @@ approved-by:   Andrew Sengul
 reviewed:      2026-11-06
 provenance:
   assistant:   opencode
-  session:     "Cell model revision plan (2026-11-02), the dense cell model; widths, history, and rows (2026-11-17)"
+  session:     "Cell model revision plan (2026-11-02), the dense cell model; widths, history, and rows (2026-11-17); halves name their columns (2026-11-18)"
 relates-to:
   - LEXTER-0017
   - LEXTER-0018
@@ -390,6 +390,10 @@ Table: The settings byte of a mask.
 | 25–26 | 2 | Operation | 0 union, 1 intersection, 2 exclusion, 3 the mask less the coverage |
 | 27–29 | 3 | Reach | The mask cuts 1 + this many layers (LEXTER-D85) |
 | 30–31 | 2 | Reserved | Zero |
+
+In the right half of a double-width glyph, the position is the glyph's
+second atlas column, its position plus 1, so that each glyph word names the
+column its cell draws (LEXTER-DRAFT-cell-model-revision-D27).
 
 Writing only a glyph, or only a setting, masks the rest of the word; the
 accessors generated from LEXTER-D104's descriptor do
@@ -1185,11 +1189,13 @@ the magnified half, in every format (LEXTER-D81).
   its layers and its masks, line glyphs among them, is magnified two times
   across, and for sizes 2 and 3 two times down as well.
 - **Which part a cell shows.** A cell of width *w* and height *h* shows,
-  at its pixel (*x*, *y*), column ⌊((2*r* + *m*) × *w* + *x*) / 2⌋ of the
-  glyph, where *r* is the right-half bit and *m* the magnified half; and row
+  at its pixel (*x*, *y*), column ⌊(*m* × *w* + *x*) / 2⌋ of the atlas
+  column that its glyph word names, where *m* is the magnified half; and row
   ⌊(*v* × *h* + *y*) / 2⌋, where *v* is 0 for the top and 1 for the bottom,
   for sizes 2 and 3, or row *y* for size 1. A narrow character on a
-  double-width line covers two cells, and a wide one covers four.
+  double-width line covers two cells, and a wide one covers four: the two
+  cells of the right half name the glyph's second column
+  (LEXTER-DRAFT-cell-model-revision-D27).
 - **Writers.** The terminal row's line size
   (LEXTER-D119) decides how the writer writes the
   row: each character across the cells it covers, with these flags, and
@@ -1314,7 +1320,10 @@ Writers keep these, and the cell checksum relies on them:
 - A mask's reach is at most the number of layers before it.
 - The payload holds exactly what its format defines.
 - The two halves of a double-width glyph are written and erased together,
-  with the wide bit in both and the right-half bit in the second.
+  with the wide bit in both and the right-half bit in the second. They have
+  the same glyph count and type bits, and where a glyph word of the left half
+  names the first column of a wide glyph, the same word of the right half
+  names its second (LEXTER-DRAFT-cell-model-revision-D27).
 
 Debugging builds of the API and the CPU renderer assert these invariants on
 the records they handle.
@@ -1392,24 +1401,24 @@ cycle(c):                                       // LEXTER-D95
     return c
 
 pixel(g):                                       // glyph g at the pixel: 0 or 1
-    rh = (word(0) >> 16) & (word(0) >> 17) & 1   // the right half of a wide glyph
     sz = (word(0) >> 19) & 3                     // the line size
     mh = (word(0) >> 21) & 1                     // the magnified half
     if sz == 0:
-        gx = rh * w + x; gy = y
+        gx = x; gy = y
     else:                                        // LEXTER-DRAFT-cell-model-D17
-        gx = ((2 * rh + mh) * w + x) div 2       // magnified across
+        gx = (mh * w + x) div 2                  // magnified across
         gy = (sz == 1) ? y : ((sz - 2) * h + y) div 2   // and down, by half
-    return glyph_pixel(g, gx, gy)                // gx counts across g's atlas columns
+    return glyph_pixel(g, gx, gy)                // g is the atlas column the cell draws
 ```
 
 Description: The procedure reads the format from the first byte and the
 background slot from the header word; an unknown format is drawn in the
 background slot. For a glyph format it reads the glyph count, clamped to the
 format's glyph words, and the type bits, and keeps one coverage bit for each
-layer. A glyph is read at the pixel's place in the cell, in the second of its
-atlas columns for the right half of a wide glyph, and magnified two times
-across, and down for double height, when the cell has a line size. A glyph
+layer. A glyph is read at the pixel's place in the cell, from the atlas
+column its glyph word names, which in the right half of a wide glyph is the
+glyph's second column, and magnified two times across, and down for double
+height, when the cell has a line size. A glyph
 that is a layer sets its bit to whether its glyph covers the pixel under its
 selector. A glyph that is a mask finds whether its own glyph
 covers the pixel, and combines that, by its operation, with the bits of the
@@ -1441,8 +1450,11 @@ Table: Mask operations, applied to the bits the mask reaches.
 | 2 Exclusion | Coverage or the mask's pixel, but not both |
 | 3 Mask less coverage | The mask's pixel and not the coverage |
 
-The right half of a double-width glyph samples the second of the glyph's two
-atlas columns; tiles are cell-sized and have no halves. In a cell with a line
+The right half of a double-width glyph names the second of the glyph's two
+atlas columns in its glyph words, so that a renderer reads every glyph from
+the column its word names, and a narrow glyph in either half is drawn whole
+(LEXTER-DRAFT-cell-model-revision-D27); tiles are cell-sized and have no
+halves. In a cell with a line
 size, `pixel` reads every glyph magnified, at the column and row that
 LEXTER-D114 gives; `tile_index` reads tiles as they are. The colour is written
 as bytes, divided by 255 on the GPU, without blending
@@ -1557,6 +1569,14 @@ and is now LEXTER-O55.
 It is LEXTER-O61. Line glyphs are narrow and are
 applied to each half's cell as they are, so whichever rule is chosen must
 let a narrow mask apply to one half.
+
+**Resolution:** 2026-11-18 — accepted, recorded at the steward's direction:
+masks apply half to half, and each half's glyph word names the atlas column
+it draws, so that a wide glyph's right half names its second column and a
+narrow glyph, such as a line glyph, names itself in either half and is drawn
+whole there. The API splits a request for one character over another into the
+halves (LEXTER-DRAFT-cell-model-revision-D27 in
+[LEXTER-0017](Plan.CellModelRevision.md)).
 
 ### LEXTER-O53 — What do the void and effect formats carry?
 

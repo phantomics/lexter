@@ -12,7 +12,7 @@ approved-by:   Andrew Sengul
 reviewed:      2026-11-06
 provenance:
   assistant:   opencode
-  session:     "Cell model revision plan (2026-11-02); widths, history, and rows (2026-11-17); swatch ranges built (2026-11-17); the gate's questions settled (2026-11-18)"
+  session:     "Cell model revision plan (2026-11-02); widths, history, and rows (2026-11-17); swatch ranges built (2026-11-17); the gate's questions settled (2026-11-18); SpecOps manifests as the descriptor (2026-11-18)"
 relates-to:
   - LEXTER-0018
   - LEXTER-0016
@@ -58,6 +58,7 @@ decisions:
   - LEXTER-DRAFT-cell-model-revision-D28
   - LEXTER-DRAFT-cell-model-revision-D29
   - LEXTER-DRAFT-cell-model-revision-D30
+  - LEXTER-DRAFT-cell-model-revision-D31
 open-questions:
   - LEXTER-O56
   - LEXTER-O57
@@ -91,6 +92,15 @@ cites:
     external: true
   - title:    "EGL_EXT_buffer_age and GLX_EXT_buffer_age"
     locator:  "Khronos EGL and OpenGL extension registries"
+    external: true
+  - title:    "SpecOps Manifest Reference"
+    locator:  "SpecOps repository (~/src/lisp/specops), doc/Ref.Manifest.md, SPECOPS-0007, release 0.2.3: defmanifest, marshal, unmarshal, patches, records at an index"
+    external: true
+  - title:    "SpecOps manifests over arrays of records"
+    locator:  "SpecOps repository, doc/Plan.OverArrays.md (Lexter's cell model as a test case; the layout as data, SPECOPS-O22) and doc/Log.Manifest.md, SPECOPS-0006 (the cost of one of Lexter's cells at 023a7c6 and d104308); test/test-manifest-arrays.lisp"
+    external: true
+  - title:    "Session transcript: 8-bit or 32-bit units for Lexter's cell"
+    locator:  "/tmp/8bitReason.txt, an excerpt of a SpecOps session given by the steward"
     external: true
 ---
 
@@ -470,6 +480,11 @@ vertex attribute setup from one definition, written from the tables of
 writers of a record's fields: one that writes a glyph or a single setting
 masks the rest of its word (LEXTER-D84). In debugging builds they assert the
 record's invariants, which the architecture lists.
+
+Amended by LEXTER-DRAFT-cell-model-revision-D31: the descriptor is a set of
+SpecOps manifests in 8-bit units, the accessors are written over `marshal`
+and `unmarshal`, and the GLSL and the attribute setup are written by hand and
+checked against the manifests until they can be generated from them.
 
 **Alternatives:**
 - Write the three by hand and test that they agree. Rejected: tests find
@@ -1555,7 +1570,7 @@ which route kernels take; where it lives decides how rows are uploaded, and is
 settled before Phase 3. Phase 2 uploads its swatch and palette stores from
 pinned Lisp arrays (`src/renderer.lisp:upload-swatches@8451a08`). SBCL's
 `sb-simd` loads and stores through accessors of specialized Lisp arrays, such
-as `u32.8-aref`, and has none for foreign pointers. Foreign memory has no
+as `u8.32-aref` and `u32.8-aref`, and has none for foreign pointers. Foreign memory has no
 bounds checks and is freed by hand; CFFI makes it portable, but access to it
 is slower than to a specialized array in some implementations. Persistent
 mapping of a GPU buffer needs OpenGL 4.4.
@@ -1563,8 +1578,10 @@ mapping of a GPU buffer needs OpenGL 4.4.
 **Decision:**
 
 - **A Lisp array.** The composed grid's records are a simple array of
-  `(unsigned-byte 32)`, eight words to a record and row by row, pinned while
-  it is uploaded.
+  `(unsigned-byte 8)`, 32 bytes to a record, each word little-endian, and row
+  by row, pinned while it is uploaded. The array first chosen here held
+  `(unsigned-byte 32)` words; the bytes follow from the units of the
+  descriptor's manifests (LEXTER-DRAFT-cell-model-revision-D31).
 - **Behind the accessors.** Only the accessors generated from the descriptor
   (LEXTER-D104) read and write it, and they hide its
   storage, so that a foreign backend can be put in its place if a need for one
@@ -1581,6 +1598,103 @@ Which route kernels take remains LEXTER-O65; typed Lisp loops come first
   index out of range would corrupt memory without an error, and its lifetime
   is managed by hand.
 - Mapped GPU memory. Not chosen: OpenGL 3.3 has no persistent mapping.
+
+### LEXTER-DRAFT-cell-model-revision-D31 — The descriptor is a set of SpecOps manifests in 8-bit units, and the shader is written against it by hand
+
+**Status:** Proposed
+
+**Context:** LEXTER-D104 has one descriptor generate the
+record's Lisp accessors, the GLSL that decodes it, and the vertex attribute
+setup, and names a macro of Lexter's own, such as `define-cell-layout`.
+SpecOps's manifests declare a binary layout once, with `defmanifest`, and
+read and write it with `marshal` and `unmarshal`, which are each other's
+inverse: records at an index of a vector, patches of single fields that
+leave the rest of a record as it was, reads of single fields, and constants
+checked on read (*SpecOps Manifest Reference*, release 0.2.3). SpecOps's plan
+for manifests over arrays took Lexter's cell model as its test case, in
+manifests of 8-bit units, little-endian, one for each format and one for the
+fields every format shares; on its fast path a cell is written in some 12 ns,
+three fields patched in 8 ns, and one field read in 4 ns, with nothing
+allocated (*SpecOps manifests over arrays of records*). That plan does not
+generate shader code; a function giving each field's offset and width, which
+a generator would need, is a later addition of SpecOps (SPECOPS-O22 in that
+plan). LEXTER-DRAFT-cell-model-revision-D30 chose an array of
+`(unsigned-byte 32)`. Units of 32 bits would make every field a group of one
+word's masque, would refuse type names such as `:u8` and `:u16`, which SpecOps
+allows only in 8-bit units, and would upload words in the host's byte order;
+two read-modify-writes of one word can lose one of the updates where two
+stores of different bytes cannot; and they would differ in speed by a few
+nanoseconds (*Session transcript: 8-bit or 32-bit units for Lexter's cell*).
+
+**Decision:** SpecOps's manifests specify the record's binary format, and as
+many of Lexter's other binary formats as they can.
+
+- **Manifests are the descriptor.** The record is declared by manifests, one
+  for each format and one of the first eight bytes for the fields every format
+  shares, written from the tables of [LEXTER-0016](Arch.CellModel.md); a reader
+  dispatches on byte 0, the format. Lexter defines its own manifests from the
+  architecture as it stands; SpecOps's test manifests follow an earlier
+  revision, before the line size and the magnified half (LEXTER-D114).
+- **8-bit units, little-endian.** The manifests are written in units of 8
+  bits, `:endian :little`, so that the grid holds the bytes the architecture
+  defines on any host; the grid is an array of `(unsigned-byte 8)`, as
+  LEXTER-DRAFT-cell-model-revision-D30 now says.
+- **Accessors over `marshal` and `unmarshal`.** Lexter's accessors, the only
+  writers of a record's fields as LEXTER-D104 requires, are
+  inline functions or macros over `marshal` and `unmarshal` at a record's
+  index; writing a glyph or a single setting is a patch, which leaves the rest
+  of its word as it was (LEXTER-D84).
+- **Checks.** Reserved bits are written as constants, which a read checks.
+  Reads on the paths that draw take `(:check nil)`; debugging builds keep the
+  checks, and assert the invariants that span fields, which manifests do not
+  express: the glyph words and type bits beyond the glyph count, a mask's
+  reach, and halves that match (LEXTER-DRAFT-cell-model-revision-D27).
+- **The shader and the attribute setup are written by hand** from the
+  architecture's tables, and checked against the manifests: in the test rig's
+  hidden window, by records the manifests wrote, and from Phase 5 by the
+  comparison of the two renderers (LEXTER-D112). Generating
+  them from the manifests waits for SpecOps to give a manifest's layout as
+  data.
+- **The other binary formats.** In this order:
+
+Table: Lexter's binary formats to be declared as SpecOps manifests, and when.
+
+| Format | When |
+|---|---|
+| The record, the text cell (LEXTER-DRAFT-cell-model-revision-D28), and the swatch and palette texels | Phase 3 |
+| The overlay instance, a record followed by its position and flags (LEXTER-D93) | Phase 4 |
+| The test rig's `.ptyb` blobs: a magic number, a version, a length, and the payload | At any time |
+| Telnet and TN3270E: commands, subnegotiations, and the TN3270E header | With the terminal-fixes plan's LEXTER-D73 |
+| The orders of the 3270 data stream | With LEXTER-DRAFT-cell-model-revision-D29 |
+| The PCF font loader's tables, each of which gives its own byte order | Later |
+
+- **Streams.** A telnet connection is read in pieces from a socket that does
+  not block. A scanner written by hand frames its commands and subnegotiations,
+  and removes the doubling of byte 255 inside them; manifests read each frame's
+  contents from a vector, and `marshal` writes what Lexter sends, before its
+  255s are doubled. A resumable `unmarshal`, which SpecOps may add, is not
+  designed around.
+- **The version.** `lexter.asd` requires SpecOps 0.2.3, as
+  `(:version "specops" "0.2.3")`, raised as a deliberate step as SpecOps
+  changes.
+
+This amends LEXTER-D104, whose descriptor is these
+manifests and whose shader and attribute setup are, for now, written by hand
+and checked against them; and LEXTER-DRAFT-cell-model-revision-D30, whose
+array holds bytes.
+
+**Alternatives:**
+- A descriptor macro of Lexter's own, as LEXTER-D104
+  named it. Not chosen: it would repeat what SpecOps does, tested against
+  this record.
+- Units of 32 bits over an array of words. Not chosen by the steward: for the
+  reasons in the Context, against a gain of a few nanoseconds.
+- GLSL generated from the manifests now. Not chosen by the steward: it waits
+  for SpecOps to give a layout as data, which is far off.
+- A resumable `unmarshal` for telnet. Not designed around now, at the
+  steward's direction; the scanner serves until SpecOps has one.
+- Tracking SpecOps's latest commit. Not chosen: a required version keeps
+  Lexter's commit-pinned references to its behaviour meaningful.
 
 ## The First Edition Repaired
 
@@ -1657,9 +1771,9 @@ edition, as LEXTER-D100 describes.
   designed after the cell model. Three things built from this phase on keep
   it possible:
   - *One swatch fetch.* Each renderer looks up swatches in one place: the
-    first edition's shader, and in Phases 3 and 5 one function, generated
-    from the descriptor (LEXTER-D104), through which glyph layers and tiles
-    alike read swatches, so that a remap is added once.
+    first edition's shader, and in Phases 3 and 5 one function in each
+    renderer, written from the descriptor (LEXTER-D104), through which glyph
+    layers and tiles alike read swatches, so that a remap is added once.
   - *Entries outside interning.* A table can append swatches that its
     interner never matches, and nothing assumes that every entry is in its
     lookup map; eviction (Phase 7) leaves such entries alone.
@@ -1696,7 +1810,7 @@ Table: What Phase 3 builds from the architecture.
 
 | Part | What is built | Architecture |
 |---|---|---|
-| The record | The format word, the header word, and glyph words with their settings, generated from one descriptor | LEXTER-D81, LEXTER-D84, LEXTER-D87 |
+| The record | The format word, the header word, and glyph words with their settings, declared by SpecOps manifests (LEXTER-DRAFT-cell-model-revision-D31) | LEXTER-D81, LEXTER-D84, LEXTER-D87 |
 | The plain format | The glyph count and type bits, layers interleaved with masks, each mask cutting the layers before it as far as its reach | LEXTER-D83, LEXTER-D85 |
 | Backgrounds | The cell's background slot in place of fills; reverse video through the background slot, so the handler no longer interns a reversed swatch | LEXTER-D86, LEXTER-D90 |
 | Lines | The single underline as a generated glyph, the text's last mask in its colour; the handler already records it, though the first edition never draws it. The other line styles are Later Formats | LEXTER-D88, LEXTER-D89 |
@@ -1754,8 +1868,10 @@ Table: What Phase 3 builds from the architecture.
   host sent (LEXTER-DRAFT-cell-model-revision-D26).
 - **Kernels follow correctness.** Typed Lisp loops over the record come first;
   generated kernels are LEXTER-O65. The grid is a
-  Lisp array of `(unsigned-byte 32)`, read and written only through the
-  descriptor's accessors (LEXTER-DRAFT-cell-model-revision-D30).
+  Lisp array of `(unsigned-byte 8)`, read and written only through the
+  accessors over the descriptor's manifests
+  (LEXTER-DRAFT-cell-model-revision-D30,
+  LEXTER-DRAFT-cell-model-revision-D31).
 - **The plain format first.** The phase builds the plain format, which every
   text cell uses; the void, inline-colour, effect, and tile formats are added
   after it, each as its own step (see Later Formats), since a renderer draws
@@ -2088,9 +2204,10 @@ memory; and custom VOPs, sb-simd, or typed Lisp. It is
 LEXTER-O10.
 
 Since 2026-11-18 where the grid lives is settled, at the steward's direction:
-in a Lisp array of `(unsigned-byte 32)`, behind the descriptor's accessors,
-which hide its storage so that a foreign backend can replace it later
-(LEXTER-DRAFT-cell-model-revision-D30). Which route kernels take remains
+in a Lisp array, behind the descriptor's accessors, which hide its storage so
+that a foreign backend can replace it later
+(LEXTER-DRAFT-cell-model-revision-D30); the array holds bytes, the units of
+the descriptor's SpecOps manifests (LEXTER-DRAFT-cell-model-revision-D31). Which route kernels take remains
 open; `sb-simd`, whose loads and stores act on specialized Lisp arrays, stays
 available to them.
 
@@ -2258,8 +2375,8 @@ Table: Prior systems and what this plan draws from each.
    cell are drawn, the part of LEXTER-O63 left open. The questions were
    settled on 2026-11-18 (LEXTER-DRAFT-cell-model-revision-D25 to
    LEXTER-DRAFT-cell-model-revision-D30).
-5. **Phase 3: the dense cell model.** The descriptor
-   (LEXTER-D104); the record of
+5. **Phase 3: the dense cell model.** The descriptor, as SpecOps manifests
+   (LEXTER-D104, LEXTER-DRAFT-cell-model-revision-D31); the record of
    [LEXTER-0016](Arch.CellModel.md) in its plain format
    (LEXTER-D102), with halves
    (LEXTER-D103), backgrounds, the single underline

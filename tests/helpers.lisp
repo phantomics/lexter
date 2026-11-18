@@ -7,7 +7,8 @@
 ;;;;
 ;;;; Everything here runs headless: fonts are built in memory, atlases are
 ;;;; packed with PACK-ATLAS and never uploaded, and the GPU's copy of the swatch
-;;;; table is a stand-in (LEXTER-DRAFT-cell-model-revision-D21, -D22).
+;;;; store is a byte vector, filled by the renderer's own upload decision
+;;;; (LEXTER-DRAFT-cell-model-revision-D21, -D22; LEXTER-D106).
 
 (in-package #:lexter-tests)
 
@@ -35,7 +36,7 @@
   :in lexter)
 
 (def-suite swatches
-  :description "Swatch tables, their copy in the grid, and the copy that reaches the GPU"
+  :description "Swatch stores, the tables that own their ranges, the palettes, and what reaches the GPU"
   :in lexter)
 
 (def-suite structure
@@ -190,10 +191,14 @@ is true."
   (or (lexter/atlas:atlas-glyph-index atlas codepoint)
       (error "The test atlas has no glyph for U+~4,'0X" codepoint)))
 
-(defun make-test-screen (&key (cols 10) (rows 3) atlas)
+(defun make-test-screen (&key (cols 10) (rows 3) atlas store)
   "A fresh screen of COLS by ROWS, whose blank glyph comes from ATLAS as a
-VT pane's does (src/panes/vt-pane.lisp:vt-pane-init-screen)."
-  (let ((screen (lexter/model:make-screen :cols cols :rows rows)))
+VT pane's does (src/panes/vt-pane.lisp:vt-pane-init-screen), with a swatch
+table of its own in STORE, as a terminal takes one from its compositor's
+store; without STORE, in a store of its own."
+  (let ((screen (lexter/model:make-screen
+                 :cols cols :rows rows
+                 :swatches (and store (lexter/swatches:make-swatch-table store)))))
     (when atlas
       (let ((space (lexter/atlas:atlas-glyph-index atlas #x20)))
         (when space
@@ -212,16 +217,20 @@ VT pane's does (src/panes/vt-pane.lisp:vt-pane-init-screen)."
 ;;; fresh objects, bound by WITH-CLEAN-TERMINAL.
 
 (defvar *atlas* nil "The atlas of the terminal WITH-CLEAN-TERMINAL makes.")
+(defvar *store* nil "The swatch store of the terminal WITH-CLEAN-TERMINAL makes.")
 (defvar *screen* nil "The screen of the terminal WITH-CLEAN-TERMINAL makes.")
 (defvar *handler* nil "The VT handler of the terminal WITH-CLEAN-TERMINAL makes.")
 (defvar *grid* nil "The display grid of the terminal WITH-CLEAN-TERMINAL makes.")
 
 (defmacro with-clean-terminal ((&key (cols 10) (rows 3)) &body body)
-  "Run BODY with *ATLAS*, *SCREEN*, *HANDLER*, and *GRID* bound to a fresh
-packed atlas, and a screen, VT handler, and display grid of COLS by ROWS, as a
-VT pane assembles them."
+  "Run BODY with *ATLAS*, *STORE*, *SCREEN*, *HANDLER*, and *GRID* bound to a
+fresh packed atlas and swatch store, and a screen, VT handler, and display grid
+of COLS by ROWS, as a VT pane assembles them, the screen's table taken from
+the store."
   `(let* ((*atlas*   (make-test-atlas))
-          (*screen*  (make-test-screen :cols ,cols :rows ,rows :atlas *atlas*))
+          (*store*   (lexter/swatches:make-swatch-store))
+          (*screen*  (make-test-screen :cols ,cols :rows ,rows :atlas *atlas*
+                                       :store *store*))
           (*handler* (lexter/vt-handler:make-vt-handler *screen* *atlas*))
           (*grid*    (make-test-grid :cols ,cols :rows ,rows)))
      ,@body))
@@ -253,7 +262,7 @@ CURSOR-VISIBLE is true, so that tests of cells are not disturbed by it."
 ;;; ============================================================
 ;;;
 ;;; These read the first edition's internal arrays; Phase 3 rewrites them for
-;;; the dense record, and Phase 2 rewrites the swatch readers for the store.
+;;; the dense record.
 
 (defun screen-wide-p (screen col row)
   "True when the cell at COL, ROW of SCREEN is marked as the left half of a
@@ -293,45 +302,45 @@ double-width character."
   (let ((loc (gethash (cons col row) (lexter/grid::display-grid-layered-cells grid))))
     (and loc (lexter/grid::cell-location-swatch-idx loc))))
 
-(defun grid-cell-colours (grid col row)
+(defun grid-swatch (grid col row)
+  "The global swatch index of the simple cell at COL, ROW of GRID."
+  (aref (lexter/grid::display-grid-swatch-indices grid) (grid-index grid col row)))
+
+(defun grid-cell-colours (grid col row &optional (store *store*))
   "The four palette indices that the simple cell at COL, ROW of GRID is drawn
-in, read through the grid's swatch table."
-  (multiple-value-list
-   (lexter/grid:get-swatch grid (aref (lexter/grid::display-grid-swatch-indices grid)
-                                      (grid-index grid col row)))))
+in, its global swatch index read through STORE."
+  (multiple-value-list (lexter/swatches:store-swatch store (grid-swatch grid col row))))
 
 ;;; ============================================================
-;;; The GPU's copy of the swatch table, a stand-in  (LEXTER-D106)
+;;; The GPU's copy of the swatch store  (LEXTER-D106)
 ;;; ============================================================
 ;;;
-;;; The renderer's upload rule needs a GL context, so the swatch tests use a
-;;; stand-in for it, as the critique did: it uploads the grid's whole table
-;;; when the grid's generation differs from the one it recorded, as
-;;; src/renderer.lisp:upload-swatch-table does at 2d4d743. Phase 2 replaces
-;;; the rule with records that name their table (LEXTER-D99); the stand-in is
-;;; then replaced by the renderer's own decision, made callable without GL.
+;;; Writing to the GPU needs a GL context, so the tests keep the GPU's copy of
+;;; a store as a byte vector, and fill it as the renderer fills its buffer:
+;;; by the spans that the renderer's own decision,
+;;; LEXTER-SWATCHES:PLAN-SWATCH-UPLOADS, gives (src/renderer.lisp,
+;;; UPLOAD-SWATCHES).
 
-(defstruct test-gpu
-  "The GPU's copy of a swatch table, and the generation it last recorded."
-  (generation 0 :type fixnum)
-  (swatch-data (make-array 0 :element-type '(unsigned-byte 8))))
+(defstruct (test-gpu (:constructor make-test-gpu ()))
+  "The GPU's copy of a swatch store, and the renderer's records of it."
+  (records (lexter/swatches:make-swatch-upload-records))
+  (swatch-data (make-array (* 4 lexter/swatches:+store-size+)
+                           :element-type '(unsigned-byte 8) :initial-element 0)))
 
-(defun gpu-upload (gpu grid)
-  "Upload GRID's swatch table to GPU by the renderer's rule. Return T if it
-uploaded."
-  (let ((generation (lexter/grid:swatch-generation grid)))
-    (when (/= generation (test-gpu-generation gpu))
-      (setf (test-gpu-swatch-data gpu) (copy-seq (lexter/grid:display-grid-swatch-data grid))
-            (test-gpu-generation gpu) generation)
-      t)))
+(defun gpu-upload (gpu store)
+  "Upload to GPU what the renderer would upload from STORE. Return the spans
+uploaded, each (first count data start)."
+  (let ((spans (lexter/swatches:plan-swatch-uploads store (test-gpu-records gpu))))
+    (loop :for (first count data start) :in spans
+          :do (replace (test-gpu-swatch-data gpu) data
+                       :start1 (* 4 first) :start2 start :end2 (+ start (* 4 count))))
+    spans))
 
 (defun gpu-swatch (gpu index)
-  "The four palette indices of swatch INDEX in GPU's copy, or zeros if the copy
-does not reach it."
+  "The four palette indices of global swatch INDEX in GPU's copy."
   (let ((data (test-gpu-swatch-data gpu)))
     (loop :for slot :below 4
-          :for i = (+ (* index 4) slot)
-          :collect (if (< i (length data)) (aref data i) 0))))
+          :collect (aref data (+ (* index 4) slot)))))
 
 ;;; ============================================================
 ;;; Async polling  (Square.md §7)

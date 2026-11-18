@@ -11,6 +11,7 @@
                (:file "src/pcf")
                (:file "src/atlas")
                (:file "src/grid")
+               (:file "src/swatches")
                (:file "src/shaders")
                (:file "src/renderer")
                (:file "src/gui")

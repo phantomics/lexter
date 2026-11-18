@@ -279,12 +279,15 @@
                                   (<= 0 base-fg 7))
                              (+ base-fg 8)
                              base-fg))
-           ;; Create swatch from current colors
-           (swatch-idx (intern-swatch (lexter/model::screen-swatches screen)
+           ;; The swatch of the current colours, a global index from the
+           ;; terminal's table; a full table gives its nearest swatch, as drawn
+           ;; in this screen's palette (LEXTER-DRAFT-cell-model-revision-D24)
+           (swatch-idx (intern-swatch (screen-swatches screen)
                                       (vt-handler-current-bg handler)
                                       effective-fg
                                       effective-fg
-                                      0)))
+                                      0
+                                      (screen-palette screen))))
       ;; Write character at cursor position
       (write-char-at screen col row glyph-idx
                      :swatch swatch-idx
@@ -682,12 +685,17 @@
 
 (defun %ensure-alt-screen (handler)
   "Lazily create the persistent alternate buffer, matching the primary's
-   dimensions and blank glyph. The alternate buffer carries no scrollback."
+   dimensions and blank glyph. It shares the primary's swatch table
+   (LEXTER-DRAFT-cell-model-revision-D24) and starts from a copy of the
+   primary's palette, so that colours the host redefined before it existed
+   hold in it too (LEXTER-D70). The alternate buffer carries no scrollback."
   (or (vt-handler-alt-screen handler)
       (let* ((primary (vt-handler-primary-screen handler))
              (alt (make-screen :cols (screen-cols primary)
                                :rows (screen-rows primary)
-                               :mode (screen-mode primary))))
+                               :mode (screen-mode primary)
+                               :swatches (screen-swatches primary)
+                               :palette (screen-palette primary))))
         (setf (screen-blank-glyph alt) (screen-blank-glyph primary))
         (fill (lexter/model::screen-glyphs alt) (screen-blank-glyph primary))
         ;; Alternate screen has no scrollback (it is exactly viewport-sized).

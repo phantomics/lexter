@@ -66,10 +66,6 @@
            #:display-grid-cols
            #:display-grid-rows
            #:resize-grid
-           ;; Swatch API
-           #:set-swatch
-           #:get-swatch
-           #:swatch-as-array
            ;; Simple cell API
            #:set-simple-cell
            ;; Layered cell API
@@ -84,10 +80,6 @@
            #:mark-all-dirty
            #:clear-dirty-flags
            #:row-dirty-p
-           ;; Swatch sync tracking
-           #:swatch-generation
-           #:display-grid-swatch-data
-           #:display-grid-swatch-count
            ;; Render data
            #:build-render-data
            ;; Constants
@@ -95,6 +87,47 @@
            #:+swatch-slots+
            #:+simple-stride+
            #:+layered-stride+))
+
+(defpackage #:lexter/swatches
+  (:use #:cl)
+  (:export ;; Constants
+           #:+range-size+
+           #:+store-size+
+           #:+store-ranges+
+           #:+first-edition-ranges+
+           #:+max-table-ranges+
+           #:+palette-entries+
+           #:+palette-bytes+
+           ;; Palettes
+           #:palette
+           #:make-default-palette
+           ;; Stores
+           #:swatch-store
+           #:make-swatch-store
+           #:swatch-store-display-table
+           #:swatch-store-usable-ranges
+           #:range-owner
+           #:store-swatch
+           ;; Tables
+           #:swatch-table
+           #:make-swatch-table
+           #:swatch-table-id
+           #:swatch-table-store
+           #:swatch-table-count
+           #:swatch-table-ranges
+           #:swatch-table-version
+           #:swatch-table-released
+           #:swatch-table-default
+           #:swatch-table-full-p
+           #:intern-swatch
+           #:append-swatch
+           #:table-swatch
+           #:bump-swatch-table-version
+           #:release-swatch-table
+           ;; Uploads
+           #:swatch-upload-records
+           #:make-swatch-upload-records
+           #:plan-swatch-uploads))
 
 (defpackage #:lexter/shaders
   (:use #:cl)
@@ -105,6 +138,10 @@
 
 (defpackage #:lexter/renderer
   (:use #:cl #:lexter/atlas #:lexter/grid #:lexter/shaders)
+  (:import-from #:lexter/swatches
+                #:+store-size+ #:+palette-entries+ #:make-default-palette
+                #:swatch-upload-records #:make-swatch-upload-records
+                #:plan-swatch-uploads)
   (:export #:make-renderer
            #:render-state
            #:render-state-atlas
@@ -114,7 +151,10 @@
            #:set-palette
            #:upload-palette
            #:set-active-palette-slot
-           #:+max-palette-slots+
+           #:upload-swatches
+           #:render-state-palette-slots
+           #:+default-palette-slots+
+           #:+default-pane-palette-slot+
            #:render-frame
            #:update-viewport
            #:set-pixel-scale
@@ -137,6 +177,10 @@
   (:use #:cl)
   ;; The layer and swatch counts have one home, the grid (LEXTER-O36)
   (:import-from #:lexter/grid #:+max-layers+ #:+swatch-slots+)
+  (:import-from #:lexter/swatches
+                #:palette #:make-default-palette
+                #:make-swatch-store #:make-swatch-table #:swatch-table
+                #:swatch-table-default #:intern-swatch)
   (:export ;; Screen creation
            #:make-screen
            #:screen
@@ -145,6 +189,7 @@
            #:screen-mode
            #:screen-blank-glyph
            ;; Swatch interning
+           #:screen-swatches
            #:intern-swatch
            #:default-swatch
            ;; Cursor
@@ -226,5 +271,7 @@
 
 (defpackage #:lexter/demo
   (:use #:cl #:lexter/pcf #:lexter/atlas #:lexter/grid #:lexter/renderer)
+  (:import-from #:lexter/swatches
+                #:make-swatch-store #:swatch-store-display-table #:intern-swatch)
   (:export #:run-demo
            #:run-cjk-demo))

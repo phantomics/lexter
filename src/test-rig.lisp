@@ -33,7 +33,10 @@
            #:with-terminal-test-config
            #:test-pixels
            #:replay-blob
-           #:*test-terminal*))
+           #:*test-terminal*
+           ;; The GPU's stores
+           #:check-gpu-stores
+           #:check-integer-texture-buffers))
 
 (in-package #:lexter/test)
 
@@ -267,3 +270,146 @@
       (error "TEST-PIXELS mismatch for ~a:~%  expected #x~16,'0X~%  actual   #x~16,'0X"
              blob-path expected actual))
     t))
+
+;;; --------------------------------------------------------------------------
+;;; The GPU's stores against their sources (LEXTER-D106)
+;;; --------------------------------------------------------------------------
+
+(defun %read-texels (buffer first count)
+  "Read COUNT RGBA8UI texels from BUFFER from texel FIRST, as bytes."
+  (let ((out (make-array (* count 4) :element-type '(unsigned-byte 8))))
+    (gl:bind-buffer :texture-buffer buffer)
+    (cffi:with-pointer-to-vector-data (ptr out)
+      (%gl:get-buffer-sub-data :texture-buffer (* first 4) (* count 4) ptr))
+    (gl:bind-buffer :texture-buffer 0)
+    out))
+
+(defun check-gpu-stores (&optional (term *test-terminal*))
+  "Compare what TERM's renderer last uploaded with its sources: every swatch
+   that a table of the compositor's store holds with the swatch store on the
+   GPU, palette slot 0 with the default palette, and the slot the terminal's
+   pane draws in with its active screen's palette. Run after a capture, which
+   uploads; needs TERM's GL context, so it runs in the test rig's hidden
+   window, not in the headless suite. Returns the number of swatches compared,
+   or signals an error naming the first that differs."
+  (let* ((comp (unix-terminal-compositor term))
+         (rs (lexter/panes:compositor-renderer comp))
+         (store (lexter/panes:compositor-swatch-store comp))
+         (compared 0))
+    (glfw:make-context-current (lexter/panes:compositor-window comp))
+    (dotimes (r lexter/swatches:+store-ranges+)
+      (let ((table (lexter/swatches:range-owner store r)))
+        (when table
+          (let* ((base (* r lexter/swatches:+range-size+))
+                 (k (position r (lexter/swatches:swatch-table-ranges table)))
+                 (used (max 0 (min lexter/swatches:+range-size+
+                                   (- (lexter/swatches:swatch-table-count table)
+                                      (* k lexter/swatches:+range-size+)))))
+                 (gpu (%read-texels (lexter/renderer::render-state-swatch-buffer rs)
+                                    base used)))
+            (dotimes (i used)
+              (let ((want (multiple-value-list
+                           (lexter/swatches:table-swatch table (+ base i))))
+                    (got (coerce (subseq gpu (* i 4) (* (1+ i) 4)) 'list)))
+                (unless (equal want got)
+                  (error "Swatch ~d: the table holds ~s, the GPU ~s." (+ base i) want got))
+                (incf compared)))))))
+    (flet ((check-palette (slot palette what)
+             (let ((gpu (%read-texels (lexter/renderer::render-state-palette-buffer rs)
+                                      (* slot lexter/swatches:+palette-entries+)
+                                      lexter/swatches:+palette-entries+)))
+               (unless (equalp gpu palette)
+                 (error "Palette slot ~d differs from ~a." slot what)))))
+      (check-palette 0 (lexter/swatches:make-default-palette) "the default palette")
+      (let ((screen (terminal-screen term)))
+        (check-palette (or (lexter/panes:vt-pane-palette-slot (unix-terminal-pane term))
+                           lexter/renderer:+default-pane-palette-slot+)
+                       (lexter/model:screen-palette screen)
+                       "the terminal's palette")))
+    compared))
+
+;;; --------------------------------------------------------------------------
+;;; Integer texture buffers (LEXTER-D109)
+;;; --------------------------------------------------------------------------
+
+(defparameter +tbo-check-vert+
+  "#version 330 core
+void main() {
+    vec2 p = vec2(float(gl_VertexID & 1), float(gl_VertexID >> 1));
+    gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+}
+")
+
+(defparameter +tbo-check-frag+
+  "#version 330 core
+uniform usamplerBuffer u_store;
+out vec4 frag_color;
+void main() {
+    uvec4 v = texelFetch(u_store, int(gl_FragCoord.x));
+    frag_color = vec4(v) / 255.0;
+}
+")
+
+(defun check-integer-texture-buffers (&key (texels 256))
+  "Confirm that cl-opengl can create and fill a GL_RGBA8UI texture buffer, and
+   that a shader reads it through usamplerBuffer with texelFetch, as the swatch
+   and palette stores require (LEXTER-D109). Draws TEXELS pixels in a hidden
+   window, one texel to a pixel, and compares what is read back with what was
+   uploaded. Owns the GLFW lifecycle. Returns T, or signals an error naming the
+   first texel that differs."
+  (glfw:initialize)
+  (unwind-protect
+       (let ((win (glfw:create-window :title "tbo check" :width texels :height 1
+                                      :visible nil
+                                      :context-version-major 3
+                                      :context-version-minor 3
+                                      :opengl-profile :opengl-core-profile
+                                      :opengl-forward-compat t))
+             (data (make-array (* texels 4) :element-type '(unsigned-byte 8))))
+         (dotimes (i (length data))
+           (setf (aref data i) (mod (* 37 (1+ i)) 256)))
+         (unwind-protect
+              (let ((buf (first (gl:gen-buffers 1)))
+                    (tex (first (gl:gen-textures 1)))
+                    (fbo (first (gl:gen-framebuffers 1)))
+                    (target (first (gl:gen-textures 1)))
+                    (vao (first (gl:gen-vertex-arrays 1)))
+                    (prog (lexter/renderer::%link-program +tbo-check-vert+
+                                                          +tbo-check-frag+)))
+                ;; The store: an ordinary buffer object seen as RGBA8UI texels
+                (gl:bind-buffer :texture-buffer buf)
+                (cffi:with-pointer-to-vector-data (ptr data)
+                  (%gl:buffer-data :texture-buffer (length data) ptr :static-draw))
+                (gl:bind-buffer :texture-buffer 0)
+                (gl:active-texture :texture0)
+                (gl:bind-texture :texture-buffer tex)
+                (%gl:tex-buffer :texture-buffer :rgba8ui buf)
+                ;; An RGBA8 target to draw into and read back
+                (gl:bind-texture :texture-2d target)
+                (gl:tex-image-2d :texture-2d 0 :rgba8 texels 1 0 :rgba :unsigned-byte
+                                 (cffi:null-pointer))
+                (gl:bind-framebuffer :framebuffer fbo)
+                (gl:framebuffer-texture-2d :framebuffer :color-attachment0 :texture-2d
+                                           target 0)
+                (gl:viewport 0 0 texels 1)
+                (gl:use-program prog)
+                (gl:uniformi (gl:get-uniform-location prog "u_store") 0)
+                (gl:bind-texture :texture-buffer tex)
+                (gl:bind-vertex-array vao)
+                (gl:disable :blend)
+                (%gl:draw-arrays :triangle-strip 0 4)
+                (gl:pixel-store :pack-alignment 1)
+                (gl:read-buffer :color-attachment0)
+                (let ((got (gl:read-pixels 0 0 texels 1 :rgba :unsigned-byte)))
+                  (gl:bind-framebuffer :framebuffer 0)
+                  (gl:delete-program prog)
+                  (gl:delete-vertex-arrays (list vao))
+                  (gl:delete-framebuffers (list fbo))
+                  (gl:delete-textures (list tex target))
+                  (gl:delete-buffers (list buf))
+                  (dotimes (i (length data) t)
+                    (unless (= (aref got i) (aref data i))
+                      (error "Texel ~d, byte ~d: uploaded ~d, read back ~d."
+                             (floor i 4) (mod i 4) (aref data i) (aref got i))))))
+           (glfw:destroy-window win)))
+    (glfw:terminate)))

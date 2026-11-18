@@ -3,18 +3,18 @@
 ;;;; Structural tests of findings about the code's arrangement rather than its
 ;;;; behaviour (LEXTER-DRAFT-cell-model-revision-D21): they read Lexter's
 ;;;; source as text, or inspect its loaded functions. Pure: no GL, no writes.
-;;;; They fail until Phase 1 repairs LEXTER-O36 and LEXTER-O40, and the
-;;;; terminal-fixes plan the Origin integration's reads of LEXTER-O29
-;;;; (LEXTER-D70); the consolidation of the two terminal stacks (LEXTER-D67)
-;;;; also removes one duplicate.
+;;;; They fail until Phase 1 repairs LEXTER-O36 and LEXTER-O40, Phase 2 gives
+;;;; swatches one owner (LEXTER-D99), and the terminal-fixes plan the Origin
+;;;; integration's reads of LEXTER-O29 (LEXTER-D70); the consolidation of the
+;;;; two terminal stacks (LEXTER-D67) also removes one duplicate.
 
 (in-package #:lexter-tests)
 (in-suite structure)
 
 (defparameter *cell-model-sources*
-  '("src/pcf.lisp" "src/atlas.lisp" "src/grid.lisp" "src/shaders.lisp"
-    "src/renderer.lisp" "src/model.lisp")
-  "The source files of the font, atlas, grid, renderer, and model layers.")
+  '("src/pcf.lisp" "src/atlas.lisp" "src/grid.lisp" "src/swatches.lisp"
+    "src/shaders.lisp" "src/renderer.lisp" "src/model.lisp")
+  "The source files of the font, atlas, grid, swatch, renderer, and model layers.")
 
 (defun all-sources ()
   "The paths, relative to the source tree, of every Lisp file under src/."
@@ -39,11 +39,28 @@ and renderer, so that the layers cannot drift apart."
   (is (null (names-defined-in-several-files
              (source-forms-named 'defconstant *cell-model-sources*)))))
 
-(def-test default-swatches-have-one-home ()
-  "LEXTER-O36: the default swatches are set up by one function, defined once."
-  (is (= 1 (count "setup-default-swatches"
-                  (source-forms-named 'defun (all-sources))
-                  :key #'car :test #'string=))))
+(def-test default-swatch-has-one-home ()
+  "LEXTER-O36: the default swatch has one home, global swatch 0 of the display's
+table, which every store makes for itself; no function sets swatches up in a
+grid (LEXTER-DRAFT-cell-model-revision-D24)."
+  (is (null (find "setup-default-swatches" (source-forms-named 'defun (all-sources))
+                  :key #'car :test #'string=)))
+  (assert-that (multiple-value-list
+                (lexter/swatches:store-swatch (lexter/swatches:make-swatch-store) 0))
+               (contains 0 7 7 0)))
+
+(def-test the-grid-holds-no-swatches ()
+  "LEXTER-D99: swatch tables have one owner, so the display grid keeps no copy
+of them: it has no swatch data, no generation, and no SET-SWATCH, and no source
+file defines or calls a SET-SWATCH."
+  (is (null (find-if (lambda (slot)
+                       (search "SWATCH-DATA" (symbol-name (sb-mop:slot-definition-name slot))))
+                     (sb-mop:class-slots (find-class 'lexter/grid:display-grid)))))
+  (is (null (find-symbol "SET-SWATCH" '#:lexter/grid)))
+  (is (null (remove-if-not (lambda (path)
+                             (search "(set-swatch " (uiop:read-file-string (source-path path))
+                                     :test #'char-equal))
+                           (all-sources)))))
 
 (def-test one-default-palette ()
   "LEXTER-O36: the default palette is the same wherever it is made, so a

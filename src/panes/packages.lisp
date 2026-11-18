@@ -122,6 +122,9 @@
    #:mark-decorations-dirty
    ;; Grid utilities (for decoration functions)
    #:clear-grid
+   ;; Swatches drawn at the level of the display
+   #:display-swatch
+   #:swatch-store-of
    ;; Compositor entry point
    #:run-paned-terminal
    #:make-paned-compositor
@@ -131,6 +134,7 @@
    #:compositor-renderer
    #:compositor-atlas
    #:compositor-display
+   #:compositor-swatch-store
    #:compositor-cols
    #:compositor-rows
    #:compositor-cell-w

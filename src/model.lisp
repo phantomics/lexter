@@ -30,155 +30,13 @@
 ;; +MAX-LAYERS+ and +SWATCH-SLOTS+ are the grid's, imported (LEXTER-O36).
 
 ;;; --------------------------------------------------------------------------
-;;; Swatch table with interning
+;;; Swatches and palettes
 ;;; --------------------------------------------------------------------------
-
-(defun %make-initial-swatch-data ()
-  "Create swatch data array with slot 0 initialized to (0, 7, 7, 0)."
-  (let ((data (make-array (* 2048 +swatch-slots+)
-                          :element-type '(unsigned-byte 8)
-                          :initial-element 0)))
-    ;; Initialize slot 0: bg=0 (black), fg=7 (white), ov=7, sec=0
-    (setf (aref data 0) 0    ; bg
-          (aref data 1) 7    ; fg
-          (aref data 2) 7    ; overlay
-          (aref data 3) 0)   ; secondary
-    data))
-
-(defun %make-initial-swatch-index ()
-  "Create swatch index hash with slot 0 pre-registered."
-  (let ((ht (make-hash-table :test 'equal)))
-    ;; Register the key for (0, 7, 7, 0) -> index 0
-    (setf (gethash (%swatch-key 0 7 7 0) ht) 0)
-    ht))
-
-(defstruct swatch-table
-  "Table of swatches with hash-based interning."
-  ;; Flat array: swatch i occupies bytes [i*4 .. i*4+3]
-  (data    (%make-initial-swatch-data)
-           :type (simple-array (unsigned-byte 8) (*)))
-  (count   1 :type fixnum)   ; next free slot (0 is pre-allocated)
-  (capacity 2048 :type fixnum)
-  ;; Hash: (s0 s1 s2 s3) -> index
-  (index   (%make-initial-swatch-index) :type hash-table)
-  ;; Generation counter: incremented on each new swatch
-  (generation 1 :type fixnum))
-
-(defun %swatch-key (s0 s1 s2 s3)
-  (logior s0 (ash s1 8) (ash s2 16) (ash s3 24)))
-
-(defun intern-swatch (table s0 s1 s2 s3)
-  "Return the swatch index for (S0 S1 S2 S3), creating if needed."
-  (let ((key (%swatch-key s0 s1 s2 s3)))
-    (or (gethash key (swatch-table-index table))
-        (let ((idx (swatch-table-count table)))
-          (when (>= idx (swatch-table-capacity table))
-            ;; Grow the table
-            (let* ((new-cap (* 2 (swatch-table-capacity table)))
-                   (new-data (make-array (* new-cap +swatch-slots+)
-                                         :element-type '(unsigned-byte 8)
-                                         :initial-element 0)))
-              (replace new-data (swatch-table-data table))
-              (setf (swatch-table-data table) new-data
-                    (swatch-table-capacity table) new-cap)))
-          (let ((base (* idx +swatch-slots+))
-                (data (swatch-table-data table)))
-            (setf (aref data (+ base 0)) s0
-                  (aref data (+ base 1)) s1
-                  (aref data (+ base 2)) s2
-                  (aref data (+ base 3)) s3))
-          (setf (gethash key (swatch-table-index table)) idx)
-          (incf (swatch-table-count table))
-          (incf (swatch-table-generation table))
-          idx))))
-
-(defun get-swatch-values (table idx)
-  "Return the 4 palette indices for swatch IDX as multiple values."
-  (let ((base (* idx +swatch-slots+))
-        (data (swatch-table-data table)))
-    (values (aref data (+ base 0))
-            (aref data (+ base 1))
-            (aref data (+ base 2))
-            (aref data (+ base 3)))))
-
-;;; --------------------------------------------------------------------------
-;;; Color Palette
-;;; --------------------------------------------------------------------------
-
-(defun make-default-palette ()
-  "Create the standard xterm 256-color palette as a float array.
-   Returns a (simple-array single-float (1024)) with RGBA values 0.0-1.0."
-  (let ((p (make-array 1024 :element-type 'single-float :initial-element 0.0)))
-    (flet ((set-rgb (i r g b)
-             (setf (aref p (+ (* i 4) 0)) (/ r 255.0)
-                   (aref p (+ (* i 4) 1)) (/ g 255.0)
-                   (aref p (+ (* i 4) 2)) (/ b 255.0)
-                   (aref p (+ (* i 4) 3)) 1.0))
-           (comp6 (v) (if (zerop v) 0 (+ 55 (* 40 v)))))
-      ;; Colors 0-15: standard ANSI
-      (loop :for (r g b) :in '((0   0   0)    ; 0  black
-                               (170 0   0)    ; 1  dark red
-                               (0   170 0)    ; 2  dark green
-                               (170 85  0)    ; 3  dark yellow
-                               (0   0   170)  ; 4  dark blue
-                               (170 0   170)  ; 5  dark magenta
-                               (0   170 170)  ; 6  dark cyan
-                               (170 170 170)  ; 7  light grey
-                               (85  85  85)   ; 8  dark grey
-                               (255 85  85)   ; 9  bright red
-                               (85  255 85)   ; 10 bright green
-                               (255 255 85)   ; 11 bright yellow
-                               (85  85  255)  ; 12 bright blue
-                               (255 85  255)  ; 13 bright magenta
-                               (85  255 255)  ; 14 bright cyan
-                               (255 255 255)) ; 15 white
-            :for i :from 0
-            :do (set-rgb i r g b))
-      ;; Colors 16-231: 6x6x6 cube
-      (loop :for i :from 16 :to 231
-            :for n = (- i 16)
-            :do (set-rgb i
-                         (comp6 (floor n 36))
-                         (comp6 (mod (floor n 6) 6))
-                         (comp6 (mod n 6))))
-      ;; Colors 232-255: greyscale ramp
-      (loop :for i :from 232 :to 255
-            :for v = (+ 8 (* 10 (- i 232)))
-            :do (set-rgb i v v v)))
-    p))
-
-(defun set-palette-entry (screen idx r g b &optional (a 1.0))
-  "Set palette entry IDX to the given RGBA values (0.0-1.0).
-   Increments the palette generation for GPU sync."
-  (let ((p (screen-palette screen))
-        (base (* idx 4)))
-    (setf (aref p (+ base 0)) (coerce r 'single-float)
-          (aref p (+ base 1)) (coerce g 'single-float)
-          (aref p (+ base 2)) (coerce b 'single-float)
-          (aref p (+ base 3)) (coerce a 'single-float)))
-  (incf (screen-palette-generation screen)))
-
-(defun set-palette-entry-rgb8 (screen idx r g b)
-  "Set palette entry IDX to the given RGB values (0-255).
-   Increments the palette generation for GPU sync."
-  (set-palette-entry screen idx (/ r 255.0) (/ g 255.0) (/ b 255.0) 1.0))
-
-(defun get-palette-entry (screen idx)
-  "Return the RGBA values for palette entry IDX as multiple values."
-  (let ((p (screen-palette screen))
-        (base (* idx 4)))
-    (values (aref p (+ base 0))
-            (aref p (+ base 1))
-            (aref p (+ base 2))
-            (aref p (+ base 3)))))
-
-(defun reset-palette (screen)
-  "Reset the screen's palette to the default xterm colors.
-   Increments the palette generation for GPU sync."
-  (let ((default (make-default-palette))
-        (palette (screen-palette screen)))
-    (replace palette default)
-    (incf (screen-palette-generation screen))))
+;;;
+;;; Swatch tables, their stores, and the default palette are in swatches.lisp
+;;; (LEXTER-D99). A screen's table hands out global indices, which its cells
+;;; hold and the flush copies unchanged (LEXTER-D100). Palettes are RGBA bytes,
+;;; as the GPU's integer store holds them (LEXTER-D109).
 
 ;;; --------------------------------------------------------------------------
 ;;; Cell representation
@@ -230,7 +88,8 @@
   (wide-flags    #*  :type simple-bit-vector)
   ;; --- Layered cells (sparse) ---
   (layered-cells (make-hash-table :test 'equal) :type hash-table)
-  ;; --- Swatch table ---
+  ;; --- Swatch table: the terminal's, shared by its primary and alternate
+  ;; screens (LEXTER-DRAFT-cell-model-revision-D24) ---
   (swatches  nil :type (or null swatch-table))
   ;; --- Cursor state ---
   (cursor-col     0   :type fixnum)
@@ -254,10 +113,11 @@
   (scrollback-viewport 0 :type fixnum)  ; 0 = viewing live screen
   ;; --- Per-row dirty flags (for flush optimization) ---
   (row-dirty     #*  :type simple-bit-vector)
-  ;; --- Default swatch for new cells ---
+  ;; --- Default swatch for new cells: the global index of the table's
+  ;; default swatch ---
   (default-swatch 0 :type fixnum)
-  ;; --- Color palette (256 RGBA colors as floats, 1024 total) ---
-  (palette nil :type (or null (simple-array single-float (1024))))
+  ;; --- Color palette (256 RGBA colors as bytes, 1024 total) ---
+  (palette nil :type (or null palette))
   (palette-generation 1 :type fixnum))
 
 ;;; --------------------------------------------------------------------------
@@ -265,18 +125,23 @@
 ;;; --------------------------------------------------------------------------
 
 (defun make-screen (&key (cols 80) (rows 24) (mode :unix)
-                         (scrollback-max 2000))
-  "Create a new screen buffer."
+                         (scrollback-max 2000) swatches palette)
+  "Create a new screen buffer whose cells take their swatches from SWATCHES, a
+   swatch table, and whose colours are PALETTE, a palette the screen copies.
+   Without SWATCHES the screen has a table of its own, in a store of its own;
+   a terminal's screens share their terminal's table, from the store of the
+   compositor that draws them (LEXTER-DRAFT-cell-model-revision-D24). Without
+   PALETTE the screen has the default palette. Every cell starts in the
+   table's default swatch."
   (let* ((n (* cols rows))
-         (swatches (make-swatch-table)))
-    ;; Intern the default swatch (index 0): black bg, white fg
-    (intern-swatch swatches 0 7 7 0)  ; bg=0(black), fg=7(white), overlay=7, secondary=0
+         (swatches (or swatches (make-swatch-table (make-swatch-store))))
+         (default (swatch-table-default swatches)))
     (%make-screen
      :cols            cols
      :rows            rows
      :mode            mode
      :glyphs          (make-array n :element-type '(unsigned-byte 32) :initial-element 0)
-     :swatch-indices  (make-array n :element-type '(unsigned-byte 16) :initial-element 0)
+     :swatch-indices  (make-array n :element-type '(unsigned-byte 16) :initial-element default)
      :attrs           (make-array n :element-type '(unsigned-byte 32) :initial-element 0)
      :wide-flags      (make-array n :element-type 'bit :initial-element 0)
      :layered-cells   (make-hash-table :test 'equal :size 64)
@@ -294,9 +159,44 @@
      :scrollback-count 0
      :scrollback-viewport 0
      :row-dirty       (make-array rows :element-type 'bit :initial-element 1)
-     :default-swatch  0
-     :palette         (make-default-palette)
+     :default-swatch  default
+     :palette         (if palette (copy-seq palette) (make-default-palette))
      :palette-generation 1)))
+
+;;; --------------------------------------------------------------------------
+;;; Palettes
+;;; --------------------------------------------------------------------------
+
+(defun set-palette-entry (screen idx r g b &optional (a 255))
+  "Set palette entry IDX to the given RGBA bytes (0-255).
+   Increments the palette generation for GPU sync."
+  (let ((p (screen-palette screen))
+        (base (* idx 4)))
+    (setf (aref p (+ base 0)) r
+          (aref p (+ base 1)) g
+          (aref p (+ base 2)) b
+          (aref p (+ base 3)) a))
+  (incf (screen-palette-generation screen)))
+
+(defun set-palette-entry-rgb8 (screen idx r g b)
+  "Set palette entry IDX to the given RGB bytes (0-255), opaque.
+   Increments the palette generation for GPU sync."
+  (set-palette-entry screen idx r g b 255))
+
+(defun get-palette-entry (screen idx)
+  "Return the RGBA bytes of palette entry IDX as multiple values."
+  (let ((p (screen-palette screen))
+        (base (* idx 4)))
+    (values (aref p (+ base 0))
+            (aref p (+ base 1))
+            (aref p (+ base 2))
+            (aref p (+ base 3)))))
+
+(defun reset-palette (screen)
+  "Reset the screen's palette to the default xterm colors.
+   Increments the palette generation for GPU sync."
+  (replace (screen-palette screen) (make-default-palette))
+  (incf (screen-palette-generation screen)))
 
 ;;; --------------------------------------------------------------------------
 ;;; Accessors
@@ -886,7 +786,8 @@
          (new-n (* new-cols new-rows))
          (blank (screen-blank-glyph screen))
          (new-glyphs (make-array new-n :element-type '(unsigned-byte 32) :initial-element blank))
-         (new-swatch-indices (make-array new-n :element-type '(unsigned-byte 16) :initial-element 0))
+         (new-swatch-indices (make-array new-n :element-type '(unsigned-byte 16)
+                                                :initial-element (screen-default-swatch screen)))
          (new-attrs (make-array new-n :element-type '(unsigned-byte 32) :initial-element 0))
          (new-wide-flags (make-array new-n :element-type 'bit :initial-element 0))
          (new-layered (make-hash-table :test 'equal :size 64))
@@ -1012,7 +913,6 @@
   (declare (ignore atlas))
   (let ((cols (screen-cols screen))
         (rows (screen-rows screen))
-        (swatches (screen-swatches screen))
         (cc (screen-cursor-col screen))
         (cr (screen-cursor-row screen))
         (grid-cols (lexter/grid:display-grid-cols display-grid))
@@ -1021,20 +921,9 @@
     ;; This ensures cursor blink and movement are always rendered
     (when (< cr rows)
       (setf (sbit (screen-row-dirty screen) cr) 1))
-    ;; Sync swatch table only if generation changed
-    (let ((model-gen (swatch-table-generation swatches))
-          (grid-gen (lexter/grid:swatch-generation display-grid)))
-      (when (/= model-gen grid-gen)
-        (let ((sw-data (swatch-table-data swatches))
-              (sw-count (swatch-table-count swatches)))
-          (loop :for i :from 0 :below sw-count
-                :for base = (* i +swatch-slots+)
-                :do (lexter/grid:set-swatch display-grid i
-                                            (aref sw-data (+ base 0))
-                                            (aref sw-data (+ base 1))
-                                            (aref sw-data (+ base 2))
-                                            (aref sw-data (+ base 3)))))
-        (setf (lexter/grid:swatch-generation display-grid) model-gen)))
+    ;; Cells hold global swatch indices, which mean the same in the grid and
+    ;; on the GPU, so they are copied unchanged and no table is copied into
+    ;; the grid (LEXTER-D100).
     ;; Copy cells (including clearing old cursor position). Row D of the pane
     ;; shows, with the viewport V lines back, history line V-1-D while that is
     ;; 0 or more, and otherwise the screen's row D-V. At V = 0 that is the

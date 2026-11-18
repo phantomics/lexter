@@ -6,16 +6,6 @@
 (in-package #:lexter/tn3270-pane)
 
 ;;; --------------------------------------------------------------------------
-;;; Global state for swatch management
-;;; --------------------------------------------------------------------------
-
-(defvar *swatch-cache* (make-hash-table :test 'equal)
-  "Cache of (bg . fg) -> swatch-index.")
-
-(defvar *next-swatch-index* 1
-  "Next available swatch index (0 is reserved for default).")
-
-;;; --------------------------------------------------------------------------
 ;;; 3270 color mapping
 ;;; --------------------------------------------------------------------------
 
@@ -93,10 +83,12 @@
    (atlas       :accessor tn3270-pane-atlas
                 :initform nil
                 :documentation "Atlas reference for glyph lookup.")
-   ;; Swatches: we use indices 1-8 for 3270 colors
    (swatches    :accessor tn3270-pane-swatches
-                :initform (make-hash-table)
-                :documentation "Cache of (fg . highlight) -> swatch-index."))
+                :initform nil
+                :documentation "The pane's swatch table, from the store of the
+                 compositor that draws it, made when the pane is initialized and
+                 released when it is destroyed
+                 (LEXTER-DRAFT-cell-model-revision-D24)."))
   (:documentation "A pane displaying a TN3270 session."))
 
 ;;; --------------------------------------------------------------------------
@@ -108,9 +100,11 @@
   (when (tn3270-pane-initialized-p pane)
     (return-from lexter/panes:pane-initialize nil))
   (setf (tn3270-pane-atlas pane) atlas)
-  ;; Reset the global swatch cache (grid is recreated each session)
-  (clrhash *swatch-cache*)
-  (setf *next-swatch-index* 1)
+  ;; A table of the pane's own, in place of a global cache (LEXTER-D77)
+  (setf (tn3270-pane-swatches pane)
+        (lexter/swatches:make-swatch-table
+         (or (lexter/panes:swatch-store-of pane)
+             (lexter/swatches:make-swatch-store))))
   (let* ((cols (lexter/panes:pane-width pane))
          (rows (lexter/panes:pane-height pane))
          (screen (lexter/tn3270:make-tn3270-screen :cols cols :rows rows))
@@ -171,11 +165,12 @@
                  (reverse-p (= highlight tacle/tn3270.lexicon:+highlight-reverse+))
                  (actual-fg (if reverse-p bg-color fg-color))
                  (actual-bg (if reverse-p fg-color bg-color))
-                 (swatch (get-or-create-swatch grid actual-bg actual-fg)))
+                 (swatch (pane-swatch pane actual-bg actual-fg)))
             (lexter/grid:set-simple-cell grid gc gr glyph-idx swatch))))
-      ;; Render cursor as reverse-video on the current cell: redraw the
-      ;; underlying glyph with foreground/background swapped, so the character
-      ;; under the cursor stays visible.
+      ;; Render cursor as reverse-video on the current cell, by exchanging the
+      ;; ink and background slots of the cell just written, as the model draws
+      ;; the cursor (LEXTER-D101): the character under the cursor stays visible,
+      ;; and no reversed swatch is interned.
       (let* ((cursor-row (floor cursor-addr cols))
              (cursor-col (mod cursor-addr cols))
              (gc (+ cursor-col col-offset))
@@ -183,44 +178,14 @@
         (when (and lexter/panes::*cursor-blink-on*
                    (< gc (+ col-offset cols))
                    (< gr (+ row-offset rows)))
-          ;; A simple solid-cursor implementation
-          ;; (let ((cursor-glyph (lexter/atlas:atlas-glyph-index atlas lexter/atlas:+cursor-block-glyph+)))
-          ;;   (when cursor-glyph
-          ;;     (lexter/grid:set-simple-cell grid gc gr cursor-glyph 0)))
-          (let* ((char-code (aref buf cursor-addr))
-                 (color (aref colors cursor-addr))
-                 (highlight (aref highlights cursor-addr))
-                 (fa (aref field-attrs cursor-addr))
-                 (glyph-idx (or (lexter/atlas:atlas-glyph-index atlas char-code)
-                                (lexter/atlas:atlas-glyph-index atlas 32)))
-                 (fg-color (if (plusp fa)
-                               7  ; field attr displays dim
-                               (map-3270-color color)))
-                 (bg-color 0)
-                 ;; The cell's normal fg/bg, accounting for its own reverse highlight.
-                 (cell-reverse-p (= highlight tacle/tn3270.lexicon:+highlight-reverse+))
-                 (cell-fg (if cell-reverse-p bg-color fg-color))
-                 (cell-bg (if cell-reverse-p fg-color bg-color))
-                 ;; Cursor inverts the cell: swap fg/bg (get-or-create-swatch takes BG FG).
-                 (cursor-swatch (get-or-create-swatch grid cell-fg cell-bg)))
-            (lexter/grid:set-simple-cell grid gc gr glyph-idx cursor-swatch))))
+          (lexter/grid:exchange-cell-slots grid gc gr)))
       ;; Mark screen as clean
       (setf (lexter/tn3270::screen-dirty screen) nil))))
 
-(defun get-or-create-swatch (grid bg fg)
-  "Get or create a swatch for the given BG/FG colors.
-   BG and FG are xterm-256 palette indices."
-  (let ((key (cons bg fg)))
-    (or (gethash key *swatch-cache*)
-        (when (< *next-swatch-index* 256)  ; max swatches
-          (let ((idx *next-swatch-index*))
-            ;; set-swatch: idx, slot0=bg, slot1=fg, slot2=overlay1, slot3=overlay2
-            (lexter/grid:set-swatch grid idx bg fg fg bg)
-            (setf (gethash key *swatch-cache*) idx)
-            (incf *next-swatch-index*)
-            idx))
-        ;; Fallback to 0 if we run out of swatches
-        0)))
+(defun pane-swatch (pane bg fg)
+  "The global index of the swatch of background BG and foreground FG, xterm-256
+   palette indices, in PANE's swatch table."
+  (lexter/swatches:intern-swatch (tn3270-pane-swatches pane) bg fg fg bg))
 
 ;;; --------------------------------------------------------------------------
 ;;; Key handling
@@ -362,10 +327,12 @@
 ;;; --------------------------------------------------------------------------
 
 (defmethod lexter/panes:pane-destroy ((pane tn3270-pane))
-  "Disconnect from the 3270 host."
+  "Disconnect from the 3270 host, and return the pane's swatch ranges."
   (let ((client (tn3270-pane-client pane)))
     (when client
-      (lexter/tn3270:client-disconnect client))))
+      (lexter/tn3270:client-disconnect client)))
+  (when (tn3270-pane-swatches pane)
+    (lexter/swatches:release-swatch-table (tn3270-pane-swatches pane))))
 
 ;;; --------------------------------------------------------------------------
 ;;; Utility

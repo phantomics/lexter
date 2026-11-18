@@ -8,10 +8,11 @@
 ;;;;
 ;;;; Key features:
 ;;;;   - Per-row dirty tracking for incremental updates
-;;;;   - Swatch table: 4-slot colour schemes (bg, fg, overlay1, overlay2)
 ;;;;   - Simple path (1 layer) and layered path (up to 3 layers)
 ;;;;
-;;;; Swatch slots by convention:
+;;;; Cells hold global swatch indices into the store whose ranges the swatch
+;;;; tables own (swatches.lisp); the grid keeps no swatches of its own
+;;;; (LEXTER-D99, LEXTER-D100). Swatch slots by convention:
 ;;;;   Slot 0 = background
 ;;;;   Slot 1 = foreground
 ;;;;   Slot 2 = primary overlay (cursor, layer 1)
@@ -47,20 +48,15 @@
 
 (defstruct cell-location
   "A cell using the layered rendering path."
-  ;; Swatch index into the grid's swatch table (same as simple cells)
+  ;; Global swatch index (same as simple cells)
   (swatch-idx 0 :type (unsigned-byte 16))
   ;; Layers 0-2; NIL = empty/inactive
   (layers (make-array +max-layers+ :initial-element nil) :type simple-vector))
 
 (defstruct (display-grid (:constructor %make-display-grid))
-  "GPU display grid with dirty tracking and swatch support."
+  "GPU display grid with dirty tracking, holding global swatch indices."
   (cols          80  :type fixnum)
   (rows          24  :type fixnum)
-  ;; --- Swatch table ---
-  ;; Each swatch is 4 consecutive bytes (global palette indices for slots 0-3).
-  ;; swatch-data[i*4 + slot] = palette index for swatch i, slot s
-  (swatch-count  2048 :type fixnum)
-  (swatch-data   #() :type (simple-array (unsigned-byte 8) (*)))
   ;; --- Simple path storage (per-cell) ---
   (glyphs        #() :type (simple-array (unsigned-byte 32) (*)))
   (swatch-indices #() :type (simple-array (unsigned-byte 16) (*)))
@@ -72,8 +68,6 @@
   (layered-flags #*  :type simple-bit-vector)
   ;; --- Dirty tracking (per-row) ---
   (row-dirty     #*  :type simple-bit-vector)
-  ;; --- Swatch sync tracking ---
-  (swatch-generation 0 :type fixnum)  ; last synced generation from model
   ;; --- Cached render buffers (persistent, updated incrementally) ---
   (simple-buffer   nil)
   (simple-count    0   :type fixnum)
@@ -99,16 +93,13 @@
           (display-grid-layered-counts grid)
           (make-array +max-layers+ :element-type 'fixnum :initial-element 0))))
 
-(defun make-display-grid (&key (cols 80) (rows 24) (swatch-count 2048))
-  "Create a display grid with COLS columns, ROWS rows, and SWATCH-COUNT swatches."
+(defun make-display-grid (&key (cols 80) (rows 24))
+  "Create a display grid with COLS columns and ROWS rows, every cell in global
+   swatch 0, the default colours."
   (let* ((n (* cols rows))
          (grid (%make-display-grid
                 :cols           cols
                 :rows           rows
-                :swatch-count   swatch-count
-                :swatch-data    (make-array (* swatch-count +swatch-slots+)
-                                            :element-type '(unsigned-byte 8)
-                                            :initial-element 0)
                 :glyphs         (make-array n :element-type '(unsigned-byte 32) :initial-element 0)
                 :swatch-indices (make-array n :element-type '(unsigned-byte 16) :initial-element 0)
                 :wide-flags     (make-array n :element-type 'bit :initial-element 0)
@@ -122,38 +113,6 @@
                 :layered-counts (make-array +max-layers+ :element-type 'fixnum :initial-element 0))))
     (%allocate-render-buffers grid)
     grid))
-
-;;; --------------------------------------------------------------------------
-;;; Swatch API
-;;; --------------------------------------------------------------------------
-
-(defun set-swatch (grid swatch-idx slot0 slot1 slot2 slot3)
-  "Define swatch SWATCH-IDX with the given palette indices for slots 0-3."
-  (let ((base (* swatch-idx +swatch-slots+))
-        (data (display-grid-swatch-data grid)))
-    (setf (aref data (+ base 0)) slot0
-          (aref data (+ base 1)) slot1
-          (aref data (+ base 2)) slot2
-          (aref data (+ base 3)) slot3))
-  ;; Increment generation so GPU upload knows swatch table changed
-  (incf (display-grid-swatch-generation grid)))
-
-(defun get-swatch (grid swatch-idx)
-  "Return the 4 palette indices for SWATCH-IDX as multiple values."
-  (let ((base (* swatch-idx +swatch-slots+))
-        (data (display-grid-swatch-data grid)))
-    (values (aref data (+ base 0))
-            (aref data (+ base 1))
-            (aref data (+ base 2))
-            (aref data (+ base 3)))))
-
-(defun swatch-as-array (grid swatch-idx)
-  "Return a fresh 4-element array with the swatch's palette indices."
-  (let ((arr (make-array +swatch-slots+ :element-type '(unsigned-byte 8)))
-        (base (* swatch-idx +swatch-slots+))
-        (data (display-grid-swatch-data grid)))
-    (dotimes (i +swatch-slots+ arr)
-      (setf (aref arr i) (aref data (+ base i))))))
 
 ;;; --------------------------------------------------------------------------
 ;;; Dirty tracking
@@ -178,14 +137,6 @@
 
 (defun row-dirty-p (grid row)
   (= 1 (sbit (display-grid-row-dirty grid) row)))
-
-(defun swatch-generation (grid)
-  "Return the last-synced swatch generation for GRID."
-  (display-grid-swatch-generation grid))
-
-(defun (setf swatch-generation) (value grid)
-  "Set the last-synced swatch generation for GRID."
-  (setf (display-grid-swatch-generation grid) value))
 
 ;;; --------------------------------------------------------------------------
 ;;; Simple path API
@@ -241,7 +192,7 @@
         (let* ((i   (%idx grid col row))
                (loc (make-cell-location))
                (sw-idx (aref (display-grid-swatch-indices grid) i)))
-          ;; Copy swatch index (same table lookup as simple cells)
+          ;; Copy the swatch index (as simple cells hold it)
           (setf (cell-location-swatch-idx loc) sw-idx)
           ;; Bootstrap layer 0 with current glyph
           (setf (aref (cell-location-layers loc) 0)
@@ -256,7 +207,7 @@
 
 (defun set-cell-swatch (grid col row swatch-idx)
   "Set the swatch index for a layered cell.
-   SWATCH-IDX references the grid's swatch table (same as simple cells).
+   SWATCH-IDX is a global swatch index (same as simple cells).
    The cell is promoted to layered mode if not already."
   (%ensure-layered grid col row)
   (let ((loc (gethash (cons col row) (display-grid-layered-cells grid))))

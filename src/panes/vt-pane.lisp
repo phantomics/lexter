@@ -70,11 +70,13 @@
                 :initform nil
                 :type boolean
                 :documentation "Has pane-initialize been called?")
-   ;; Palette slot for GPU paging (NIL = use default slot 0)
+   ;; Palette slot for GPU paging (NIL = the renderer's default pane slot)
    (palette-slot :initarg :palette-slot
                  :accessor vt-pane-palette-slot
                  :initform nil
-                 :documentation "GPU palette slot index (0-3) or NIL for default.")
+                 :documentation "GPU palette slot index, from 1 to the store's last slot,
+                  or NIL for the renderer's default pane slot. Slot 0 holds the
+                  default palette and is never uploaded to.")
    ;; I/O buffers
    (read-buffer :accessor vt-pane-read-buffer
                 :initform (make-array 4096 :element-type '(unsigned-byte 8))
@@ -184,10 +186,18 @@
    ENCODING is :utf8 (default) or :cp437 (for BBS/DOS compatibility).
    BOLD-AS-BRIGHT when T promotes fg colors 0-7 to 8-15 when bold is set.
    Uses content-width and content-height so chrome panes reserve space for
-   scroll bars, headers, and footers."
+   scroll bars, headers, and footers.
+   The terminal takes a swatch table of its own from the store of the
+   compositor that draws the pane, which its primary and alternate screens
+   share; a screen made again, as TERMINAL-RESET makes it, first returns the
+   old table's ranges (LEXTER-DRAFT-cell-model-revision-D24)."
+  (%release-pane-swatches pane)
   (let* ((width (content-width pane))
          (height (content-height pane))
-         (screen (lexter/model:make-screen :cols width :rows height)))
+         (store (swatch-store-of pane))
+         (screen (lexter/model:make-screen
+                  :cols width :rows height
+                  :swatches (and store (lexter/swatches:make-swatch-table store)))))
     ;; The blank is the atlas's empty glyph (LEXTER-D89, LEXTER-O28)
     (setf (lexter/model:screen-blank-glyph screen) lexter/atlas:+empty-glyph-position+)
     ;; Store screen
@@ -389,9 +399,17 @@
     (when screen
       (lexter/model:mark-screen-dirty screen))))
 
+(defun %release-pane-swatches (pane)
+  "Return the ranges of the swatch table of PANE's terminal, if it has one."
+  (let ((screen (vt-pane-screen pane)))
+    (when screen
+      (lexter/swatches:release-swatch-table (lexter/model:screen-swatches screen)))))
+
 (defmethod pane-destroy ((pane vt-pane))
-  "Destroy the terminal's backend connection."
-  (vt-pane-backend-destroy pane))
+  "Destroy the terminal's backend connection, and return its swatch table's
+   ranges to the store."
+  (vt-pane-backend-destroy pane)
+  (%release-pane-swatches pane))
 
 (defmethod pane-alive-p ((pane vt-pane))
   "Return T if the terminal's backend is still alive."

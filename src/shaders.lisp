@@ -10,6 +10,27 @@
 ;;;;   Since both the screen Y-axis and the GL texture V-axis are flipped
 ;;;;   relative to each other, the two flips cancel: the natural formula
 ;;;;   V = (atlas_row + corner.y) / atlas_rows is correct with no extra inversion.
+;;;;
+;;;; Colours: both fragment shaders read swatches and palettes from integer
+;;;; texture buffers (LEXTER-D109) through the functions of +COLOUR-FUNCTIONS+,
+;;;; so that every swatch is fetched in one place, where a remap of swatch
+;;;; indices would be added once (LEXTER-O73).
+
+(defparameter +colour-functions+
+  "uniform usamplerBuffer u_swatches;  // RGBA8UI: 4 palette indices per swatch
+uniform usamplerBuffer u_palettes;  // RGBA8UI: 256 colours per palette slot
+uniform int u_palette_slot;         // which palette slot to draw in
+
+uvec4 fetch_swatch(uint idx) {
+    return texelFetch(u_swatches, int(idx));
+}
+
+vec4 palette_colour(uint idx) {
+    return vec4(texelFetch(u_palettes, u_palette_slot * 256 + int(idx))) / 255.0;
+}
+"
+  "GLSL that the fragment shaders share: the one swatch fetch, and the palette
+   lookup.")
 
 ;;; --------------------------------------------------------------------------
 ;;; Simple cell shaders
@@ -58,16 +79,13 @@ void main() {
 ")
 
 (defparameter +simple-frag+
+  (concatenate 'string
 "#version 330 core
 
 uniform sampler2D u_atlas;
-uniform sampler1D u_swatch_table;  // RGBA8: 4 palette indices per swatch (normalized)
-uniform int u_palette_slot;        // which palette slot (0-3) to use
-
-layout(std140) uniform Palette {
-    vec4 colors[1024];  // 4 palettes x 256 colors
-} u_palette;
-
+"
++colour-functions+
+"
 in  vec2 f_uv;
 flat in uint f_swatch_idx;
 
@@ -75,14 +93,11 @@ out vec4 frag_color;
 
 void main() {
     float mask = texture(u_atlas, f_uv).r;
-    vec4 sw    = texelFetch(u_swatch_table, int(f_swatch_idx), 0);
-    // Convert normalized 0.0-1.0 back to palette index 0-255
+    uvec4 sw   = fetch_swatch(f_swatch_idx);
     // Slot 0 = bg (r), Slot 1 = fg (g)
-    uint idx   = uint(mask > 0.5 ? sw.g * 255.0 + 0.5 : sw.r * 255.0 + 0.5);
-    // Offset by palette slot (each palette is 256 colors)
-    frag_color = u_palette.colors[u_palette_slot * 256 + int(idx)];
+    frag_color = palette_colour(mask > 0.5 ? sw.g : sw.r);
 }
-")
+"))
 
 ;;; --------------------------------------------------------------------------
 ;;; Layered cell shaders
@@ -144,16 +159,13 @@ void main() {
 ")
 
 (defparameter +layered-frag+
+  (concatenate 'string
 "#version 330 core
 
 uniform sampler2D u_atlas;
-uniform sampler1D u_swatch_table;  // RGBA8: 4 palette indices per swatch (normalized)
-uniform int u_palette_slot;        // which palette slot (0-3) to use
-
-layout(std140) uniform Palette {
-    vec4 colors[1024];  // 4 palettes x 256 colors
-} u_palette;
-
+"
++colour-functions+
+"
 in  vec2  f_uv;
 flat in uint  f_ink_idx;
 flat in uint  f_bg_idx;
@@ -164,17 +176,12 @@ out vec4 frag_color;
 
 void main() {
     float mask = texture(u_atlas, f_uv).r;
-    vec4 sw    = texelFetch(u_swatch_table, int(f_swatch_idx), 0);
-    // Convert normalized 0.0-1.0 back to palette index 0-255
-    uint ink_pal = uint(sw[f_ink_idx] * 255.0 + 0.5);
-    // Offset by palette slot (each palette is 256 colors)
-    int base     = u_palette_slot * 256;
-    vec4 ink     = u_palette.colors[base + int(ink_pal)];
+    uvec4 sw   = fetch_swatch(f_swatch_idx);
+    vec4 ink   = palette_colour(sw[f_ink_idx]);
 
     if (f_ts == 2u) {
         // Layer 0: fully opaque on both sides
-        uint bg_pal = uint(sw[f_bg_idx] * 255.0 + 0.5);
-        vec4 bg     = u_palette.colors[base + int(bg_pal)];
+        vec4 bg     = palette_colour(sw[f_bg_idx]);
         frag_color  = mask > 0.5 ? ink : bg;
     } else {
         // Overlay layer: one side is transparent
@@ -183,4 +190,4 @@ void main() {
         frag_color  = vec4(ink.rgb, alpha);
     }
 }
-")
+"))

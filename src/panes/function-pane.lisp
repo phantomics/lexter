@@ -95,7 +95,9 @@
 (defun write-pane-string (pane grid col row string &key (swatch 0))
   "Write STRING into the pane's grid region at relative (COL, ROW).
    COL and ROW are relative to the pane's origin.
-   SWATCH is the swatch index to use."
+   SWATCH is a global swatch index, from (DISPLAY-SWATCH PANE bg fg), since a
+   function pane draws in the display's table
+   (LEXTER-DRAFT-cell-model-revision-D24); by default the default colours."
   (let ((grid-col (+ (pane-col pane) col))
         (grid-row (+ (pane-row pane) row))
         (max-col (+ (pane-col pane) (pane-width pane))))
@@ -105,7 +107,8 @@
                                             (char-code char) swatch))))
 
 (defun clear-pane-region (pane grid &key (glyph lexter/atlas:+empty-glyph-position+) (swatch 0))
-  "Clear the entire pane region with GLYPH and SWATCH."
+  "Clear the entire pane region with GLYPH and SWATCH, a global swatch index
+   as WRITE-PANE-STRING takes."
   (loop :for row :from (pane-row pane) :below (+ (pane-row pane) (pane-height pane))
         :do (loop :for col :from (pane-col pane) :below (+ (pane-col pane) (pane-width pane))
                   :do (lexter/grid:set-simple-cell grid col row glyph swatch))))

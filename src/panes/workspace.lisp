@@ -20,13 +20,15 @@
    (decorations :initarg :decorations
                 :accessor workspace-decorations
                 :initform nil
-                :documentation "Decoration source: NIL, list of (col row glyph swatch), 
-                 or function (workspace grid) that draws borders/separators.")
+                :documentation "Decoration source: NIL, list of (col row glyph swatch),
+                 or function (workspace grid) that draws borders/separators. A
+                 swatch is a global index from DISPLAY-SWATCH.")
    (decorator   :initarg :decorator
                 :accessor workspace-decorator
                 :initform nil
                 :documentation "Style-aware decoration function (target grid mode &rest params).
-                 Called with workspace for :borders mode, or pane for :scroll-bar mode.")
+                 Called with workspace for :borders mode, or pane for :scroll-bar mode.
+                 It takes its swatches from (DISPLAY-SWATCH target bg fg).")
    (decorations-dirty :accessor workspace-decorations-dirty
                       :initform t
                       :type boolean
@@ -174,7 +176,8 @@ private profile PROFILE-PARENT as its parent, when one is given."
 
 (defun clear-grid (grid &key (glyph lexter/atlas:+empty-glyph-position+) (swatch 0))
   "Clear the entire grid with GLYPH, by default the atlas's empty glyph, and
-   SWATCH."
+   SWATCH, a global index, by default global swatch 0, the default colours of
+   the display's table."
   (let ((cols (lexter/grid:display-grid-cols grid))
         (rows (lexter/grid:display-grid-rows grid)))
     (dotimes (row rows)

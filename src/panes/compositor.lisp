@@ -23,6 +23,10 @@
   (display      nil)   ; the single display-grid
   (renderer     nil)
   (palette      nil)
+  ;; The swatch store whose global indices the display grid holds: its display
+  ;; table holds what is drawn at the level of the display, and each terminal
+  ;; takes a table of its own (LEXTER-DRAFT-cell-model-revision-D24)
+  (swatch-store (lexter/swatches:make-swatch-store))
   ;; Dimensions (in cells)
   (cols         80  :type fixnum)
   (rows         24  :type fixnum)
@@ -159,7 +163,7 @@
   (when (< index (length (compositor-workspaces comp)))
     (setf (compositor-active-index comp) index)
     ;; Clear grid and mark for full redraw
-    (clear-grid (compositor-display comp) :swatch 0)))
+    (clear-grid (compositor-display comp))))
 
 (defun handle-compositor-char (comp codepoint)
   "Route character input to focused pane."
@@ -359,7 +363,7 @@
                    (when pane
                      (multiple-value-bind (palette gen slot) (pane-palette pane)
                        (when palette
-                         (let ((s (or slot 0)))
+                         (let ((s (or slot lexter/renderer:+default-pane-palette-slot+)))
                            ;; Upload palette data to slot if changed
                            (lexter/renderer:upload-palette
                             (compositor-renderer comp) palette gen s)
@@ -368,7 +372,8 @@
                             (compositor-renderer comp) s)))))))
                ;; 6. Render
                (lexter/renderer:render-frame (compositor-renderer comp)
-                                             (compositor-display comp))
+                                             (compositor-display comp)
+                                             (compositor-swatch-store comp))
                ;; 6b. Present offscreen buffer to the window (no-op unless
                ;; offscreen rendering is enabled).
                (lexter/renderer:present-offscreen (compositor-renderer comp))
@@ -482,9 +487,9 @@ new context current, so the atlas/renderer GL objects belong to it."
               (renderer (lexter/renderer:make-renderer atlas win-w win-h
                                                        :pixel-scale scale))
               (palette (make-xterm-palette)))
-          ;; Set up palette and default swatches
-          (lexter/renderer:set-palette renderer palette)
-          (setup-default-swatches display)
+          ;; The renderer gives palette slot 0 the default palette, and global
+          ;; swatch 0 is the default swatch of the display's table, so a fresh
+          ;; grid draws in the default colours.
           ;; Populate the persistent compositor object.
           (setf (compositor-window   comp) win
                 (compositor-atlas    comp) atlas
@@ -537,7 +542,7 @@ new context current, so the atlas/renderer GL objects belong to it."
             (dolist (pane (workspace-panes ws))
               (pane-initialize pane atlas)))
           ;; Clear grid initially
-          (clear-grid display :swatch 0)
+          (clear-grid display)
           (setf (compositor-running comp) t
                 (compositor-last-tick-time comp) (glfw:get-time))
           comp)))))
@@ -634,20 +639,21 @@ new context current, so the atlas/renderer GL objects belong to it."
         (when pane
           (multiple-value-bind (palette gen slot) (pane-palette pane)
             (when palette
-              (let ((s (or slot 0)))
+              (let ((s (or slot lexter/renderer:+default-pane-palette-slot+)))
                 (lexter/renderer:upload-palette renderer palette gen s)
                 (lexter/renderer:set-active-palette-slot renderer s)))))))
-    (lexter/renderer:render-frame renderer (compositor-display comp))
+    (lexter/renderer:render-frame renderer (compositor-display comp)
+                                  (compositor-swatch-store comp))
     (lexter/renderer:capture-pixels renderer)))
 
 (defun compositor-reset-display (comp)
-  "Give COMP a fresh display grid of its size, with the default swatches,
-   keeping its window, atlas, and renderer. Used by the standalone terminal's
-   TERMINAL-RESET between replayed fixtures. Returns the new grid."
-  (let ((display (lexter/grid:make-display-grid :cols (compositor-cols comp)
-                                                :rows (compositor-rows comp))))
-    (setup-default-swatches display)
-    (setf (compositor-display comp) display)))
+  "Give COMP a fresh display grid of its size, every cell in the default
+   swatch, keeping its window, atlas, renderer, and swatch store. Used by the
+   standalone terminal's TERMINAL-RESET between replayed fixtures. Returns the
+   new grid."
+  (setf (compositor-display comp)
+        (lexter/grid:make-display-grid :cols (compositor-cols comp)
+                                       :rows (compositor-rows comp))))
 
 ;;; --------------------------------------------------------------------------
 ;;; Helper functions
@@ -659,6 +665,23 @@ new context current, so the atlas/renderer GL objects belong to it."
    (LEXTER-O36). Kept under this name for its callers."
   (lexter/model:make-default-palette))
 
-(defun setup-default-swatches (display)
-  "Initialize default swatches in display grid."
-  (lexter/grid:set-swatch display 0  0 7 7 0))
+(defun swatch-store-of (target)
+  "The swatch store of the compositor that draws TARGET, a compositor, a
+   workspace, or a pane, or NIL when no compositor holds it."
+  (etypecase target
+    (null nil)
+    (compositor (compositor-swatch-store target))
+    (workspace (swatch-store-of (workspace-compositor target)))
+    (pane (swatch-store-of (pane-workspace target)))))
+
+(defun display-swatch (target bg fg &optional (s2 fg) (s3 0))
+  "Return the global index of the swatch of palette indices BG, FG, S2, and S3
+   in the display's table of the compositor that draws TARGET, a compositor, a
+   workspace, or a pane. Chrome, decorators, workspace clears, and function
+   panes take their swatches here (LEXTER-DRAFT-cell-model-revision-D24). For a
+   target that no compositor draws yet, it is global swatch 0, the default."
+  (let ((store (swatch-store-of target)))
+    (if store
+        (lexter/swatches:intern-swatch
+         (lexter/swatches:swatch-store-display-table store) bg fg s2 s3)
+        0)))

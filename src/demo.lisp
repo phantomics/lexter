@@ -15,8 +15,8 @@
 ;;; Standard xterm 256-colour palette
 ;;; --------------------------------------------------------------------------
 
-;; Note: The canonical palette creator is now lexter/model:make-default-palette.
-;; This demo uses it directly instead of duplicating the code.
+;; The renderer gives palette slot 0 the default palette
+;; (lexter/swatches:make-default-palette), in which the demo draws.
 
 ;;; --------------------------------------------------------------------------
 ;;; Grid population helpers
@@ -24,7 +24,7 @@
 
 (defun write-string-simple (grid atlas str col row swatch-idx)
   "Write STR into GRID starting at (COL, ROW) using the simple path.
-   SWATCH-IDX is the swatch table index (fg/bg are defined in the swatch).
+   SWATCH-IDX is a global swatch index (fg/bg are defined in the swatch).
    Handles double-wide glyphs: wide characters advance by 2 columns."
   (let ((c col))
     (loop :for ch :across str
@@ -34,26 +34,20 @@
                 (set-simple-cell grid c row glyph-idx swatch-idx :wide wide)
                 (incf c (if wide 2 1))))))
 
-(defun setup-demo-swatches (grid)
-  "Set up swatch table for the demo.
-   Swatch 0: black bg, white fg (default)
-   Swatches 1-32: black bg, palette colours 1-32 as fg (for colour sampler)
-   Swatch 100: black bg, grey fg (for labels)"
-  ;; Default swatch 0: black bg (palette 0), white fg (palette 15)
-  (set-swatch grid 0  0 15 0 0)
-  ;; Colour sampler swatches 1-32
-  (loop :for i :from 1 :to 32
-        :do (set-swatch grid i  0 i 0 0))
-  ;; Grey label text
-  (set-swatch grid 100  0 7 0 0))
+(defun demo-swatch (store s0 s1 s2 s3)
+  "The global index of the swatch S0-S3 in the display table of STORE, into
+   which the demo interns everything it draws, as chrome does
+   (LEXTER-DRAFT-cell-model-revision-D24)."
+  (intern-swatch (swatch-store-display-table store) s0 s1 s2 s3))
 
-(defun setup-demo-grid (grid atlas)
-  "Populate GRID with the demo scene."
-  (let ((cols (display-grid-cols grid)))
-    ;; Initialize swatches
-    (setup-demo-swatches grid)
-    ;; Row 0: simple white-on-black text (swatch 0)
-    (write-string-simple grid atlas "Hello from lexter!" 1 0 0)
+(defun setup-demo-grid (grid atlas store)
+  "Populate GRID with the demo scene, its swatches interned in STORE."
+  (let ((cols (display-grid-cols grid))
+        ;; White on black, and grey label text
+        (white (demo-swatch store 0 15 0 0))
+        (grey (demo-swatch store 0 7 0 0)))
+    ;; Row 0: simple white-on-black text
+    (write-string-simple grid atlas "Hello from lexter!" 1 0 white)
     ;; Row 1: colour sampler — each character in a different swatch
     (let ((blank-index (atlas-glyph-index atlas (char-code #\ ))))
       (loop :for y :from 0 :below (display-grid-rows grid)
@@ -62,60 +56,57 @@
           :for ch-code = (+ 65 (mod i 26))       ; A-Z cycling
           :for glyph-idx = (atlas-glyph-index atlas ch-code)
           :when glyph-idx
-          :do (set-simple-cell grid (1+ i) 1 glyph-idx (1+ i)))
+          :do (set-simple-cell grid (1+ i) 1 glyph-idx
+                               ;; Black background, palette colour i+1
+                               (demo-swatch store 0 (1+ i) 0 0)))
     ;; Row 3: layered demonstration
     ;; Cell (1,3): '#' on layer 0 in dark-green/black,
     ;;             'X' on layer 1 in bright-red with transparent background
     (let ((hash-glyph (atlas-glyph-index atlas (char-code #\#)))
           (x-glyph    (atlas-glyph-index atlas (char-code #\X))))
       (when (and hash-glyph x-glyph)
-        ;; Define swatch 200: slot 0=black(0) slot 1=dark-green(2)
-        ;;                    slot 2=bright-red(9) slot 3=unused
-        (set-swatch grid 200 0 2 9 0)
-        (set-cell-swatch grid 1 3 200)
+        ;; Slot 0=black(0) slot 1=dark-green(2) slot 2=bright-red(9) slot 3=unused
+        (set-cell-swatch grid 1 3 (demo-swatch store 0 2 9 0))
         ;; Layer 0: '#' — ink=slot1(dark-green), bg=slot0(black)
         (set-cell-layer grid 1 3 0 hash-glyph 1 :bg-slot 0 :transparent-side :none)
         ;; Layer 1: 'X' — ink=slot2(bright-red), bg transparent
         (set-cell-layer grid 1 3 1 x-glyph    2 :transparent-side :bg)))
-    ;; Row 3 label (swatch 100 = grey text)
-    (write-string-simple grid atlas "  <- layered: # + X overlay" 2 3 100)
+    ;; Row 3 label (grey text)
+    (write-string-simple grid atlas "  <- layered: # + X overlay" 2 3 grey)
     ;; Row 5: a second layered example — block on layer 0, letter cut-out on layer 1 (:fg)
     (let ((block-glyph  (atlas-glyph-index atlas (char-code #\@)))
           (letter-glyph (atlas-glyph-index atlas (char-code #\A))))
       (when (and block-glyph letter-glyph)
-        ;; Define swatch 201: slot 0=black slot 1=bright-cyan(14) slot 2=dark-blue(4) slot 3=unused
-        (set-swatch grid 201 0 14 4 0)
-        (set-cell-swatch grid 1 5 201)
+        ;; Slot 0=black slot 1=bright-cyan(14) slot 2=dark-blue(4) slot 3=unused
+        (set-cell-swatch grid 1 5 (demo-swatch store 0 14 4 0))
         ;; Layer 0: '@' solid, cyan-on-black
         (set-cell-layer grid 1 5 0 block-glyph 1 :bg-slot 0 :transparent-side :none)
         ;; Layer 1: 'A' with :fg transparent — the letter pixels are cut out,
         ;;          revealing black from layer 0 through the letter shape
         (set-cell-layer grid 1 5 1 letter-glyph 2 :transparent-side :fg)))
-    (write-string-simple grid atlas "  <- layered: @ with A cut-out (:fg)" 2 5 100)
+    (write-string-simple grid atlas "  <- layered: @ with A cut-out (:fg)" 2 5 grey)
     ;; Row 7: cursor glyph demo (if cursor glyphs were added)
     (let ((block-cursor (atlas-glyph-index atlas +cursor-block-glyph+))
           (underline-cursor (atlas-glyph-index atlas +cursor-underline-glyph+))
           (bar-cursor (atlas-glyph-index atlas +cursor-bar-glyph+)))
       (when block-cursor
-        ;; Swatch 101: black bg, bright green fg (for cursor display)
-        (set-swatch grid 101  0 10 0 0)
-        (set-simple-cell grid 1 7 block-cursor 101)
-        (set-simple-cell grid 2 7 underline-cursor 101)
-        (set-simple-cell grid 3 7 bar-cursor 101)
-        (write-string-simple grid atlas "  <- cursor glyphs: block, underline, bar" 4 7 100)))
+        ;; Black bg, bright green fg (for cursor display)
+        (let ((green (demo-swatch store 0 10 0 0)))
+          (set-simple-cell grid 1 7 block-cursor green)
+          (set-simple-cell grid 2 7 underline-cursor green)
+          (set-simple-cell grid 3 7 bar-cursor green))
+        (write-string-simple grid atlas "  <- cursor glyphs: block, underline, bar" 4 7 grey)))
     (let ((fg-string  "This is a notebook paper string display test.")
           (fg-string2 "Another line of notebook paper.")
           (bg-char-index (atlas-glyph-index atlas (char-code #\▂))))
       (print (list :bg bg-char-index))
       (loop :for i :below (length fg-string)
-            :do (set-swatch grid 211 0 12 6 0)
-                (set-cell-swatch grid (+ 1 i) 9 211)
+            :do (set-cell-swatch grid (+ 1 i) 9 (demo-swatch store 0 12 6 0))
                 (set-cell-layer grid (+ 1 i) 9 0 bg-char-index 1 :transparent-side :none)
                 (set-cell-layer grid (+ 1 i) 9 1 (atlas-glyph-index atlas (char-code (aref fg-string i)))
                                 2 :transparent-side :bg))
       (loop :for i :below (length fg-string2)
-            :do (set-swatch grid 211 0 12 6 0)
-                (set-cell-swatch grid (+ 1 i) 10 211)
+            :do (set-cell-swatch grid (+ 1 i) 10 (demo-swatch store 0 12 6 0))
                 (set-cell-layer  grid (+ 1 i) 10 0 bg-char-index 1 :transparent-side :none)
                 (set-cell-layer  grid (+ 1 i) 10 1 (atlas-glyph-index atlas (char-code (aref fg-string2 i)))
                                  2 :transparent-side :bg)))
@@ -125,14 +116,12 @@
     ;;       (bg-char-index (atlas-glyph-index atlas (char-code #\▂))))
     ;;   (print (list :bg bg-char-index))
     ;;   (loop :for i :below (length fg-string)
-    ;;         :do (set-swatch grid 211 0 12 6 0)
-    ;;             (set-cell-swatch grid (+ 1 i) 11 211)
+    ;;         :do (set-cell-swatch grid (+ 1 i) 11 (demo-swatch store 0 12 6 0))
     ;;             (set-cell-layer grid (+ 1 i) 11 0 bg-char-index 1 :transparent-side :none)
     ;;             (set-cell-layer grid (+ 1 i) 11 1 (atlas-glyph-index atlas (char-code (aref fg-string i)))
     ;;                             2 :transparent-side :fg))
     ;;   (loop :for i :below (length fg-string2)
-    ;;         :do (set-swatch grid 211 0 12 6 0)
-    ;;             (set-cell-swatch grid (+ 1 i) 12 211)
+    ;;         :do (set-cell-swatch grid (+ 1 i) 12 (demo-swatch store 0 12 6 0))
     ;;             (set-cell-layer  grid (+ 1 i) 12 0 bg-char-index 1 :transparent-side :none)
     ;;             (set-cell-layer  grid (+ 1 i) 12 1 (atlas-glyph-index atlas (char-code (aref fg-string2 i)))
     ;;                              2 :transparent-side :fg)))
@@ -141,8 +130,7 @@
           (bg-indices #(1 1 2 5 7 8 7 5 2 1))
           (bg-chars "▁▂▃▄▅▆▇█"))
       (loop :for i :below (length fg-string)
-            :do (set-swatch grid 212 1 12 0 24)
-                (set-cell-swatch grid (+ 1 i) 12 212)
+            :do (set-cell-swatch grid (+ 1 i) 12 (demo-swatch store 1 12 0 24))
                 (set-cell-layer grid (+ 1 i) 12 0 (atlas-glyph-index atlas (char-code (aref bg-chars (1- (aref bg-indices (mod i 10))))))
                                 3 :transparent-side :none)
                 (set-cell-layer grid (+ 1 i) 12 1 (atlas-glyph-index atlas (char-code (aref fg-string i)))
@@ -212,11 +200,11 @@
         (let* ((atlas    (build-atlas (list font)))
                (_        (add-cursor-glyphs atlas))
                (grid     (make-display-grid :cols cols :rows rows))
-               (renderer (make-renderer atlas win-w win-h :pixel-scale scale))
-               (palette  (lexter/model:make-default-palette)))
+               (store    (make-swatch-store))
+               ;; Draws in palette slot 0, the default palette
+               (renderer (make-renderer atlas win-w win-h :pixel-scale scale)))
           (declare (ignore _))
-          (set-palette renderer palette)
-          (setup-demo-grid grid atlas)
+          (setup-demo-grid grid atlas store)
           ;; Register key callback for Escape
           (glfw:def-key-callback quit-on-escape (window key scancode action mods)
             (declare (ignore scancode mods))
@@ -226,7 +214,7 @@
           ;; Main loop
           (loop :until (or (glfw:window-should-close-p)
                            (and stop-flag (not (car stop-flag))))
-                :do (render-frame renderer grid)
+                :do (render-frame renderer grid store)
                     (glfw:swap-buffers)
                     (glfw:poll-events)
                     (sleep 0.1))
@@ -270,25 +258,24 @@
         (let* ((atlas    (build-atlas (list font)))
                (_        (add-cursor-glyphs atlas))
                (grid     (make-display-grid :cols cols :rows rows))
+               (store    (make-swatch-store))
+               ;; Draws in palette slot 0, the default palette
                (renderer (make-renderer atlas win-w win-h :pixel-scale scale))
-               (palette  (lexter/model:make-default-palette)))
+               (white    (demo-swatch store 0 15 0 0))
+               (yellow   (demo-swatch store 0 11 0 0))
+               (cyan     (demo-swatch store 0 14 0 0))
+               (green    (demo-swatch store 0 10 0 0)))
           (declare (ignore _))
-          (set-palette renderer palette)
-          ;; Set up swatches
-          (set-swatch grid 0  0 15 0 0)   ; white on black
-          (set-swatch grid 1  0 11 0 0)   ; yellow on black
-          (set-swatch grid 2  0 14 0 0)   ; cyan on black
-          (set-swatch grid 3  0 10 0 0)   ; green on black
           ;; Row 0: ASCII text (narrow)
-          (write-string-simple grid atlas "Hello from lexter!" 1 0 0)
+          (write-string-simple grid atlas "Hello from lexter!" 1 0 white)
           ;; Row 2: CJK text (wide characters)
-          (write-string-simple grid atlas "新たなる世界" 1 2 1)
+          (write-string-simple grid atlas "新たなる世界" 1 2 yellow)
           ;; Row 4: mixed narrow + wide
-          (write-string-simple grid atlas "CJK: 新たなる世界 (new world)" 1 4 2)
+          (write-string-simple grid atlas "CJK: 新たなる世界 (new world)" 1 4 cyan)
           ;; Row 6: more CJK
-          (write-string-simple grid atlas "漢字テスト" 1 6 3)
+          (write-string-simple grid atlas "漢字テスト" 1 6 green)
           ;; Row 8: ASCII for comparison
-          (write-string-simple grid atlas "ABCDEFGHIJKLMNOPQRSTUVWXYZ" 1 8 0)
+          (write-string-simple grid atlas "ABCDEFGHIJKLMNOPQRSTUVWXYZ" 1 8 white)
           ;; Key callback
           (glfw:def-key-callback quit-on-escape (window key scancode action mods)
             (declare (ignore scancode mods))
@@ -298,7 +285,7 @@
           ;; Main loop
           (loop :until (or (glfw:window-should-close-p)
                            (and stop-flag (not (car stop-flag))))
-                :do (render-frame renderer grid)
+                :do (render-frame renderer grid store)
                     (glfw:swap-buffers)
                     (glfw:poll-events)
                     (sleep 0.1))

@@ -93,9 +93,11 @@ the cursor's place in the grid keeps the colours of the line it shows."
     (scroll-to pane 1)
     (lexter/panes:pane-flush pane grid)
     ;; The cursor is at row 2, column 1 of the screen; at offset 1 the grid's
-    ;; row 2 shows the screen's row 1, the line D, whose cell 1 is blank.
-    (is (= 0 (aref (lexter/grid::display-grid-swatch-indices grid)
-                   (grid-index grid 1 2))))))
+    ;; row 2 shows the screen's row 1, the line D, whose cell 1 is blank, in
+    ;; the screen's default swatch. A cursor would exchange the cell's slots,
+    ;; making it layered (LEXTER-D101).
+    (is (= (lexter/model:default-swatch (view-screen pane)) (grid-swatch grid 1 2)))
+    (is-false (lexter/grid:cell-layered-p grid 1 2))))
 
 (def-test short-history-line-is-padded ()
   "LEXTER-O30: a history line narrower than the pane, left by a resize, is

@@ -47,10 +47,12 @@ policy makes its own.")
           :do (setf (aref starts i) start (aref ends i) end (aref classes i) class))
     (values starts ends classes)))
 
-(multiple-value-bind (starts ends classes) (%make-table *width-table-data*)
-  (defparameter *width-starts* starts "The first code point of each range.")
-  (defparameter *width-ends* ends "The last code point of each range.")
-  (defparameter *width-classes* classes "The class of each range: 0, 2, or 3 (ambiguous)."))
+(defvar *width-starts* nil "The first code point of each range.")
+(defvar *width-ends* nil "The last code point of each range.")
+(defvar *width-classes* nil "The class of each range: 0, 2, or 3 (ambiguous).")
+
+(setf (values *width-starts* *width-ends* *width-classes*)
+      (%make-table *width-table-data*))
 
 (defun unicode-width-class (codepoint)
   "The width class Unicode's table gives CODEPOINT: 0, 1, 2, or 3 for

@@ -6,13 +6,23 @@
 ;;;;   Simple  — one instanced draw call, blending off.
 ;;;;   Layered — up to three instanced draw calls (one per layer depth);
 ;;;;             layer 0 is opaque, layers 1-2 use SRC_ALPHA blending.
+;;;;
+;;;; Colours are kept on the GPU as integers, in two texture buffers of
+;;;; RGBA8UI texels read through usamplerBuffer (LEXTER-D109): the swatch
+;;;; store, whose ranges the swatch tables own (LEXTER-D99), and the palette
+;;;; store, 256 texels for each palette slot.
 
 ;;; --------------------------------------------------------------------------
-;;; Constants (must match grid.lisp)
+;;; Constants
 ;;; --------------------------------------------------------------------------
 
-(defconstant +max-palette-slots+ 4  "Number of palette slots in the UBO.")
-(defconstant +palette-slot-size+ 4096 "Bytes per palette slot (256 x vec4).")
+(defconstant +default-palette-slots+ 128
+  "Palette slots in the palette store unless the renderer is told otherwise
+   (LEXTER-D92).")
+
+(defconstant +default-pane-palette-slot+ 1
+  "The palette slot of a pane that names none. Slot 0 holds the default
+   palette and is never written after the renderer is made (LEXTER-D83).")
 
 ;;; --------------------------------------------------------------------------
 ;;; Render state
@@ -26,11 +36,19 @@
   simple-vbo
   layered-vao
   layered-vbo
-  palette-ubo
-  swatch-texture          ; 1D RGBA8 texture for swatch table
-  (swatch-gen 0 :type fixnum)   ; last uploaded swatch generation
-  ;; Palette slot tracking: one generation counter per slot
-  (palette-gens (make-array +max-palette-slots+ :element-type 'fixnum :initial-element 0)
+  ;; The swatch store: a buffer of RGBA8UI texels, one swatch to a texel, and
+  ;; what the renderer last uploaded to each of its ranges, by table
+  swatch-buffer
+  swatch-texture
+  (swatch-records (make-swatch-upload-records) :type swatch-upload-records)
+  ;; The palette store: 256 RGBA8UI texels for each slot, and for each slot
+  ;; the owner and generation of the palette last uploaded to it (LEXTER-D92)
+  palette-buffer
+  palette-texture
+  (palette-slots +default-palette-slots+ :type fixnum)
+  (palette-owners (make-array +default-palette-slots+ :initial-element nil)
+                  :type simple-vector)
+  (palette-gens (make-array +default-palette-slots+ :element-type 'fixnum :initial-element 0)
                 :type (simple-array fixnum (*)))
   (current-palette-slot 0 :type fixnum) ; active slot for rendering
   ;; Uniform locations for u_palette_slot
@@ -157,55 +175,72 @@
     (values vao vbo)))
 
 ;;; --------------------------------------------------------------------------
-;;; Palette UBO
+;;; Integer texture buffers
 ;;; --------------------------------------------------------------------------
 
-(defun %make-palette-ubo ()
-  "Create UBO for palette storage. Holds +max-palette-slots+ palettes."
-  (let ((ubo (first (gl:gen-buffers 1)))
-        (total-size (* +max-palette-slots+ +palette-slot-size+)))
-    (gl:bind-buffer :uniform-buffer ubo)
-    (%gl:buffer-data :uniform-buffer total-size (cffi:null-pointer) :dynamic-draw)
-    (gl:bind-buffer :uniform-buffer 0)
-    ubo))
+(defun %make-texture-buffer (texels)
+  "Create a buffer of TEXELS RGBA8UI texels, all zero, and a buffer texture
+   that reads it. Returns (values buffer texture)."
+  (let ((buffer (first (gl:gen-buffers 1)))
+        (texture (first (gl:gen-textures 1)))
+        (zeros (make-array (* texels 4) :element-type '(unsigned-byte 8)
+                                        :initial-element 0)))
+    (gl:bind-buffer :texture-buffer buffer)
+    (cffi:with-pointer-to-vector-data (ptr zeros)
+      (%gl:buffer-data :texture-buffer (length zeros) ptr :dynamic-draw))
+    (gl:bind-buffer :texture-buffer 0)
+    (gl:bind-texture :texture-buffer texture)
+    (%gl:tex-buffer :texture-buffer :rgba8ui buffer)
+    (gl:bind-texture :texture-buffer 0)
+    (values buffer texture)))
 
-(defun %bind-ubo-to-prog (prog ubo)
-  "Bind the 'Palette' uniform block in PROG to UBO binding point 0."
-  ;; gl:get-uniform-block-index handles Lisp string -> C string conversion
-  (let ((idx (gl:get-uniform-block-index prog "Palette")))
-    (unless (= idx #xFFFFFFFF)
-      (%gl:uniform-block-binding prog idx 0)))
-  (%gl:bind-buffer-base :uniform-buffer 0 ubo))
+(defun %write-texels (buffer first data start count)
+  "Write COUNT texels, the bytes of DATA from byte START, to BUFFER from texel
+   FIRST."
+  (gl:bind-buffer :texture-buffer buffer)
+  (cffi:with-pointer-to-vector-data (ptr data)
+    (%gl:buffer-sub-data :texture-buffer (* first 4) (* count 4)
+                         (cffi:inc-pointer ptr start)))
+  (gl:bind-buffer :texture-buffer 0))
 
-(defun set-palette (rs palette-floats &optional (slot 0))
-  "Upload PALETTE-FLOATS (1024 single-floats: 256 x RGBA) to palette SLOT.
-   This is the low-level upload; prefer upload-palette for generation-tracked updates."
-  (assert (< slot +max-palette-slots+) ()
-          "Palette slot ~d out of range (max ~d)" slot +max-palette-slots+)
-  (gl:bind-buffer :uniform-buffer (render-state-palette-ubo rs))
-  (let ((offset (* slot +palette-slot-size+)))
-    (cffi:with-pointer-to-vector-data (ptr palette-floats)
-      (%gl:buffer-sub-data :uniform-buffer offset +palette-slot-size+ ptr)))
-  (gl:bind-buffer :uniform-buffer 0))
+;;; --------------------------------------------------------------------------
+;;; Palettes
+;;; --------------------------------------------------------------------------
 
-(defun upload-palette (rs palette-floats generation &optional (slot 0))
-  "Upload palette to GPU slot if generation has changed.
-   PALETTE-FLOATS is a 1024-element single-float array.
-   GENERATION is the screen's palette-generation counter.
-   SLOT is the palette slot index (0 to +max-palette-slots+-1).
+(defun %check-palette-slot (rs slot)
+  (assert (< -1 slot (render-state-palette-slots rs)) ()
+          "Palette slot ~d out of range (the store holds ~d)"
+          slot (render-state-palette-slots rs)))
+
+(defun set-palette (rs palette &optional (slot +default-pane-palette-slot+))
+  "Upload PALETTE (1024 bytes: 256 x RGBA) to palette SLOT.
+   This is the low-level upload; prefer upload-palette for tracked updates."
+  (%check-palette-slot rs slot)
+  (%write-texels (render-state-palette-buffer rs) (* slot +palette-entries+)
+                 palette 0 +palette-entries+))
+
+(defun upload-palette (rs palette generation
+                       &optional (slot +default-pane-palette-slot+) (owner palette))
+  "Upload PALETTE to SLOT unless the slot already holds OWNER's palette at
+   GENERATION. PALETTE is 1024 bytes (256 x RGBA); GENERATION is its screen's
+   palette generation; OWNER names whose palette it is, by default the palette
+   array itself, so that two palettes with equal generations are told apart.
+   Slot 0 holds the default palette and is never written here (LEXTER-D83).
    Returns T if upload occurred, NIL otherwise."
-  (assert (< slot +max-palette-slots+) ()
-          "Palette slot ~d out of range (max ~d)" slot +max-palette-slots+)
-  (let ((gens (render-state-palette-gens rs)))
-    (when (/= generation (aref gens slot))
-      (set-palette rs palette-floats slot)
-      (setf (aref gens slot) generation)
+  (%check-palette-slot rs slot)
+  (assert (plusp slot) () "Palette slot 0 holds the default palette and is not uploaded to")
+  (let ((owners (render-state-palette-owners rs))
+        (gens (render-state-palette-gens rs)))
+    (unless (and (eq owner (aref owners slot))
+                 (= generation (aref gens slot)))
+      (set-palette rs palette slot)
+      (setf (aref owners slot) owner
+            (aref gens slot) generation)
       t)))
 
 (defun set-active-palette-slot (rs slot)
   "Set the active palette slot for rendering. Updates uniforms in both shaders."
-  (assert (< slot +max-palette-slots+) ()
-          "Palette slot ~d out of range (max ~d)" slot +max-palette-slots+)
+  (%check-palette-slot rs slot)
   (unless (= slot (render-state-current-palette-slot rs))
     (setf (render-state-current-palette-slot rs) slot)
     ;; Update uniform in simple shader
@@ -220,44 +255,19 @@
         (gl:uniformi loc slot)))))
 
 ;;; --------------------------------------------------------------------------
-;;; Swatch Table Texture
+;;; Swatches
 ;;; --------------------------------------------------------------------------
 
-(defconstant +swatch-table-size+ 2048
-  "Maximum number of swatches in the GPU swatch table.")
-
-(defun %make-swatch-texture ()
-  "Create a 1D RGBA8 texture for the swatch table.
-   Uses normalized RGBA8 format - shaders will convert 0.0-1.0 back to 0-255."
-  (let ((tex (first (gl:gen-textures 1))))
-    (gl:bind-texture :texture-1d tex)
-    (gl:tex-parameter :texture-1d :texture-min-filter :nearest)
-    (gl:tex-parameter :texture-1d :texture-mag-filter :nearest)
-    (gl:tex-parameter :texture-1d :texture-wrap-s :clamp-to-edge)
-    ;; Allocate with RGBA8 format (4 bytes per texel = 4 palette indices per swatch)
-    ;; Initial data is null - we'll upload when rendering
-    (gl:tex-image-1d :texture-1d 0 :rgba8 +swatch-table-size+ 0
-                     :rgba :unsigned-byte (cffi:null-pointer))
-    (gl:bind-texture :texture-1d 0)
-    tex))
-
-(defun upload-swatch-table (rs grid)
-  "Upload the grid's swatch table to the GPU if generation changed.
-   Returns T if upload occurred, NIL otherwise."
-  (let ((grid-gen (swatch-generation grid)))
-    (when (/= grid-gen (render-state-swatch-gen rs))
-      (gl:active-texture :texture1)
-      (gl:bind-texture :texture-1d (render-state-swatch-texture rs))
-      ;; Upload the swatch-data array directly - it's already RGBA8 layout
-      ;; (4 consecutive bytes per swatch: slot0, slot1, slot2, slot3)
-      (let ((data (display-grid-swatch-data grid))
-            (count (display-grid-swatch-count grid)))
-        (cffi:with-pointer-to-vector-data (ptr data)
-          (%gl:tex-sub-image-1d :texture-1d 0 0 count
-                                :rgba :unsigned-byte ptr)))
-      (gl:bind-texture :texture-1d 0)
-      (setf (render-state-swatch-gen rs) grid-gen)
-      t)))
+(defun upload-swatches (rs store)
+  "Bring the GPU's copy of STORE up to date with its tables: for each range,
+   the swatches its table has added since the last upload, or all of them when
+   the range was last uploaded from another table or version
+   (LEXTER-SWATCHES:PLAN-SWATCH-UPLOADS). Returns the number of spans
+   uploaded."
+  (let ((spans (plan-swatch-uploads store (render-state-swatch-records rs))))
+    (loop :for (first count data start) :in spans
+          :do (%write-texels (render-state-swatch-buffer rs) first data start count))
+    (length spans)))
 
 ;;; --------------------------------------------------------------------------
 ;;; Uniform helpers
@@ -273,28 +283,33 @@
   (gl:uniformi (gl:get-uniform-location prog "u_viewport") win-w win-h)
   (gl:uniformi (gl:get-uniform-location prog "u_atlas_size")
                (atlas-cols atlas) (atlas-rows atlas))
-  ;; Texture unit bindings: atlas on unit 0, swatch table on unit 1
+  ;; Texture unit bindings: atlas on unit 0, swatch store on unit 1, palette
+  ;; store on unit 2
   (gl:uniformi (gl:get-uniform-location prog "u_atlas") 0)
-  (gl:uniformi (gl:get-uniform-location prog "u_swatch_table") 1))
+  (gl:uniformi (gl:get-uniform-location prog "u_swatches") 1)
+  (gl:uniformi (gl:get-uniform-location prog "u_palettes") 2))
 
 ;;; --------------------------------------------------------------------------
 ;;; Public constructor
 ;;; --------------------------------------------------------------------------
 
-(defun make-renderer (atlas win-w win-h &key (pixel-scale 1))
+(defun make-renderer (atlas win-w win-h &key (pixel-scale 1)
+                                             (palette-slots +default-palette-slots+))
   "Create a RENDER-STATE.  A GL 3.3 core context must already be current.
-   PIXEL-SCALE is an integer multiplier for nearest-neighbor scaling (1-16)."
+   PIXEL-SCALE is an integer multiplier for nearest-neighbor scaling (1-16).
+   PALETTE-SLOTS is how many palettes the palette store holds, at most 256;
+   slot 0 is given the default palette, and drawing starts in it."
   (assert (<= 1 pixel-scale 16) (pixel-scale)
           "Pixel scale must be between 1 and 16, got ~d" pixel-scale)
+  (assert (<= 2 palette-slots 256) (palette-slots)
+          "Palette slots must be between 2 and 256, got ~d" palette-slots)
   (let* ((sp  (%link-program +simple-vert+  +simple-frag+))
          (lp  (%link-program +layered-vert+ +layered-frag+))
-         (cv  (%make-corner-vbo))
-         (pu  (%make-palette-ubo))
-         (st  (%make-swatch-texture)))
+         (cv  (%make-corner-vbo)))
     (multiple-value-bind (svao svbo) (%make-simple-vao  cv)
       (multiple-value-bind (lvao lvbo) (%make-layered-vao cv)
-        (%bind-ubo-to-prog sp pu)
-        (%bind-ubo-to-prog lp pu)
+       (multiple-value-bind (sb st) (%make-texture-buffer +store-size+)
+        (multiple-value-bind (pb pt) (%make-texture-buffer (* palette-slots +palette-entries+))
         (%set-uniforms sp atlas win-w win-h pixel-scale)
         (%set-uniforms lp atlas win-w win-h pixel-scale)
         ;; Cache palette slot uniform locations and set initial slot = 0
@@ -307,15 +322,23 @@
           (when (>= layered-slot-loc 0)
             (gl:uniformi layered-slot-loc 0))
           (gl:use-program 0)
-          (make-render-state :simple-prog  sp  :layered-prog lp
-                             :corner-vbo   cv  :simple-vao   svao
-                             :simple-vbo   svbo :layered-vao  lvao
-                             :layered-vbo  lvbo :palette-ubo  pu
-                             :swatch-texture st
-                             :simple-palette-slot-loc simple-slot-loc
-                             :layered-palette-slot-loc layered-slot-loc
-                             :atlas        atlas :win-w win-w :win-h win-h
-                             :pixel-scale  pixel-scale))))))
+          (let ((rs (make-render-state
+                     :simple-prog  sp  :layered-prog lp
+                     :corner-vbo   cv  :simple-vao   svao
+                     :simple-vbo   svbo :layered-vao  lvao
+                     :layered-vbo  lvbo
+                     :swatch-buffer sb :swatch-texture st
+                     :palette-buffer pb :palette-texture pt
+                     :palette-slots palette-slots
+                     :palette-owners (make-array palette-slots :initial-element nil)
+                     :palette-gens (make-array palette-slots :element-type 'fixnum
+                                                             :initial-element 0)
+                     :simple-palette-slot-loc simple-slot-loc
+                     :layered-palette-slot-loc layered-slot-loc
+                     :atlas        atlas :win-w win-w :win-h win-h
+                     :pixel-scale  pixel-scale)))
+            (set-palette rs (make-default-palette) 0)
+            rs))))))))
 
 ;;; --------------------------------------------------------------------------
 ;;; Offscreen render target (opt-in: post-processing + screenshots)
@@ -418,8 +441,9 @@
 ;;; Per-frame render
 ;;; --------------------------------------------------------------------------
 
-(defun render-frame (rs grid)
-  "Render one frame.  Call after making the GL context current.
+(defun render-frame (rs grid store)
+  "Render one frame of GRID, whose swatch indices are global indices of
+   STORE.  Call after making the GL context current.
    When offscreen rendering is enabled, draws into the offscreen FBO; otherwise
    draws to the default framebuffer."
   (if (render-state-offscreen-enabled rs)
@@ -430,8 +454,8 @@
       (gl:bind-framebuffer :framebuffer 0))
   (gl:clear-color 0.0 0.0 0.0 1.0)
   (gl:clear :color-buffer-bit)
-  ;; Upload swatch table to GPU if changed
-  (upload-swatch-table rs grid)
+  ;; Bring the swatch store up to date with its tables
+  (upload-swatches rs store)
   (multiple-value-bind (sdata sbytes ldata lc)
       (build-render-data grid)
     (declare (type fixnum sbytes))
@@ -440,14 +464,14 @@
       ;; Bind atlas texture to unit 0
       (gl:active-texture :texture0)
       (gl:bind-texture :texture-2d (atlas-texture-id atlas))
-      ;; Bind swatch table texture to unit 1
+      ;; Bind the swatch store to unit 1 and the palette store to unit 2
       (gl:active-texture :texture1)
-      (gl:bind-texture :texture-1d (render-state-swatch-texture rs))
+      (gl:bind-texture :texture-buffer (render-state-swatch-texture rs))
+      (gl:active-texture :texture2)
+      (gl:bind-texture :texture-buffer (render-state-palette-texture rs))
       ;; ---- Simple cells ------------------------------------------------
       (when (> sc 0)
         (gl:use-program (render-state-simple-prog rs))
-        (%bind-ubo-to-prog (render-state-simple-prog rs)
-                           (render-state-palette-ubo rs))
         (gl:disable :blend)
         (gl:bind-buffer :array-buffer (render-state-simple-vbo rs))
         (cffi:with-pointer-to-vector-data (ptr sdata)
@@ -458,8 +482,6 @@
       (let ((total-layered (reduce #'+ lc)))
         (when (> total-layered 0)
           (gl:use-program (render-state-layered-prog rs))
-          (%bind-ubo-to-prog (render-state-layered-prog rs)
-                             (render-state-palette-ubo rs))
           ;; Upload the full merged buffer once
           (gl:bind-buffer :array-buffer (render-state-layered-vbo rs))
           (let ((lbytes (* total-layered +layered-stride+)))
@@ -544,8 +566,10 @@
   (gl:delete-buffers (list (render-state-corner-vbo  rs)
                            (render-state-simple-vbo  rs)
                            (render-state-layered-vbo rs)
-                           (render-state-palette-ubo rs)))
-  (gl:delete-textures (list (render-state-swatch-texture rs)))
+                           (render-state-swatch-buffer rs)
+                           (render-state-palette-buffer rs)))
+  (gl:delete-textures (list (render-state-swatch-texture rs)
+                            (render-state-palette-texture rs)))
   (gl:delete-vertex-arrays (list (render-state-simple-vao  rs)
                                  (render-state-layered-vao rs)))
   ;; Offscreen render target, if allocated.

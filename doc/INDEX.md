@@ -191,6 +191,7 @@ Table: Decision, open-question, and memo records in the LEXTER namespace.
 | [LEXTER-DRAFT-pane-profiles-D8](Plan.PaneProfiles.md#lexter-draft-pane-profiles-d8--unseen-output-is-pane-state-polled-by-the-decorator) | Decision | Unseen output is pane state, polled by the decorator | Implemented | LEXTER-DRAFT-pane-profiles |
 | [LEXTER-DRAFT-pane-profiles-D9](Plan.PaneProfiles.md#lexter-draft-pane-profiles-d9--terminal-events-reach-the-apl-layer-through-a-generic-function) | Decision | Terminal events reach the APL layer through a generic function | Implemented | LEXTER-DRAFT-pane-profiles |
 | [LEXTER-DRAFT-terminal-fixes-1e-D16](Plan.TerminalFixes1e.md#lexter-draft-terminal-fixes-1e-d16--the-protocol-tests-talk-to-a-scripted-peer-over-a-loopback-socket) | Decision | The protocol tests talk to a scripted peer over a loopback socket | Proposed | LEXTER-0015 |
+| [LEXTER-DRAFT-terminal-stacks-D1](Log.TerminalStacks.md#lexter-draft-terminal-stacks-d1--the-standalone-terminal-moves-into-lexterpanes) | Decision | The standalone terminal moves into lexter/panes | Proposed | LEXTER-DRAFT-terminal-stacks |
 | [LEXTER-O1](Log.EncodingRanges.md#lexter-o1--where-utf-8-is-decoded-relative-to-cl-vt) | Open question | Where UTF-8 is decoded relative to cl-vt | — | LEXTER-0009 |
 | [LEXTER-O2](Plan.CompassMigration.md#lexter-o2--which-documents-are-numbered-first) | Open question | Which documents are numbered first | — | LEXTER-0011 |
 | [LEXTER-O3](Plan.CompassMigration.md#lexter-o3--a-compiled-readme) | Open question | A compiled README | — | LEXTER-0011 |

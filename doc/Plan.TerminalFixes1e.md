@@ -23,6 +23,7 @@ relates-to:
   - LEXTER-0006
   - LEXTER-0010
   - LEXTER-0020
+  - LEXTER-DRAFT-terminal-stacks
 decisions:
   - LEXTER-D66
   - LEXTER-D67
@@ -523,6 +524,11 @@ Table: The standalone terminal's API after consolidation.
 The Origin integration reads the accessors through `::`
 (`src/origin-impulse.lisp:%window-fields@2d4d743`); those it keeps are
 exported (LEXTER-D76).
+
+The consolidation defines `terminal-pty` in place of `unix-terminal-pty`:
+the name was already exported, and defined nowhere, so the PTY is read under
+it, and `unix-terminal-pty` is not kept
+([LEXTER-DRAFT-terminal-stacks](Log.TerminalStacks.md)).
 
 Key encoding, cursor blink, resize, palette upload, and default swatches then
 exist once, in the pane and compositor code. The Origin integration keeps the

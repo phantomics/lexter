@@ -8,7 +8,7 @@ language:      en
 status:        Draft
 provenance:
   assistant:   opencode
-  session:     "Consolidating the terminal stacks (2026-11-17)"
+  session:     "Consolidating the terminal stacks (2026-11-17); review revisions (2026-11-19)"
 relates-to:
   - LEXTER-0015
   - LEXTER-0017
@@ -16,6 +16,11 @@ relates-to:
   - LEXTER-0005
   - LEXTER-0010
   - LEXTER-0020
+  - LEXTER-DRAFT-pane-profiles
+  - LEXTER-DRAFT-first-edition-repairs
+  - LEXTER-DRAFT-swatch-ranges
+decisions:
+  - LEXTER-DRAFT-terminal-stacks-D1
 ---
 
 # Consolidating the Terminal Stacks: Development Log
@@ -23,8 +28,9 @@ relates-to:
 This document records the second step of the terminal-fixes plan
 ([LEXTER-0015](Plan.TerminalFixes1e.md)), the consolidation of LEXTER-D67:
 the standalone terminal becomes a compositor holding one workspace with one
-Unix terminal pane, behind the API that the test rig and the Origin
-integration use, and the code it duplicated is removed. The compositor gains
+Unix terminal pane, behind the API that the test rig
+([LEXTER-0010](Log.ScreenshotTestRig.md)) and the Origin integration use, and
+the code it duplicated is removed. The compositor gains
 the headless flag that LEXTER-O41 chose. The cell plan's Phase 1
 ([LEXTER-0017](Plan.CellModelRevision.md)) waits for this step, so that its
 repairs land once.
@@ -38,9 +44,10 @@ key encoding (`src/unix-term.lisp:*key-sequences*@2d4d743` beside
 `src/panes/vt-pane.lisp:*key-sequences*@2d4d743`), cursor blink, resize
 handling, palette upload, and `setup-default-swatches`
 (`src/unix-term.lisp:setup-default-swatches@2d4d743`,
-`src/panes/compositor.lisp:setup-default-swatches@2d4d743`). The critique
-found that every fix landed twice or landed once
-([LEXTER-0014](Eval.Critique.DataStructures1e.md), LEXTER-O36), and Phase 1
+`src/panes/compositor.lisp:setup-default-swatches@2d4d743`). The review
+cited in the plan found that every fix landed twice or landed once, and the
+critique traced the duplicated `setup-default-swatches` and default palettes
+([LEXTER-0014](Eval.Critique.DataStructures1e.md), LEXTER-O36); Phase 1
 changes the flush, the cursor, and the swatches in both. The standalone
 terminal's input handlers dereferenced a missing PTY in headless mode
 (LEXTER-O35), and the Origin integration read its cached screen slot, which
@@ -49,14 +56,8 @@ held the primary screen while the alternate one was shown (LEXTER-O29).
 ## Design Decisions
 
 The decision is LEXTER-D67, with LEXTER-O41's resolution, both in the plan.
-Choices made while building it:
+Choices made while building, within LEXTER-D67:
 
-- **The standalone terminal moves into `lexter/panes`.** The panes depended
-  on `lexter/unix`, which held the standalone terminal, so a terminal built on
-  the compositor cannot stay there. `lexter/unix` keeps the PTY and the VT
-  handler; `src/unix-term.lisp` loads at the end of `lexter/panes`, with its
-  package in a file of its own, `src/packages-unix-term.lisp`; and
-  `lexter/test` and `lexter/origin` depend on `lexter/panes`.
 - **A layout function on the compositor.** The compositor resized its grid
   but left the panes as they were, since a paned layout is the user's. The
   standalone terminal's one pane must follow the window, so the compositor
@@ -91,7 +92,35 @@ Choices made while building it:
   both names were exported before but defined nowhere (LEXTER-O37).
 
 As LEXTER-D67 foresaw, the standalone terminal gains what panes have: mouse
-reporting and wheel scrolling of the scrollback.
+reporting and wheel scrolling of the scrollback, which the pane-profiles plan
+provides ([LEXTER-DRAFT-pane-profiles](Plan.PaneProfiles.md)).
+
+Where the standalone terminal now lives is recorded as a decision of its own:
+
+### LEXTER-DRAFT-terminal-stacks-D1 — The standalone terminal moves into `lexter/panes`
+
+**Status:** Proposed
+
+**Context:** The standalone terminal was part of `lexter/unix`, with the PTY
+and the VT handler, and `lexter/panes` depended on `lexter/unix`. Once the
+terminal is built on the compositor (LEXTER-D67), it depends on
+`lexter/panes`, so it cannot stay in a system that `lexter/panes` depends on.
+Its callers, the test rig and the Origin integration, load it by system.
+
+**Decision:** `lexter/unix` keeps the PTY and the VT handler.
+`src/unix-term.lisp` loads at the end of `lexter/panes`, with its package,
+`lexter/unix-term`, in a file of its own, `src/packages-unix-term.lisp`; and
+`lexter/test` and `lexter/origin` depend on `lexter/panes`. Code that loaded
+`lexter/unix` to make a standalone terminal loads `lexter/panes` instead; the
+package and its functions keep their names.
+
+**Alternatives:**
+- The pane system moved into `lexter/unix`. Rejected: the backend system would
+  carry the compositor, the workspace, and every pane type, which the telnet
+  and 3270 panes build on without a PTY.
+- A system of its own for the standalone terminal, depending on
+  `lexter/panes`. Not chosen: one more system for its callers to load, for
+  some 260 lines that every caller loads with the panes already.
 
 ## Implementation
 
@@ -132,7 +161,8 @@ by `src/unix-term.lisp:terminal-screen@ee026f2` and
 `src/unix-term.lisp:terminal-pty@ee026f2`, and a reset is
 `src/unix-term.lisp:terminal-reset@ee026f2`. The `gui-*` methods delegate to the compositor;
 `terminal-capture` calls `compositor-capture`; recording uses the pane's VT
-handler; `terminal-config-plist` reads the compositor. Removed with the
+handler; `terminal-config-plist` reads the compositor. The `gui-*` protocol is
+the one [LEXTER-0005](Log.GUILifecycle.md) defines. Removed with the
 duplication: the terminal's own main loop, key table and encoder, character
 encoder, VT callback, PTY polling, cursor blink, resize handling, GLFW
 callbacks, and `setup-default-swatches`.
@@ -162,7 +192,8 @@ and `lexter/origin` depend on `lexter/panes`.
 
 ## Verification
 
-- **The regression suite.** `(asdf:test-system :lexter)` runs 120 checks: 35
+- **The regression suite** ([LEXTER-0020](Log.RegressionSuite.md)).
+  `(asdf:test-system :lexter)` runs 120 checks: 35
   pass and 85 fail, where 31 passed before. Four reproduction tests turn
   green, all owed to this step: the default swatches have one home
   (LEXTER-O36, in part), the Origin integration reads screens through the
@@ -211,13 +242,15 @@ Table: Files added or changed by the consolidation, in commit `ee026f2`.
 
 - **The palette half of LEXTER-O29.** The alternate screen still starts from
   the default palette; it is repaired with the VT handler's fixes
-  (LEXTER-D70).
+  (LEXTER-D70). Since done
+  ([LEXTER-DRAFT-swatch-ranges](Log.SwatchRanges.md)).
 - **The rest of LEXTER-O35.** Closing a PTY after its child's end of file
   still leaves the descriptor open and the child unreaped (LEXTER-D74).
 - **The default palette.** The compositor loads `make-xterm-palette` at
   initialisation, whose colour 7 differs from the model's default; the pane's
   palette replaces it at the first frame, but the two definitions remain until
-  LEXTER-O36's repair in Phase 1.
+  LEXTER-O36's repair in Phase 1. Since done
+  ([LEXTER-DRAFT-first-edition-repairs](Log.FirstEditionRepairs.md)).
 - **Globals.** `*prefix-key*` and `*cursor-blink-on*` are still set globally;
   LEXTER-D77 moves them into the compositor.
 - **The Origin tests' failures** are outside the cell-model and terminal-fixes

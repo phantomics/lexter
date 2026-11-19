@@ -6,11 +6,11 @@ scope:         component
 project:       Lexter
 component:     panes
 language:      en
-status:        Accepted
+status:        Implemented
 authors:
   - Andrew Sengul
 approved-by:   Andrew Sengul
-reviewed:      2026-11-05
+reviewed:      2026-11-19
 provenance:
   assistant:   opencode
 relates-to:

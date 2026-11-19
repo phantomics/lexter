@@ -2,20 +2,21 @@
 id:            LEXTER-DRAFT-pane-profiles-log
 title:         "Pane Profiles and Scrollback Viewing: Development Log"
 genre:         Log
-scope:         component
+scope:         project
 project:       Lexter
-component:     panes
 language:      en
 status:        Draft
 provenance:
   assistant:   opencode
-  session:     "Pane profiles and the history drawing (2026-11-17)"
+  session:     "Pane profiles and the history drawing (2026-11-17); review revisions (2026-11-19)"
 relates-to:
   - LEXTER-DRAFT-pane-profiles
   - LEXTER-0017
   - LEXTER-0014
   - LEXTER-0021
   - LEXTER-0020
+  - LEXTER-0010
+  - LEXTER-DRAFT-swatch-ranges
 ---
 
 # Pane Profiles and Scrollback Viewing: Development Log
@@ -45,11 +46,13 @@ first setting, needed a home that is not a global which instances write.
 
 ## Design Decisions
 
-The decisions are the plan's: LEXTER-DRAFT-pane-profiles-D1 to -D5 and -D7.
-The steward settled two of its open questions for this work: a workspace finds
-its compositor through a `workspace-compositor` slot
-(LEXTER-DRAFT-pane-profiles-O2), and the tests live in the Square suite
-(LEXTER-DRAFT-pane-profiles-O4). Choices made while building:
+The decisions are the plan's: LEXTER-DRAFT-pane-profiles-D1,
+LEXTER-DRAFT-pane-profiles-D2, LEXTER-DRAFT-pane-profiles-D3,
+LEXTER-DRAFT-pane-profiles-D4, LEXTER-DRAFT-pane-profiles-D5, and
+LEXTER-DRAFT-pane-profiles-D7. The steward settled two of its open questions
+for this work: a workspace finds its compositor through a
+`workspace-compositor` slot (LEXTER-DRAFT-pane-profiles-O2), and the tests
+live in the Square suite (LEXTER-DRAFT-pane-profiles-O4). Choices made while building:
 
 - **The compositor link is set at construction.** The lean of
   LEXTER-DRAFT-pane-profiles-O2 set the slot in
@@ -115,7 +118,8 @@ at the bottom of the bar for the live screen.
 
 ### Tests
 
-Two suites of `lexter/tests`. `profiles` (8 tests): the workspace's link to
+Two suites of `lexter/tests` ([LEXTER-0020](Log.RegressionSuite.md)).
+`profiles` (8 tests): the workspace's link to
 its compositor, defaults, the order pane, workspace, compositor, the parent
 chain before containment, a shared parent, a profile subclass with a setting
 of its own (`test-pane-profile`), unsetting, and type checks. `scrollback`
@@ -128,19 +132,21 @@ taken for a blank.
 
 ## Verification
 
-- **The suite.** `(asdf:test-system :lexter)` runs 72 tests and 155 checks: 70
-  checks pass and 85 fail, the same 85 as before. All 17 new tests pass.
+- **The suite.** `(asdf:test-system :lexter)` runs 73 tests and 155 checks: 70
+  checks pass and 85 fail, the same 85 as after the consolidation of the
+  terminal stacks ([LEXTER-0021](Log.TerminalStacks.md)). All 17 new tests
+  pass.
 - **The tests see the fault.** With the flush and the thumb of commit
   `ee026f2` restored, five of the nine scrollback tests fail: the views one and
   two lines back, the missing cursor, the padded line, and both thumbs.
-- **Pixels unchanged on the live view.** The test rig's three replayed
-  fixtures, in Terminus and Unifont, give the same six checksums as before.
+- **Pixels unchanged on the live view.** The test rig's
+  ([LEXTER-0010](Log.ScreenshotTestRig.md)) three replayed fixtures, in Terminus and Unifont, give the same six checksums as before.
 - **The other test systems.** `lexter/mouse-tests` passes, 32 checks;
   `lexter/origin-tests` gives its same 23 passes and 28 failures.
 
 ## Files
 
-Table: Files added or changed in the first two steps, in commit `6bac50d`.
+Table: Files added or changed in the first two steps: the code and tests in commit `6bac50d`, the documents in commit `2332136`.
 
 | File | Action | Description |
 |---|---|---|
@@ -156,7 +162,8 @@ Table: Files added or changed in the first two steps, in commit `6bac50d`.
 | `tests/helpers.lisp` | Modified | The suites `profiles` and `scrollback` |
 | `tests/test-profiles.lisp` | **New** | Profile tests |
 | `tests/test-scrollback.lisp` | **New** | History, wheel, and thumb tests |
-| `doc/Plan.PaneProfiles.md` | Modified | The resolutions of LEXTER-DRAFT-pane-profiles-O2 and -O4 |
+| `doc/Plan.PaneProfiles.md` | Modified | The resolutions of LEXTER-DRAFT-pane-profiles-O2 and LEXTER-DRAFT-pane-profiles-O4 |
+| `doc/Log.TerminalStacks.md` | Modified | Its code references pinned to commit `ee026f2` |
 
 ## Outstanding Work
 
@@ -168,7 +175,8 @@ Table: Files added or changed in the first two steps, in commit `6bac50d`.
   output arrives while scrolled back; the globals `*prefix-key*` and
   `*cursor-blink-on*` remain (LEXTER-D77); the redirect protocol's payload is
   unchanged; history cells carry their screen's swatch indices, and so share
-  the swatch faults that Phase 2 repairs; and the history is lossy, keeping no
+  the swatch faults that Phase 2 repairs (since done:
+  [LEXTER-DRAFT-swatch-ranges](Log.SwatchRanges.md)); and the history is lossy, keeping no
   wide glyphs or layers, until the second edition keeps it as text and styles
   (LEXTER-D118).
 - **The decision records' statuses.** The plan's decision records are marked

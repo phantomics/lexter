@@ -36,7 +36,7 @@ Table: Documents in the LEXTER namespace.
 | [LEXTER-DRAFT-first-edition-repairs](Log.FirstEditionRepairs.md) | The First Edition Repaired (Phase 1): Development Log | Log | project | Draft | — |
 | [LEXTER-DRAFT-mouse-reporting](Log.MouseReporting.md) | Mouse Reporting: Development Log | Log | component | Draft | vt |
 | [LEXTER-DRAFT-pane-profiles](Plan.PaneProfiles.md) | Pane Profiles and Scrollback Viewing: Development Plan | Plan | component | Accepted | panes |
-| [LEXTER-DRAFT-pane-profiles-log](Log.PaneProfiles.md) | Pane Profiles and Scrollback Viewing: Development Log | Log | component | Draft | panes |
+| [LEXTER-DRAFT-pane-profiles-log](Log.PaneProfiles.md) | Pane Profiles and Scrollback Viewing: Development Log | Log | project | Draft | — |
 | [LEXTER-DRAFT-swatch-ranges](Log.SwatchRanges.md) | Swatch Ranges (Phase 2): Development Log | Log | project | Draft | — |
 | [LEXTER-DRAFT-workspace-repaint](Log.WorkspaceRepaint.md) | The Workspace-Switch Repaint: Development Log | Log | project | Draft | — |
 

@@ -5,10 +5,14 @@ genre:         Log
 scope:         project
 project:       Lexter
 language:      en
-status:        Draft
+status:        Accepted
+authors:
+  - Andrew Sengul
+approved-by:   Andrew Sengul
+reviewed:      2026-11-19
 provenance:
   assistant:   opencode
-  session:     "Phase 2: swatch ranges (2026-11-17)"
+  session:     "Phase 2: swatch ranges (2026-11-17); review revisions and pixel fixtures (2026-11-19)"
 relates-to:
   - LEXTER-0017
   - LEXTER-0016
@@ -16,6 +20,8 @@ relates-to:
   - LEXTER-0014
   - LEXTER-0024
   - LEXTER-0020
+  - LEXTER-0010
+  - LEXTER-DRAFT-workspace-repaint
 ---
 
 # Swatch Ranges (Phase 2): Development Log
@@ -84,8 +90,9 @@ steward's direction:
   the first request and kept if the palette changes later.
 - **A released table interns nothing.** Asking it to signals an error, rather
   than writing into ranges another table may hold.
-- **The 3270 cursor exchanges slots,** as the model's cursor does
-  (LEXTER-D101), in place of interning a reversed swatch.
+- **The 3270 cursor exchanges slots,** as the model's cursor has done since
+  Phase 1 (LEXTER-D101, [LEXTER-0024](Log.FirstEditionRepairs.md)), in place
+  of interning a reversed swatch.
 
 ## Implementation
 
@@ -162,8 +169,10 @@ The grid loses its swatch data, count, and generation, and `set-swatch`,
 
 ### Elsewhere
 
-`src/width.lisp` declared its three tables inside a `let`, which a fresh
-compile reported as four undefined variables; they are now `defvar`s.
+`src/width.lisp`, written in Phase 1
+([LEXTER-0024](Log.FirstEditionRepairs.md)), declared its three tables inside
+a `multiple-value-bind`, which a fresh compile reported as four undefined
+variables; they are now `defvar`s.
 
 ### Tests
 
@@ -191,17 +200,50 @@ with the screen's default and checks that no cursor made the cell layered.
   LEXTER-O24, and LEXTER-O29 pass. The 14 tests that fail belong to the
   terminal-fixes plan (LEXTER-O21, LEXTER-O25, LEXTER-O31, LEXTER-O33,
   LEXTER-O34, LEXTER-O35), and fail as they did before the phase.
-- **Pixels.** In the test rig's hidden terminal, four fixtures of colours,
-  reverse video, cursor movement, and SGR 256 and truecolour; of OSC 4 palette
-  changes; of CJK text; and of the alternate screen give the checksums they gave
-  before the phase, in Terminus and in Unifont. Bytes divided by 255 are the
-  floats that were stored before.
-- **Order.** The fixtures, and a fifth that interns 2304 swatches and so needs
-  a second range, give the same checksums replayed in reverse order.
+- **The plan's conditions.** The plan counts Phase 2 complete when every
+  swatch writer interns into a table with its own range, nothing calls
+  `set-swatch` on a grid, and every upload record names its table. The
+  writers are listed under Panes; the structural test
+  `the-grid-holds-no-swatches` finds no `set-swatch` defined or called in any
+  source, nor any swatch data in the grid; and `plan-swatch-uploads` records
+  each range's table by its id and version.
+- **Pixels.** In the test rig's hidden terminal
+  ([LEXTER-0010](Log.ScreenshotTestRig.md)), of 40 columns by 8 rows, four
+  fixtures of colours, reverse video, cursor movement, and SGR 256 and
+  truecolour; of OSC 4 palette changes; of CJK text; and of the alternate
+  screen give the checksums they gave before the phase, in Terminus and in
+  Unifont. Bytes divided by 255 are the floats that were stored before. A
+  fifth fixture, which interns 2304 swatches and so needs a second range,
+  could not be replayed before the phase.
+- **Order.** The four original fixtures already gave the same checksums
+  replayed in reverse order before the phase: none of them happened to
+  trigger LEXTER-O23, so their order shows that nothing regressed, not the
+  repair, which the reproduction test
+  `replay-does-not-depend-on-earlier-fixtures` shows. The fifth fixture also
+  gives the same checksum in either order.
 - **The GPU's stores.** After every replay, `check-gpu-stores` finds every
   swatch held by a table, 2305 for the fifth fixture, equal on the GPU, and
   palette slot 0 and the terminal's slot equal to their sources. A cell drawn
   from range 2 shows palette colour 255.
+
+Table: Pixel checksums of the fixtures, on an NVIDIA GL 4.6 driver; the four original fixtures gave the same before the phase.
+
+| Fixture | Terminus | Unifont 17.0.04 |
+|---|---|---|
+| colours | `#x0AA0C7479DECC3D4` | `#xA1BF8B8BFCDCDFFA` |
+| palette | `#x6F228D86413D573C` | `#xC03D510C21B0C7FD` |
+| cjk | `#xD3758C95BC11B3B5` | `#xE04CD998C68F6774` |
+| alt | `#x1E7393F293E8303D` | `#xF4D9A7010B64A71F` |
+| many | `#xFF822E35378CA846` | `#xD790B48E4BBF36CD` |
+
+- **The fixtures kept.** The five fixtures were first byte streams in a script
+  outside the repository. In review they were written, from the same bytes,
+  as the test rig's blobs in `tests/fixtures/`, with
+  `tools/check-pixel-fixtures.lisp`, which replays them in order and in
+  reverse in each font, checks the checksums above, and compares the GPU's
+  stores after each replay; it reproduces every checksum. The checksums hold
+  on the driver they were taken on, until Phase 3 re-authors the fixtures on a
+  pinned llvmpipe (LEXTER-D112).
 - **Running.** Both demos and a terminal running `/bin/sh` draw without error.
 - **The other test systems.** `lexter/mouse-tests` passes, 32 checks;
   `lexter/origin-tests` gives its same 23 passes and 28 failures.
@@ -210,7 +252,7 @@ with the screen's default and checks that no cursor made the cell layered.
 
 ## Files
 
-Table: Files added or changed in Phase 2, in commit `8451a08`.
+Table: Files added or changed in Phase 2: the code and tests in commit `8451a08`, the documents in commit `0dc327c`, and the pixel fixtures in review.
 
 | File | Action | Description |
 |---|---|---|
@@ -233,6 +275,11 @@ Table: Files added or changed in Phase 2, in commit `8451a08`.
 | `tests/test-swatches.lisp` | Modified | The swatch suite rewritten and extended |
 | `tests/test-structure.lisp` | Modified | Global swatch 0; no swatches in the grid |
 | `tests/test-scrollback.lisp` | Modified | The cursor test compares the screen's default swatch |
+| `doc/Plan.CellModelRevision.md` | Modified | LEXTER-D123 amended to name function panes; the early parts of LEXTER-D92 recorded in Swatch Ranges |
+| `doc/Log.FirstEditionRepairs.md` | Modified | A "Since done" pointer to this Log |
+| `doc/Plan.TerminalFixes1e.md` | Modified | LEXTER-D77's cross-reference to this Log |
+| `tests/fixtures/colours.ptyb`, `palette.ptyb`, `cjk.ptyb`, `alt.ptyb`, `many.ptyb` | **New** | The pixel fixtures, as the test rig's blobs |
+| `tools/check-pixel-fixtures.lisp` | **New** | Replays the fixtures and checks their checksums and the GPU's stores |
 
 ## Outstanding Work
 
@@ -259,4 +306,7 @@ Table: Files added or changed in Phase 2, in commit `8451a08`.
   slot the terminal draws in, after one replay.
 - **Phase 3's gate.** LEXTER-O57, LEXTER-O61, LEXTER-O63, and LEXTER-O66,
   with where the grid lives (LEXTER-O65), and the terminal-fixes plan's
-  workspace-switch repaint (LEXTER-D71).
+  workspace-switch repaint (LEXTER-D71). Since done: the questions are
+  settled by LEXTER-D124 to LEXTER-D129, all but how the characters that join
+  a cell are drawn, which the gate lets wait; and the repaint has landed
+  ([LEXTER-DRAFT-workspace-repaint](Log.WorkspaceRepaint.md)).

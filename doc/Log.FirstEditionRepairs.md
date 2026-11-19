@@ -29,7 +29,7 @@ This document records Phase 1 of the cell-model revision
 repaired in place for the cell-model findings of the critique
 ([LEXTER-0014](Eval.Critique.DataStructures1e.md)), LEXTER-O19, LEXTER-O26,
 LEXTER-O27, LEXTER-O28, LEXTER-O36, and LEXTER-O40, as LEXTER-D97 decides,
-with the width table of LEXTER-D117 and LEXTER-DRAFT-cell-model-revision-D23,
+with the width table of LEXTER-D117 and LEXTER-D122,
 the atlas's reserved positions of LEXTER-D89, and the cursor of LEXTER-D101.
 Every reproduction test of those findings that Phase 0 wrote
 ([LEXTER-DRAFT-regression-suite](Log.RegressionSuite.md)) now passes.
@@ -51,7 +51,7 @@ cursor, and widths came from the font that happened to be loaded.
 ## Design Decisions
 
 The decisions are the plan's and the architecture's: LEXTER-D97, LEXTER-D98,
-LEXTER-D101, LEXTER-D117, LEXTER-DRAFT-cell-model-revision-D23, and
+LEXTER-D101, LEXTER-D117, LEXTER-D122, and
 LEXTER-D89. Choices made while building:
 
 - **The data files by checksum.** At the steward's choice, the Unicode 17.0
@@ -78,7 +78,7 @@ LEXTER-D89. Choices made while building:
   diagonals; where the cell is too narrow for the diagonals to show inside the
   box, the box is filled, and where even the box is solid, the glyph is a
   checkerboard, so that the two are always told apart.
-- **A wide uncovered character.** LEXTER-DRAFT-cell-model-revision-D23 draws
+- **A wide uncovered character.** LEXTER-D122 draws
   the "no glyph" glyph in each cell of a wide character. The first edition
   draws a pair as one instance two cells wide from its left half's glyph, so
   the box shows in the left cell and the right cell is empty; the halves of

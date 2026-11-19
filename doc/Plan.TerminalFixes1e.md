@@ -12,7 +12,7 @@ approved-by:   Andrew Sengul
 reviewed:      2026-11-05
 provenance:
   assistant:   opencode
-  session:     "Terminal fixes plan (2026-11-02); the headless flag (2026-11-17)"
+  session:     "Terminal fixes plan (2026-11-02); the headless flag (2026-11-17); the protocol tests' loopback peer (2026-11-19)"
 relates-to:
   - LEXTER-0014
   - LEXTER-DRAFT-data-structures-1e
@@ -22,6 +22,7 @@ relates-to:
   - LEXTER-0005
   - LEXTER-0006
   - LEXTER-0010
+  - LEXTER-DRAFT-regression-suite
 decisions:
   - LEXTER-D66
   - LEXTER-D67
@@ -38,6 +39,7 @@ decisions:
   - LEXTER-D78
   - LEXTER-D79
   - LEXTER-D80
+  - LEXTER-DRAFT-terminal-fixes-1e-D16
 open-questions:
   - LEXTER-O41
   - LEXTER-O42
@@ -248,7 +250,7 @@ OSC 4 changes made before it existed are lost inside it
 of the handler, and every reader, the Origin integration included, asks the
 handler for the active screen. The alternate screen is created with a copy of
 the primary's palette. The two screens also share one swatch table, as the cell
-plan's LEXTER-O58 resolves (LEXTER-DRAFT-cell-model-revision-D24).
+plan's LEXTER-O58 resolves (LEXTER-D123).
 
 **Alternatives:**
 - Keep the slot and update it on every swap. Rejected: it is a second copy
@@ -464,6 +466,38 @@ the telnet fixes against an in-memory stream.
 **Alternatives:**
 - Test the protocols only against live servers. Rejected: the tests would
   depend on the network and on servers outside the project.
+
+How the protocol tests reach the client is amended by
+LEXTER-DRAFT-terminal-fixes-1e-D16: a scripted peer over a loopback socket,
+in place of the recorded negotiation and the in-memory stream. The rest of
+this decision stands.
+
+### LEXTER-DRAFT-terminal-fixes-1e-D16 — The protocol tests talk to a scripted peer over a loopback socket
+
+**Status:** Proposed
+
+**Context:** LEXTER-D80 has the TN3270E fix tested against a recorded
+negotiation and the telnet fixes against an in-memory stream. When the tests
+were written, no TN3270E server was at hand to record a negotiation from. The
+in-memory stream would exercise the telnet client's string writer, which
+LEXTER-D73 moves into the pane, so a test of it would not test what the pane
+sends ([LEXTER-DRAFT-regression-suite](Log.RegressionSuite.md)).
+
+**Decision:** The TN3270 and telnet tests connect the real client, and a real
+telnet pane, over a loopback socket in the same image, to a peer in the test
+that sends the server's side of the exchange, as RFC 2355 lays out the
+TN3270E negotiation (`tests/helpers.lisp:with-loopback-listener@7de1459`,
+`tests/helpers.lisp:exchange@7de1459`). The tests stay hermetic: they use only
+the loopback interface and need no server outside the test. A recording from
+a real TN3270E server replaces the scripted peer's side when one is made.
+
+**Alternatives:**
+- A recorded negotiation, as LEXTER-D80 had it. Not
+  possible when the tests were written, for want of a server; kept as the
+  later replacement for the scripted side.
+- An in-memory stream for the telnet tests, as LEXTER-D80
+  had it. Not chosen: it would test the client's string writer rather than
+  what the pane sends.
 
 ## The Consolidated Stack
 

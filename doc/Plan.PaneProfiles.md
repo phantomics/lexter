@@ -490,7 +490,7 @@ the display grid is plain arrays.
 
 **Resolution:** 2026-11-17 — accepted, recorded at the steward's direction:
 the Square suite `lexter/tests`, which the cell-model plan's Phase 0 created
-(LEXTER-DRAFT-cell-model-revision-D21 in
+(LEXTER-D120 in
 [LEXTER-0017](Plan.CellModelRevision.md)), in the suites `profiles` and
 `scrollback`. The tests use a terminal pane with no PTY, fed through its VT
 handler, which needs no backend of its own.

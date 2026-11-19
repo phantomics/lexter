@@ -24,7 +24,7 @@ This document records Phase 2 of the cell-model revision
 ([LEXTER-0017](Plan.CellModelRevision.md)): every swatch table given one owner
 and ranges of one GPU store (LEXTER-D99), screens storing global indices
 (LEXTER-D100), ranges sized and the display given a table of its own as
-LEXTER-DRAFT-cell-model-revision-D24 decides, and palettes and swatches kept on
+LEXTER-D123 decides, and palettes and swatches kept on
 the GPU as integers (LEXTER-D109). The reproduction tests of LEXTER-O22,
 LEXTER-O23, and LEXTER-O24 that Phase 0 wrote
 ([LEXTER-DRAFT-regression-suite](Log.RegressionSuite.md)) now pass, and so does
@@ -47,7 +47,7 @@ uniform buffer of floats with room for four.
 ## Design Decisions
 
 The decisions are the plan's and the architecture's: LEXTER-D99, LEXTER-D100,
-LEXTER-D109, LEXTER-DRAFT-cell-model-revision-D24, and, for palette slot 0,
+LEXTER-D109, LEXTER-D123, and, for palette slot 0,
 LEXTER-D83 and LEXTER-D92. Choices made while building, the first four at the
 steward's direction:
 
@@ -58,7 +58,7 @@ steward's direction:
   keep their ranges and upload records apart.
 - **Function panes draw in the display's table.** They have no screen and draw
   straight into the grid, as decorators do, and cost no range;
-  LEXTER-DRAFT-cell-model-revision-D24 is amended to name them.
+  LEXTER-D123 is amended to name them.
 - **`display-swatch`.** Chrome, decorators, workspace clears, and function
   panes take their swatches from
   `src/panes/compositor.lisp:display-swatch@8451a08`, given a compositor, a
@@ -248,6 +248,15 @@ Table: Files added or changed in Phase 2, in commit `8451a08`.
   pane draw in its own.
 - **The 3270 pane's table is untested,** since the suite does not load the
   3270 pane, whose initialization connects to a host.
+- **The palette half of LEXTER-O23 is untested.** Two screens' palette
+  generations can be equal for different palettes, which the regression
+  suite's Log left to be tested once uploads are recorded by owner
+  ([LEXTER-DRAFT-regression-suite](Log.RegressionSuite.md)). The renderer now
+  records them (`src/renderer.lisp:upload-palette@8451a08`), but its decision
+  is made beside the GL calls, so no headless test reaches it; separating the
+  decision from the upload, as `plan-swatch-uploads` is separated for
+  swatches, would let the suite test it. `check-gpu-stores` compares only the
+  slot the terminal draws in, after one replay.
 - **Phase 3's gate.** LEXTER-O57, LEXTER-O61, LEXTER-O63, and LEXTER-O66,
   with where the grid lives (LEXTER-O65), and the terminal-fixes plan's
   workspace-switch repaint (LEXTER-D71).

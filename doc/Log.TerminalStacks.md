@@ -20,7 +20,7 @@ relates-to:
   - LEXTER-0005
   - LEXTER-0010
   - LEXTER-0020
-  - LEXTER-DRAFT-pane-profiles
+  - LEXTER-0022
   - LEXTER-DRAFT-first-edition-repairs
   - LEXTER-DRAFT-swatch-ranges
 decisions:
@@ -97,7 +97,7 @@ Choices made while building, within LEXTER-D67:
 
 As LEXTER-D67 foresaw, the standalone terminal gains what panes have: mouse
 reporting and wheel scrolling of the scrollback, which the pane-profiles plan
-provides ([LEXTER-DRAFT-pane-profiles](Plan.PaneProfiles.md)).
+provides ([LEXTER-0022](Plan.PaneProfiles.md)).
 
 Where the standalone terminal now lives is recorded as a decision of its own:
 

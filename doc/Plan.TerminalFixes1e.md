@@ -17,7 +17,7 @@ relates-to:
   - LEXTER-0014
   - LEXTER-DRAFT-data-structures-1e
   - LEXTER-0017
-  - LEXTER-DRAFT-pane-profiles
+  - LEXTER-0022
   - LEXTER-0013
   - LEXTER-0005
   - LEXTER-0006
@@ -136,8 +136,8 @@ LEXTER-D96 keeps to the cell model and leaves the
 other fixes to a separate plan. One finding in
 that set, the scrollback viewport and the inverted scroll-bar thumb
 (LEXTER-O30), is already planned in
-[LEXTER-DRAFT-pane-profiles](Plan.PaneProfiles.md), whose
-LEXTER-DRAFT-pane-profiles-D5 draws the history and whose Scrollback Viewing
+[LEXTER-0022](Plan.PaneProfiles.md), whose
+LEXTER-D136 draws the history and whose Scrollback Viewing
 section inverts the thumb.
 
 **Decision:** This plan covers the critique's LEXTER-O21, LEXTER-O25,
@@ -543,7 +543,7 @@ names it uses, and reads screens through the handler
   model.
 - **The pane-profiles plan.** It owns
   LEXTER-O30. Its workspace-to-compositor
-  reference (LEXTER-DRAFT-pane-profiles-O2) would answer this plan's
+  reference (LEXTER-O81) would answer this plan's
   LEXTER-O42, and its profiles would hold the prefix
   key (LEXTER-D77). Both it and the cell plan's Phase
   1 change `flush-to-display`, so their order is settled when the phases are
@@ -582,7 +582,7 @@ it; a compositor that is not headless stops when every pane is dead, as now.
 
 The title and the prefix key need the compositor that owns a pane. Panes
 refer to their workspace; the pane-profiles plan leans to a
-`workspace-compositor` slot (LEXTER-DRAFT-pane-profiles-O2), which would
+`workspace-compositor` slot (LEXTER-O81), which would
 serve here too.
 
 ### LEXTER-O43 — What does an oversized TN3270 record do?

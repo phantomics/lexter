@@ -17,7 +17,7 @@ relates-to:
   - LEXTER-DRAFT-cell-field-format
   - LEXTER-DRAFT-data-structures-1e
   - LEXTER-0014
-  - LEXTER-DRAFT-pane-profiles
+  - LEXTER-0022
   - LEXTER-0004
   - LEXTER-0008
   - LEXTER-0007
@@ -82,7 +82,7 @@ this survey asks what a second edition's cell could be, and maps the findings
 of that critique and of an earlier review onto the dense design. Its main
 finding is that the dense design keeps cells consistent by construction but
 depends on settled ownership of the swatches, which must come first. Scroll
-bars of the kind [LEXTER-DRAFT-pane-profiles](Plan.PaneProfiles.md) leaves to
+bars of the kind [LEXTER-0022](Plan.PaneProfiles.md) leaves to
 decorators are its first use case.
 
 ## Motivation
@@ -1010,7 +1010,7 @@ Within Lexter:
   terminals own colour and glyph data across panes and the GPU. This survey
   covers how glyphs are stored and drawn; how other terminals own colour data
   across panes and the GPU remains unsurveyed.
-- [LEXTER-DRAFT-pane-profiles](Plan.PaneProfiles.md) leaves scroll bars to
+- [LEXTER-0022](Plan.PaneProfiles.md) leaves scroll bars to
   decorators, which would write masked cells.
 - [LEXTER-DRAFT-cell-field-format](Survey.CellFieldFormat.md) proposes the
   dense record's layout and the swatch store whose ranges Swatch Ownership

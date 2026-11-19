@@ -5,12 +5,16 @@ genre:         Log
 scope:         project
 project:       Lexter
 language:      en
-status:        Draft
+status:        Implemented
+authors:
+  - Andrew Sengul
+approved-by:   Andrew Sengul
+reviewed:      2026-11-05
 provenance:
   assistant:   opencode
   session:     "Pane profiles and the history drawing (2026-11-17); review revisions (2026-11-19)"
 relates-to:
-  - LEXTER-DRAFT-pane-profiles
+  - LEXTER-0022
   - LEXTER-0017
   - LEXTER-0014
   - LEXTER-0021
@@ -22,7 +26,7 @@ relates-to:
 # Pane Profiles and Scrollback Viewing: Development Log
 
 This document records the first two steps of the pane-profiles plan
-([LEXTER-DRAFT-pane-profiles](Plan.PaneProfiles.md)): pane profiles, typed
+([LEXTER-0022](Plan.PaneProfiles.md)): pane profiles, typed
 settings inherited through parent profiles and then through containment; and
 the drawing of a pane's history, so that the mouse wheel scrolls back through
 it, with the scroll-bar thumb turned the right way up. Together they repair
@@ -46,16 +50,16 @@ first setting, needed a home that is not a global which instances write.
 
 ## Design Decisions
 
-The decisions are the plan's: LEXTER-DRAFT-pane-profiles-D1,
-LEXTER-DRAFT-pane-profiles-D2, LEXTER-DRAFT-pane-profiles-D3,
-LEXTER-DRAFT-pane-profiles-D4, LEXTER-DRAFT-pane-profiles-D5, and
-LEXTER-DRAFT-pane-profiles-D7. The steward settled two of its open questions
+The decisions are the plan's: LEXTER-D132,
+LEXTER-D133, LEXTER-D134,
+LEXTER-D135, LEXTER-D136, and
+LEXTER-D138. The steward settled two of its open questions
 for this work: a workspace finds its compositor through a
-`workspace-compositor` slot (LEXTER-DRAFT-pane-profiles-O2), and the tests
-live in the Square suite (LEXTER-DRAFT-pane-profiles-O4). Choices made while building:
+`workspace-compositor` slot (LEXTER-O81), and the tests
+live in the Square suite (LEXTER-O83). Choices made while building:
 
 - **The compositor link is set at construction.** The lean of
-  LEXTER-DRAFT-pane-profiles-O2 set the slot in
+  LEXTER-O81 set the slot in
   `gui-initialize`; it is set in `make-paned-compositor` instead, where the
   compositor first receives its workspaces, so that settings resolve before a
   window exists.
@@ -70,7 +74,7 @@ live in the Square suite (LEXTER-DRAFT-pane-profiles-O4). Choices made while bui
 - **Sharing by initarg.** Panes and workspaces take `:profile-parent`, which
   becomes the parent of their private profile. Settings are not initargs of
   the panes; they are set with the writers.
-- **The arrow keys take the factor too.** LEXTER-DRAFT-pane-profiles-D7 makes
+- **The arrow keys take the factor too.** LEXTER-D138 makes
   the lines per notch apply to the history and to the arrow keys sent in the
   alternate screen; both are built, and a report to an application stays one
   event per notch.
@@ -162,15 +166,15 @@ Table: Files added or changed in the first two steps: the code and tests in comm
 | `tests/helpers.lisp` | Modified | The suites `profiles` and `scrollback` |
 | `tests/test-profiles.lisp` | **New** | Profile tests |
 | `tests/test-scrollback.lisp` | **New** | History, wheel, and thumb tests |
-| `doc/Plan.PaneProfiles.md` | Modified | The resolutions of LEXTER-DRAFT-pane-profiles-O2 and LEXTER-DRAFT-pane-profiles-O4 |
+| `doc/Plan.PaneProfiles.md` | Modified | The resolutions of LEXTER-O81 and LEXTER-O83 |
 | `doc/Log.TerminalStacks.md` | Modified | Its code references pinned to commit `ee026f2` |
 
 ## Outstanding Work
 
 - **The plan's remaining steps.** Snapping on input and output
-  (LEXTER-DRAFT-pane-profiles-D6), unseen output
-  (LEXTER-DRAFT-pane-profiles-D8, with -O1), and terminal events
-  (LEXTER-DRAFT-pane-profiles-D9).
+  (LEXTER-D137), unseen output
+  (LEXTER-D139, with -O1), and terminal events
+  (LEXTER-D140).
 - **The plan's non-goals**, carried here as the plan asks: the view drifts as
   output arrives while scrolled back; the globals `*prefix-key*` and
   `*cursor-blink-on*` remain (LEXTER-D77); the redirect protocol's payload is
@@ -181,8 +185,8 @@ Table: Files added or changed in the first two steps: the code and tests in comm
   (LEXTER-D118).
 - **The decision records' statuses.** The plan's decision records are marked
   Implemented, though before this work none was built:
-  LEXTER-DRAFT-pane-profiles-D1 to LEXTER-DRAFT-pane-profiles-D5 and
-  LEXTER-DRAFT-pane-profiles-D7 are built now, and
-  LEXTER-DRAFT-pane-profiles-D6, LEXTER-DRAFT-pane-profiles-D8, and
-  LEXTER-DRAFT-pane-profiles-D9 are not. Their statuses are for the steward to
+  LEXTER-D132 to LEXTER-D136 and
+  LEXTER-D138 are built now, and
+  LEXTER-D137, LEXTER-D139, and
+  LEXTER-D140 are not. Their statuses are for the steward to
   set.

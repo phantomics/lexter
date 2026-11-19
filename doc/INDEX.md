@@ -31,12 +31,12 @@ Table: Documents in the LEXTER namespace.
 | [LEXTER-0019](Survey.HostProtocol.md) | Exposing Lexter's Colour and Graphics to Hosts: Survey | Survey | project | Accepted | — |
 | [LEXTER-0020](Log.RegressionSuite.md) | Regression Suite (Phase 0): Development Log | Log | project | Accepted | — |
 | [LEXTER-0021](Log.TerminalStacks.md) | Consolidating the Terminal Stacks: Development Log | Log | project | Accepted | — |
+| [LEXTER-0022](Plan.PaneProfiles.md) | Pane Profiles and Scrollback Viewing: Development Plan | Plan | component | Accepted | panes |
 | [LEXTER-DRAFT-cell-field-format](Survey.CellFieldFormat.md) | Cell Field Format: Survey | Survey | component | Deprecated | renderer |
 | [LEXTER-DRAFT-data-structures-1e](Spec.DataStructures1e.md) | Data Structures, First Edition: Specification | Spec | project | Deprecated | — |
 | [LEXTER-DRAFT-first-edition-repairs](Log.FirstEditionRepairs.md) | The First Edition Repaired (Phase 1): Development Log | Log | project | Draft | — |
 | [LEXTER-DRAFT-mouse-reporting](Log.MouseReporting.md) | Mouse Reporting: Development Log | Log | component | Draft | vt |
-| [LEXTER-DRAFT-pane-profiles](Plan.PaneProfiles.md) | Pane Profiles and Scrollback Viewing: Development Plan | Plan | component | Accepted | panes |
-| [LEXTER-DRAFT-pane-profiles-log](Log.PaneProfiles.md) | Pane Profiles and Scrollback Viewing: Development Log | Log | project | Draft | — |
+| [LEXTER-DRAFT-pane-profiles-log](Log.PaneProfiles.md) | Pane Profiles and Scrollback Viewing: Development Log | Log | project | Implemented | — |
 | [LEXTER-DRAFT-swatch-ranges](Log.SwatchRanges.md) | Swatch Ranges (Phase 2): Development Log | Log | project | Draft | — |
 | [LEXTER-DRAFT-workspace-repaint](Log.WorkspaceRepaint.md) | The Workspace-Switch Repaint: Development Log | Log | project | Draft | — |
 
@@ -175,6 +175,15 @@ Table: Decision, open-question, and memo records in the LEXTER namespace.
 | [LEXTER-D129](Plan.CellModelRevision.md#lexter-d129--the-composed-grid-lives-in-a-lisp-array-behind-generated-accessors) | Decision | The composed grid lives in a Lisp array, behind generated accessors | Accepted | LEXTER-0017 |
 | [LEXTER-D130](Plan.CellModelRevision.md#lexter-d130--the-descriptor-is-a-set-of-specops-manifests-in-8-bit-units-and-the-shader-is-written-against-it-by-hand) | Decision | The descriptor is a set of SpecOps manifests in 8-bit units, and the shader is written against it by hand | Accepted | LEXTER-0017 |
 | [LEXTER-D131](Log.TerminalStacks.md#lexter-d131--the-standalone-terminal-moves-into-lexterpanes) | Decision | The standalone terminal moves into lexter/panes | Proposed | LEXTER-0021 |
+| [LEXTER-D132](Plan.PaneProfiles.md#lexter-d132--settings-live-in-pane-profile-objects) | Decision | Settings live in pane-profile objects | Implemented | LEXTER-0022 |
+| [LEXTER-D133](Plan.PaneProfiles.md#lexter-d133--resolution-walks-parent-links-then-containment) | Decision | Resolution walks parent links, then containment | Implemented | LEXTER-0022 |
+| [LEXTER-D134](Plan.PaneProfiles.md#lexter-d134--each-object-owns-a-private-profile-writers-write-it) | Decision | Each object owns a private profile; writers write it | Implemented | LEXTER-0022 |
+| [LEXTER-D135](Plan.PaneProfiles.md#lexter-d135--one-generic-reader-per-setting-defined-by-one-macro) | Decision | One generic reader per setting, defined by one macro | Implemented | LEXTER-0022 |
+| [LEXTER-D136](Plan.PaneProfiles.md#lexter-d136--the-history-is-drawn-by-flush-to-display) | Decision | The history is drawn by flush-to-display | Implemented | LEXTER-0022 |
+| [LEXTER-D137](Plan.PaneProfiles.md#lexter-d137--typing-returns-the-view-to-live-output-does-not) | Decision | Typing returns the view to live; output does not | Implemented | LEXTER-0022 |
+| [LEXTER-D138](Plan.PaneProfiles.md#lexter-d138--the-wheel-factor-applies-to-local-scrolling-only) | Decision | The wheel factor applies to local scrolling only | Implemented | LEXTER-0022 |
+| [LEXTER-D139](Plan.PaneProfiles.md#lexter-d139--unseen-output-is-pane-state-polled-by-the-decorator) | Decision | Unseen output is pane state, polled by the decorator | Implemented | LEXTER-0022 |
+| [LEXTER-D140](Plan.PaneProfiles.md#lexter-d140--terminal-events-reach-the-apl-layer-through-a-generic-function) | Decision | Terminal events reach the APL layer through a generic function | Implemented | LEXTER-0022 |
 | [LEXTER-DRAFT-mouse-reporting-D1](Log.MouseReporting.md#lexter-draft-mouse-reporting-d1--coordinates-are-pane-content-relative) | Decision | Coordinates are pane-content-relative | Proposed | LEXTER-DRAFT-mouse-reporting |
 | [LEXTER-DRAFT-mouse-reporting-D2](Log.MouseReporting.md#lexter-draft-mouse-reporting-d2--drag-capture) | Decision | Drag capture | Proposed | LEXTER-DRAFT-mouse-reporting |
 | [LEXTER-DRAFT-mouse-reporting-D3](Log.MouseReporting.md#lexter-draft-mouse-reporting-d3--cell-granularity-motion) | Decision | Cell-granularity motion | Proposed | LEXTER-DRAFT-mouse-reporting |
@@ -182,15 +191,6 @@ Table: Decision, open-question, and memo records in the LEXTER namespace.
 | [LEXTER-DRAFT-mouse-reporting-D5](Log.MouseReporting.md#lexter-draft-mouse-reporting-d5--direct-host-write-back) | Decision | Direct host write-back | Proposed | LEXTER-DRAFT-mouse-reporting |
 | [LEXTER-DRAFT-mouse-reporting-D6](Log.MouseReporting.md#lexter-draft-mouse-reporting-d6--substrate-fall-through) | Decision | Substrate fall-through | Proposed | LEXTER-DRAFT-mouse-reporting |
 | [LEXTER-DRAFT-mouse-reporting-D7](Log.MouseReporting.md#lexter-draft-mouse-reporting-d7--redirect-captures-the-pointer-too) | Decision | Redirect captures the pointer too | Proposed | LEXTER-DRAFT-mouse-reporting |
-| [LEXTER-DRAFT-pane-profiles-D1](Plan.PaneProfiles.md#lexter-draft-pane-profiles-d1--settings-live-in-pane-profile-objects) | Decision | Settings live in pane-profile objects | Implemented | LEXTER-DRAFT-pane-profiles |
-| [LEXTER-DRAFT-pane-profiles-D2](Plan.PaneProfiles.md#lexter-draft-pane-profiles-d2--resolution-walks-parent-links-then-containment) | Decision | Resolution walks parent links, then containment | Implemented | LEXTER-DRAFT-pane-profiles |
-| [LEXTER-DRAFT-pane-profiles-D3](Plan.PaneProfiles.md#lexter-draft-pane-profiles-d3--each-object-owns-a-private-profile-writers-write-it) | Decision | Each object owns a private profile; writers write it | Implemented | LEXTER-DRAFT-pane-profiles |
-| [LEXTER-DRAFT-pane-profiles-D4](Plan.PaneProfiles.md#lexter-draft-pane-profiles-d4--one-generic-reader-per-setting-defined-by-one-macro) | Decision | One generic reader per setting, defined by one macro | Implemented | LEXTER-DRAFT-pane-profiles |
-| [LEXTER-DRAFT-pane-profiles-D5](Plan.PaneProfiles.md#lexter-draft-pane-profiles-d5--the-history-is-drawn-by-flush-to-display) | Decision | The history is drawn by flush-to-display | Implemented | LEXTER-DRAFT-pane-profiles |
-| [LEXTER-DRAFT-pane-profiles-D6](Plan.PaneProfiles.md#lexter-draft-pane-profiles-d6--typing-returns-the-view-to-live-output-does-not) | Decision | Typing returns the view to live; output does not | Implemented | LEXTER-DRAFT-pane-profiles |
-| [LEXTER-DRAFT-pane-profiles-D7](Plan.PaneProfiles.md#lexter-draft-pane-profiles-d7--the-wheel-factor-applies-to-local-scrolling-only) | Decision | The wheel factor applies to local scrolling only | Implemented | LEXTER-DRAFT-pane-profiles |
-| [LEXTER-DRAFT-pane-profiles-D8](Plan.PaneProfiles.md#lexter-draft-pane-profiles-d8--unseen-output-is-pane-state-polled-by-the-decorator) | Decision | Unseen output is pane state, polled by the decorator | Implemented | LEXTER-DRAFT-pane-profiles |
-| [LEXTER-DRAFT-pane-profiles-D9](Plan.PaneProfiles.md#lexter-draft-pane-profiles-d9--terminal-events-reach-the-apl-layer-through-a-generic-function) | Decision | Terminal events reach the APL layer through a generic function | Implemented | LEXTER-DRAFT-pane-profiles |
 | [LEXTER-DRAFT-terminal-fixes-1e-D16](Plan.TerminalFixes1e.md#lexter-draft-terminal-fixes-1e-d16--the-protocol-tests-talk-to-a-scripted-peer-over-a-loopback-socket) | Decision | The protocol tests talk to a scripted peer over a loopback socket | Proposed | LEXTER-0015 |
 | [LEXTER-O1](Log.EncodingRanges.md#lexter-o1--where-utf-8-is-decoded-relative-to-cl-vt) | Open question | Where UTF-8 is decoded relative to cl-vt | — | LEXTER-0009 |
 | [LEXTER-O2](Plan.CompassMigration.md#lexter-o2--which-documents-are-numbered-first) | Open question | Which documents are numbered first | — | LEXTER-0011 |
@@ -271,6 +271,10 @@ Table: Decision, open-question, and memo records in the LEXTER namespace.
 | [LEXTER-O77](Arch.CellModel.md#lexter-o77--may-a-cell-address-its-swatches-as-a-run) | Open question | May a cell address its swatches as a run? | — | LEXTER-0016 |
 | [LEXTER-O78](Arch.CellModel.md#lexter-o78--should-a-palette-change-damage-only-the-rows-that-use-its-slot) | Open question | Should a palette change damage only the rows that use its slot? | — | LEXTER-0016 |
 | [LEXTER-O79](Plan.CellModelRevision.md#lexter-o79--should-a-characters-width-come-from-unicodes-tables-rather-than-the-atlas) | Open question | Should a character's width come from Unicode's tables rather than the atlas? | — | LEXTER-0017 |
+| [LEXTER-O80](Plan.PaneProfiles.md#lexter-o80--should-unseen-output-be-a-flag-or-a-line-count) | Open question | Should unseen output be a flag or a line count? | — | LEXTER-0022 |
+| [LEXTER-O81](Plan.PaneProfiles.md#lexter-o81--how-does-a-workspace-find-its-compositor) | Open question | How does a workspace find its compositor? | — | LEXTER-0022 |
+| [LEXTER-O82](Plan.PaneProfiles.md#lexter-o82--which-other-settings-move-into-profiles) | Open question | Which other settings move into profiles? | — | LEXTER-0022 |
+| [LEXTER-O83](Plan.PaneProfiles.md#lexter-o83--where-do-the-tests-live) | Open question | Where do the tests live? | — | LEXTER-0022 |
 | [LEXTER-DRAFT-cell-field-format-O1](Survey.CellFieldFormat.md#lexter-draft-cell-field-format-o1--is-index-0-transparent-in-tile-mode) | Open question | Is index 0 transparent in tile mode? | — | LEXTER-DRAFT-cell-field-format |
 | [LEXTER-DRAFT-cell-field-format-O2](Survey.CellFieldFormat.md#lexter-draft-cell-field-format-o2--which-scales-and-cell-sizes-does-tile-mode-support) | Open question | Which scales and cell sizes does tile mode support? | — | LEXTER-DRAFT-cell-field-format |
 | [LEXTER-DRAFT-cell-field-format-O3](Survey.CellFieldFormat.md#lexter-draft-cell-field-format-o3--should-the-wide-bits-become-a-tile-position) | Open question | Should the wide bits become a tile position? | — | LEXTER-DRAFT-cell-field-format |
@@ -283,7 +287,3 @@ Table: Decision, open-question, and memo records in the LEXTER namespace.
 | [LEXTER-DRAFT-cell-field-format-O10](Survey.CellFieldFormat.md#lexter-draft-cell-field-format-o10--how-is-a-surfaces-geometry-kept-consistent-with-its-cells) | Open question | How is a surface's geometry kept consistent with its cells? | — | LEXTER-DRAFT-cell-field-format |
 | [LEXTER-DRAFT-cell-field-format-O11](Survey.CellFieldFormat.md#lexter-draft-cell-field-format-o11--should-masks-have-targets-and-in-which-encoding) | Open question | Should masks have targets, and in which encoding? | — | LEXTER-DRAFT-cell-field-format |
 | [LEXTER-DRAFT-cell-field-format-O12](Survey.CellFieldFormat.md#lexter-draft-cell-field-format-o12--how-does-a-mask-apply-to-a-wide-display-glyph) | Open question | How does a mask apply to a wide display glyph? | — | LEXTER-DRAFT-cell-field-format |
-| [LEXTER-DRAFT-pane-profiles-O1](Plan.PaneProfiles.md#lexter-draft-pane-profiles-o1--should-unseen-output-be-a-flag-or-a-line-count) | Open question | Should unseen output be a flag or a line count? | — | LEXTER-DRAFT-pane-profiles |
-| [LEXTER-DRAFT-pane-profiles-O2](Plan.PaneProfiles.md#lexter-draft-pane-profiles-o2--how-does-a-workspace-find-its-compositor) | Open question | How does a workspace find its compositor? | — | LEXTER-DRAFT-pane-profiles |
-| [LEXTER-DRAFT-pane-profiles-O3](Plan.PaneProfiles.md#lexter-draft-pane-profiles-o3--which-other-settings-move-into-profiles) | Open question | Which other settings move into profiles? | — | LEXTER-DRAFT-pane-profiles |
-| [LEXTER-DRAFT-pane-profiles-O4](Plan.PaneProfiles.md#lexter-draft-pane-profiles-o4--where-do-the-tests-live) | Open question | Where do the tests live? | — | LEXTER-DRAFT-pane-profiles |

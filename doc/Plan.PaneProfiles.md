@@ -1,16 +1,16 @@
 ---
-id:            LEXTER-DRAFT-pane-profiles
+id:            LEXTER-0022
 title:         "Pane Profiles and Scrollback Viewing: Development Plan"
 genre:         Plan
 scope:         component
 project:       Lexter
 component:     panes
 language:      en
-status:        Implemented
+status:        Accepted
 authors:
   - Andrew Sengul
 approved-by:   Andrew Sengul
-reviewed:      2026-11-19
+reviewed:      2026-11-05
 provenance:
   assistant:   opencode
 relates-to:
@@ -24,20 +24,20 @@ cites:
     locator:  "session-ses_febe-LexterCritique.md, the closing review"
     external: true
 decisions:
-  - LEXTER-DRAFT-pane-profiles-D1
-  - LEXTER-DRAFT-pane-profiles-D2
-  - LEXTER-DRAFT-pane-profiles-D3
-  - LEXTER-DRAFT-pane-profiles-D4
-  - LEXTER-DRAFT-pane-profiles-D5
-  - LEXTER-DRAFT-pane-profiles-D6
-  - LEXTER-DRAFT-pane-profiles-D7
-  - LEXTER-DRAFT-pane-profiles-D8
-  - LEXTER-DRAFT-pane-profiles-D9
+  - LEXTER-D132
+  - LEXTER-D133
+  - LEXTER-D134
+  - LEXTER-D135
+  - LEXTER-D136
+  - LEXTER-D137
+  - LEXTER-D138
+  - LEXTER-D139
+  - LEXTER-D140
 open-questions:
-  - LEXTER-DRAFT-pane-profiles-O1
-  - LEXTER-DRAFT-pane-profiles-O2
-  - LEXTER-DRAFT-pane-profiles-O3
-  - LEXTER-DRAFT-pane-profiles-O4
+  - LEXTER-O80
+  - LEXTER-O81
+  - LEXTER-O82
+  - LEXTER-O83
 ---
 
 # Pane Profiles and Scrollback Viewing: Development Plan
@@ -127,7 +127,7 @@ three patterns that the obvious designs would repeat:
 
 ## Settled Decisions
 
-### LEXTER-DRAFT-pane-profiles-D1 — Settings live in pane-profile objects
+### LEXTER-D132 — Settings live in pane-profile objects
 
 **Status:** Implemented
 
@@ -150,7 +150,7 @@ set here; inherit".
 - Slots directly on the pane classes. Rejected: settings could not be shared
   between panes or set for a workspace.
 
-### LEXTER-DRAFT-pane-profiles-D2 — Resolution walks parent links, then containment
+### LEXTER-D133 — Resolution walks parent links, then containment
 
 **Status:** Implemented
 
@@ -167,7 +167,7 @@ the compositor's profile and its parents; and finally in the default the
 setting declares. Parent links express sharing and derivation; containment is
 found through the pane's existing workspace back-reference
 (`src/panes/workspace.lisp:initialize-instance@a9efdfc`) and a new reference
-from workspace to compositor (LEXTER-DRAFT-pane-profiles-O2). A profile
+from workspace to compositor (LEXTER-O81). A profile
 lacking the slot is skipped, which lets a subclass of `pane-profile` add
 settings that base profiles do not have.
 
@@ -179,7 +179,7 @@ settings that base profiles do not have.
 - Containment only, with no parent links. Rejected: panes in different
   workspaces could not share a profile.
 
-### LEXTER-DRAFT-pane-profiles-D3 — Each object owns a private profile; writers write it
+### LEXTER-D134 — Each object owns a private profile; writers write it
 
 **Status:** Implemented
 
@@ -198,7 +198,7 @@ restores inheritance.
 - Copy on write. Rejected: more machinery for no gain over a private profile
   with a parent.
 
-### LEXTER-DRAFT-pane-profiles-D4 — One generic reader per setting, defined by one macro
+### LEXTER-D135 — One generic reader per setting, defined by one macro
 
 **Status:** Implemented
 
@@ -212,9 +212,9 @@ duplicated layered stride constant.
 **Decision:** A macro, `define-pane-profile`, defines a profile class and,
 for each setting in it, the slot (without an initform), the declared type and
 default, a generic reader on panes such as `pane-wheel-scroll-lines` with a
-default method that resolves the setting (LEXTER-DRAFT-pane-profiles-D2), and
+default method that resolves the setting (LEXTER-D133), and
 a `setf` writer that checks the type and writes the private profile
-(LEXTER-DRAFT-pane-profiles-D3). Lexter's own settings are defined with it,
+(LEXTER-D134). Lexter's own settings are defined with it,
 and the APL layer defines a subclass the same way.
 
 **Alternatives:**
@@ -222,7 +222,7 @@ and the APL layer defines a subclass the same way.
 - A hand-written `defclass` plus separate `defgeneric` forms. Rejected: the
   slot names and reader names would have to be kept in step by hand.
 
-### LEXTER-DRAFT-pane-profiles-D5 — The history is drawn by flush-to-display
+### LEXTER-D136 — The history is drawn by flush-to-display
 
 **Status:** Implemented
 
@@ -241,7 +241,7 @@ of history and live rows, and does not draw the cursor.
 - Copy history lines into the live screen while scrolled back. Rejected: it
   would corrupt the model, which goes on receiving output.
 
-### LEXTER-DRAFT-pane-profiles-D6 — Typing returns the view to live; output does not
+### LEXTER-D137 — Typing returns the view to live; output does not
 
 **Status:** Implemented
 
@@ -259,7 +259,7 @@ to 0.
 - Fixed behaviour with no settings. Rejected: the profile makes the settings
   nearly free, and xterm shows they are wanted.
 
-### LEXTER-DRAFT-pane-profiles-D7 — The wheel factor applies to local scrolling only
+### LEXTER-D138 — The wheel factor applies to local scrolling only
 
 **Status:** Implemented
 
@@ -276,7 +276,7 @@ event per notch, as xterm sends it.
 - Apply the factor to reports as well. Rejected: applications expect one
   wheel event per notch and scale it themselves.
 
-### LEXTER-DRAFT-pane-profiles-D8 — Unseen output is pane state, polled by the decorator
+### LEXTER-D139 — Unseen output is pane state, polled by the decorator
 
 **Status:** Implemented
 
@@ -287,20 +287,20 @@ warns against adding view state to `screen`.
 **Decision:** `vt-pane` gets a slot recording unseen output, set when output
 is processed while the viewport is above 0 and cleared when the viewport
 returns to 0. A reader exposes it to the decorator. Whether it is a flag or a
-line count is LEXTER-DRAFT-pane-profiles-O1.
+line count is LEXTER-O80.
 
 **Alternatives:**
 - A slot on `screen`. Rejected for the reason above.
 - An event only. Rejected: the decorator would have to keep the state
   itself.
 
-### LEXTER-DRAFT-pane-profiles-D9 — Terminal events reach the APL layer through a generic function
+### LEXTER-D140 — Terminal events reach the APL layer through a generic function
 
 **Status:** Implemented
 
 **Context:** The APL layer needs discrete events (output, unseen output, the
 bell, a title change, a viewport change) as well as the state of
-LEXTER-DRAFT-pane-profiles-D8. A registered `funcall` callback was proposed.
+LEXTER-D139. A registered `funcall` callback was proposed.
 It would repeat the weak half of the redirect protocol, a payload dispatched
 on a keyword inside one function, and not its sound half, interception by
 method combination.
@@ -410,7 +410,7 @@ Table: Terminal events raised through pane-terminal-event.
 | Kind | Data | Raised when |
 |---|---|---|
 | `:output` | none | `pane-process-output` processed bytes |
-| `:unseen-output` | none, or a count (LEXTER-DRAFT-pane-profiles-O1) | output was processed while scrolled back |
+| `:unseen-output` | none, or a count (LEXTER-O80) | output was processed while scrolled back |
 | `:bell` | none | the VT handler reports a bell |
 | `:title` | the title string | the VT handler reports a title change |
 | `:viewport` | the new offset | the viewport changed |
@@ -446,7 +446,7 @@ Table: Terminal events raised through pane-terminal-event.
 
 ## Open Questions
 
-### LEXTER-DRAFT-pane-profiles-O1 — Should unseen output be a flag or a line count?
+### LEXTER-O80 — Should unseen output be a flag or a line count?
 
 A flag says that output has arrived since the view left the live screen,
 which is enough to flash a border. A count says how many lines, which lets
@@ -455,7 +455,7 @@ screen's total scrollback count when the viewport leaves 0, and subtract it
 from the current count. The current lean is the count, if that holds when
 the ring wraps.
 
-### LEXTER-DRAFT-pane-profiles-O2 — How does a workspace find its compositor?
+### LEXTER-O81 — How does a workspace find its compositor?
 
 Lookup needs the chain pane, workspace, compositor. Panes already refer to
 their workspace. The lean is a `workspace-compositor` slot, set where the
@@ -472,7 +472,7 @@ workspaces, rather than in `gui-initialize`, so that panes find the
 compositor's settings before a window exists, as the headless tests and the
 REPL need.
 
-### LEXTER-DRAFT-pane-profiles-O3 — Which other settings move into profiles?
+### LEXTER-O82 — Which other settings move into profiles?
 
 Candidates are xterm's `alternateScroll` (DECSET 1007), which would make the
 wheel-to-arrows translation optional; the scrollback size; the blink
@@ -480,7 +480,7 @@ interval; and the encoding and bold-as-bright options now passed as
 initargs. The compositor's prefix key is a further candidate once the
 steward takes up the globals.
 
-### LEXTER-DRAFT-pane-profiles-O4 — Where do the tests live?
+### LEXTER-O83 — Where do the tests live?
 
 The tests can extend `lexter/mouse-tests`, which uses a small check macro of
 its own, or start a suite that follows the Square testing standard, with
@@ -511,7 +511,7 @@ Table: Prior systems and what this plan draws from each.
 
 1. **Profiles.** `define-pane-profile`, the resolver, private profiles on
    panes, workspaces, and compositors, the workspace-to-compositor reference
-   (LEXTER-DRAFT-pane-profiles-O2), and the three settings. Tests for lookup
+   (LEXTER-O81), and the three settings. Tests for lookup
    order, parent sharing, skipping profiles without a slot, unbinding, and
    type checks.
 2. **Drawing the history.** Viewport-aware `flush-to-display`,
@@ -523,7 +523,7 @@ Table: Prior systems and what this plan draws from each.
 3. **Snapping.** Snap-on-input in the key and character handlers, and
    snap-on-output in `pane-process-output`. Tests with an in-memory backend.
 4. **Events and unseen output.** `pane-terminal-event`, the unseen-output
-   slot and reader (LEXTER-DRAFT-pane-profiles-O1), and the bell and title
+   slot and reader (LEXTER-O80), and the bell and title
    routed through the generic function. Tests with a recording method.
 5. **Log.** A development Log recording the work, with its Outstanding Work
    carrying the non-goals above.

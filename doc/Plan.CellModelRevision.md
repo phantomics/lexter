@@ -17,7 +17,7 @@ relates-to:
   - LEXTER-0018
   - LEXTER-0016
   - LEXTER-0015
-  - LEXTER-DRAFT-pane-profiles
+  - LEXTER-0022
   - LEXTER-0013
   - LEXTER-DRAFT-cell-field-format
   - LEXTER-DRAFT-data-structures-1e
@@ -225,7 +225,7 @@ how they are drawn, and the VT handler's writing of double-width characters,
 which is part of how cells are made. The other fixes go in
 [LEXTER-0015](Plan.TerminalFixes1e.md), except the
 scroll-bar thumb and the scrollback viewport, which
-[LEXTER-DRAFT-pane-profiles](Plan.PaneProfiles.md) already plans. Two of the
+[LEXTER-0022](Plan.PaneProfiles.md) already plans. Two of the
 companion plan's fixes are prerequisites here and are named in the Roadmap:
 the consolidation of the two terminal stacks
 (LEXTER-D67) before Phase 1, and the workspace-switch
@@ -974,11 +974,11 @@ a screen's top is kept in its history as text and styles.
   the function by which the handler writes a cell, so that one function makes
   records from text and styles wherever they come from. The pane-profiles
   plan draws the history in `flush-to-display`
-  (LEXTER-DRAFT-pane-profiles-D5), and in the second edition its viewport
+  (LEXTER-D136), and in the second edition its viewport
   builds the history rows it shows with this function. That plan's history
   cells of glyph, swatch, and attributes, and the lossy history and shared
   swatch problem its tensions list
-  ([LEXTER-DRAFT-pane-profiles](Plan.PaneProfiles.md), Scrollback Viewing),
+  ([LEXTER-0022](Plan.PaneProfiles.md), Scrollback Viewing),
   belong to the first edition; this decision replaces them.
 - **Swatches in use.** History holds palette indices, not swatch indices, so
   only the cells on screen keep swatches in use, and eviction (Phase 7) marks
@@ -2418,7 +2418,7 @@ Table: Prior systems and what this plan draws from each.
 
 Three plans work in this area: this one,
 [LEXTER-0015](Plan.TerminalFixes1e.md), and
-[LEXTER-DRAFT-pane-profiles](Plan.PaneProfiles.md). Their steps interleave as
+[LEXTER-0022](Plan.PaneProfiles.md). Their steps interleave as
 follows.
 
 Table: The order of work across the three plans.

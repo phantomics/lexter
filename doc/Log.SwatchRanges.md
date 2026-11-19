@@ -1,5 +1,5 @@
 ---
-id:            LEXTER-DRAFT-swatch-ranges
+id:            LEXTER-0025
 title:         "Swatch Ranges (Phase 2): Development Log"
 genre:         Log
 scope:         project

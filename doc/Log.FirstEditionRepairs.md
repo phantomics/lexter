@@ -227,7 +227,7 @@ line.
   compile reports in `src/width.lisp`, whose three tables are defined inside a
   `multiple-value-bind` and so are undefined variables where
   `src/width.lisp:unicode-width-class@3627e50` reads them. Phase 2 repaired
-  them ([LEXTER-DRAFT-swatch-ranges](Log.SwatchRanges.md)).
+  them ([LEXTER-0025](Log.SwatchRanges.md)).
 
 ## Files
 
@@ -260,7 +260,7 @@ Table: Files added or changed in Phase 1, in commit `3627e50`.
 
 - **Phase 2.** The swatch ranges, which the reproduction tests of LEXTER-O22,
   LEXTER-O23, and LEXTER-O24 wait for, after LEXTER-O58 and LEXTER-O59 are
-  settled. Since done ([LEXTER-DRAFT-swatch-ranges](Log.SwatchRanges.md)).
+  settled. Since done ([LEXTER-0025](Log.SwatchRanges.md)).
 - **Autowrap and the scrolling region.** A pair that wraps uses the same
   wrapping as a narrow character, which still ignores the region (LEXTER-O33);
   the terminal-fixes plan's LEXTER-D69 repairs both together.

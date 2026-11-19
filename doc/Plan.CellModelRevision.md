@@ -1285,7 +1285,7 @@ and a terminal's alternate screen has a table of its own.
   they have no screen and draw straight into the grid, as decorators do, so a
   range of their own would spend the store on a status bar. Amended at the
   steward's direction while Phase 2 was built
-  ([LEXTER-DRAFT-swatch-ranges](Log.SwatchRanges.md)).
+  ([LEXTER-0025](Log.SwatchRanges.md)).
 
 **Alternatives:**
 - Fixed ranges, one per table. Not chosen: a table that outgrows one range has

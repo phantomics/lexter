@@ -22,7 +22,7 @@ relates-to:
   - LEXTER-0020
   - LEXTER-0022
   - LEXTER-0024
-  - LEXTER-DRAFT-swatch-ranges
+  - LEXTER-0025
 decisions:
   - LEXTER-D131
 ---
@@ -247,7 +247,7 @@ Table: Files added or changed by the consolidation, in commit `ee026f2`.
 - **The palette half of LEXTER-O29.** The alternate screen still starts from
   the default palette; it is repaired with the VT handler's fixes
   (LEXTER-D70). Since done
-  ([LEXTER-DRAFT-swatch-ranges](Log.SwatchRanges.md)).
+  ([LEXTER-0025](Log.SwatchRanges.md)).
 - **The rest of LEXTER-O35.** Closing a PTY after its child's end of file
   still leaves the descriptor open and the child unreaped (LEXTER-D74).
 - **The default palette.** The compositor loads `make-xterm-palette` at

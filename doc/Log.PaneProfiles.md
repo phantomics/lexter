@@ -20,7 +20,7 @@ relates-to:
   - LEXTER-0021
   - LEXTER-0020
   - LEXTER-0010
-  - LEXTER-DRAFT-swatch-ranges
+  - LEXTER-0025
 ---
 
 # Pane Profiles and Scrollback Viewing: Development Log
@@ -180,7 +180,7 @@ Table: Files added or changed in the first two steps: the code and tests in comm
   `*cursor-blink-on*` remain (LEXTER-D77); the redirect protocol's payload is
   unchanged; history cells carry their screen's swatch indices, and so share
   the swatch faults that Phase 2 repairs (since done:
-  [LEXTER-DRAFT-swatch-ranges](Log.SwatchRanges.md)); and the history is lossy, keeping no
+  [LEXTER-0025](Log.SwatchRanges.md)); and the history is lossy, keeping no
   wide glyphs or layers, until the second edition keeps it as text and styles
   (LEXTER-D118).
 - **The decision records' statuses.** The plan's decision records are marked

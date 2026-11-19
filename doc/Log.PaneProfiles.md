@@ -1,5 +1,5 @@
 ---
-id:            LEXTER-DRAFT-pane-profiles-log
+id:            LEXTER-0023
 title:         "Pane Profiles and Scrollback Viewing: Development Log"
 genre:         Log
 scope:         project

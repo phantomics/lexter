@@ -32,11 +32,11 @@ Table: Documents in the LEXTER namespace.
 | [LEXTER-0020](Log.RegressionSuite.md) | Regression Suite (Phase 0): Development Log | Log | project | Accepted | — |
 | [LEXTER-0021](Log.TerminalStacks.md) | Consolidating the Terminal Stacks: Development Log | Log | project | Accepted | — |
 | [LEXTER-0022](Plan.PaneProfiles.md) | Pane Profiles and Scrollback Viewing: Development Plan | Plan | component | Accepted | panes |
+| [LEXTER-0023](Log.PaneProfiles.md) | Pane Profiles and Scrollback Viewing: Development Log | Log | project | Implemented | — |
 | [LEXTER-DRAFT-cell-field-format](Survey.CellFieldFormat.md) | Cell Field Format: Survey | Survey | component | Deprecated | renderer |
 | [LEXTER-DRAFT-data-structures-1e](Spec.DataStructures1e.md) | Data Structures, First Edition: Specification | Spec | project | Deprecated | — |
 | [LEXTER-DRAFT-first-edition-repairs](Log.FirstEditionRepairs.md) | The First Edition Repaired (Phase 1): Development Log | Log | project | Draft | — |
 | [LEXTER-DRAFT-mouse-reporting](Log.MouseReporting.md) | Mouse Reporting: Development Log | Log | component | Draft | vt |
-| [LEXTER-DRAFT-pane-profiles-log](Log.PaneProfiles.md) | Pane Profiles and Scrollback Viewing: Development Log | Log | project | Implemented | — |
 | [LEXTER-DRAFT-swatch-ranges](Log.SwatchRanges.md) | Swatch Ranges (Phase 2): Development Log | Log | project | Draft | — |
 | [LEXTER-DRAFT-workspace-repaint](Log.WorkspaceRepaint.md) | The Workspace-Switch Repaint: Development Log | Log | project | Draft | — |
 

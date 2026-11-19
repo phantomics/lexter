@@ -15,7 +15,7 @@ relates-to:
   - LEXTER-0014
   - LEXTER-0020
   - LEXTER-0021
-  - LEXTER-DRAFT-pane-profiles-log
+  - LEXTER-0023
 cites:
   - title:    "Unicode Character Database 17.0.0"
     locator:  "https://www.unicode.org/Public/17.0.0/ucd/: EastAsianWidth.txt, extracted/DerivedGeneralCategory.txt, emoji/emoji-data.txt"

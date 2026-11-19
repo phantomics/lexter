@@ -14,6 +14,7 @@ relates-to:
   - LEXTER-0014
   - LEXTER-0015
   - LEXTER-0016
+  - LEXTER-0010
 ---
 
 # Regression Suite (Phase 0): Development Log
@@ -25,7 +26,7 @@ reproduces each cell-model finding of the critique
 ([LEXTER-0014](Eval.Critique.DataStructures1e.md)) before it is repaired; and
 the separation of the glyph atlas's packing from the upload of its texture,
 so that the suite can pack atlases with no GL context. The suite is red by
-design (LEXTER-DRAFT-cell-model-revision-D21): its reproduction tests fail
+design (LEXTER-D120): its reproduction tests fail
 until Phase 1 and Phase 2 land their repairs.
 
 ## Problem
@@ -49,12 +50,12 @@ atlases.
 The decisions of this phase are recorded in the plan, where the steward made
 them:
 
-- **LEXTER-DRAFT-cell-model-revision-D21** — the suite follows Square, as the
+- **LEXTER-D120** — the suite follows Square, as the
   system `lexter/tests` in `tests/`; reproduction tests assert the repaired
   behaviour and fail until the repair lands; findings about the code's
   arrangement get structural tests; fonts are made in the tests; and the
   existing test systems move into the suite later.
-- **LEXTER-DRAFT-cell-model-revision-D22** — the atlas's packing is separated
+- **LEXTER-D121** — the atlas's packing is separated
   from its upload in Phase 0, with a column count the caller fixes.
 
 Choices made while building, within those decisions:
@@ -171,7 +172,7 @@ Table: Files added or changed in this phase: the code and tests in commit `d6acd
 | `tests/test-swatches.lisp` | **New** | Swatch tests |
 | `tests/test-structure.lisp` | **New** | Structural tests |
 | `AGENTS.md` | Modified | The Square block |
-| `doc/Plan.CellModelRevision.md` | Modified | LEXTER-DRAFT-cell-model-revision-D21, -D22, -D23, the order of work, and the Roadmap |
+| `doc/Plan.CellModelRevision.md` | Modified | LEXTER-D120, -D22, -D23, the order of work, and the Roadmap |
 | `doc/Arch.CellModel.md` | Modified | The "no glyph" glyph at generated position 6 |
 | `doc/Plan.TerminalFixes1e.md` | Modified | The resolution of LEXTER-O41 |
 
@@ -179,13 +180,13 @@ Table: Files added or changed in this phase: the code and tests in commit `d6acd
 
 - **Phase 1's own tests.** The width table, the fitting of glyphs to widths,
   the replacement and "no glyph" glyphs, and dropped zero-width characters
-  (LEXTER-D117, LEXTER-DRAFT-cell-model-revision-D23) are not findings, and
+  (LEXTER-D117, LEXTER-D122) are not findings, and
   their tests are written first in Phase 1.
 - **The palette half of LEXTER-O23.** Two screens' palette generations can be
   equal for different palettes; it is tested when Phase 2 records uploads by
   owner (LEXTER-D92).
 - **The existing test systems** move into the suite later
-  (LEXTER-DRAFT-cell-model-revision-D21).
+  (LEXTER-D120).
 - **The Origin tests' failures.** `lexter/origin-tests` already failed 28 of
   its checks before this phase; they are outside the cell-model plan.
 
@@ -198,7 +199,29 @@ reproduction test for each finding of the terminal-fixes plan
 LEXTER-D80 asks: LEXTER-O21, LEXTER-O25, LEXTER-O29, LEXTER-O31,
 LEXTER-O33, LEXTER-O34, and LEXTER-O35.
 
-### A build fault repaired first
+### Problem
+
+LEXTER-D80 asks that each finding of the terminal-fixes plan be reproduced by
+a headless test before it is repaired, in this suite. `lexter/tn3270` did not
+load, so its tests could not be written until a build fault was repaired.
+
+### Design Decisions
+
+- **Loopback, not a recording.** LEXTER-D80 asks that the TN3270E fix be
+  tested against a recorded negotiation. No TN3270E server was at hand, so
+  the tests connect the real client, over a loopback socket in the same
+  image, to a peer that sends the server's side of the negotiation as RFC
+  2355 lays it out. The telnet tests do the same with a real telnet pane, in
+  place of the in-memory stream LEXTER-D80 names, so that they test what the
+  pane sends rather than the client's string writer, which LEXTER-D73 moves
+  into the pane. The plan records this as LEXTER-DRAFT-terminal-fixes-1e-D16.
+- **Slow tests.** The two tests that fork `/bin/true` on a PTY are in the
+  suite `pty-slow`, which `run-all-tests` omits when given `:skip-slow`
+  (`tests/helpers.lisp:run-all-tests@7de1459`).
+
+### Implementation
+
+#### A build fault repaired first
 
 `lexter/tn3270` did not load. Commit `71e86d7` renamed its EBCDIC dependency
 in `lexter.asd` from `specops/format.ebcdic` to `specops.map.ebcdic`, the
@@ -209,7 +232,7 @@ the package in the source kept the old name
 read. They now name `specops.map.ebcdic`, and `lexter/tn3270`,
 `lexter/tn3270-pane`, and `lexter/origin-tests` load again.
 
-### Tests by finding
+#### Tests by finding
 
 Table: The terminal-fixes plan's reproduction tests, by finding.
 
@@ -223,18 +246,6 @@ Table: The terminal-fixes plan's reproduction tests, by finding.
 | LEXTER-O34 | `telnet` | A UTF-8 pane sends `é` as C3 A9; a CP437 pane sends the no-break space as FF FF; a second WILL ECHO gets no reply |
 | LEXTER-O35 | `pty`, `pty-slow` | A key and a character on a terminal with no PTY are ignored; closing a PTY after its child's end of file closes the descriptor and reaps the child |
 
-- **Loopback, not a recording.** LEXTER-D80 asks that the TN3270E fix be
-  tested against a recorded negotiation. No TN3270E server was at hand, so
-  the tests connect the real client, over a loopback socket in the same
-  image, to a peer that sends the server's side of the negotiation as RFC
-  2355 lays it out. The telnet tests do the same with a real telnet pane, in
-  place of the in-memory stream LEXTER-D80 names, so that they test what the
-  pane sends rather than the client's string writer, which LEXTER-D73 moves
-  into the pane. A recording from a real server can replace the scripted
-  peer when one is made.
-- **Slow tests.** The two tests that fork `/bin/true` on a PTY are in the
-  suite `pty-slow`, which `run-all-tests` omits when given `:skip-slow`
-  (`tests/helpers.lisp:run-all-tests@7de1459`).
 - **Where the pieces are.** The loopback helpers are
   `tests/helpers.lisp:with-loopback-listener@7de1459` and
   `tests/helpers.lisp:exchange@7de1459`; the sessions are
@@ -250,9 +261,9 @@ Table: The terminal-fixes plan's reproduction tests, by finding.
 
 ### Verification
 
-- `(asdf:test-system :lexter)` runs 55 tests and 120 checks: 31 checks pass
+- `(asdf:test-system :lexter)` runs 56 tests and 120 checks: 31 checks pass
   and 89 fail. The 9 tests that held before still pass, and every one of the
-  17 new tests fails as its finding predicts: the client answers DO TN3270E
+  18 new tests fails as its finding predicts: the client answers DO TN3270E
   and then nothing; the UTF-8 pane sends `é` as 69 and the CP437 pane the
   no-break space as 20; the second WILL ECHO is answered again; the key and
   character handlers signal a type error on the missing PTY; and the
@@ -261,6 +272,8 @@ Table: The terminal-fixes plan's reproduction tests, by finding.
   seconds, omitting `pty-slow`.
 - `lexter/mouse-tests` still passes, 32 checks, and `lexter/origin-tests`
   gives the same 23 passes and 28 failures as before.
+
+### Files
 
 Table: Files added or changed in this update, in commit `7de1459`.
 
@@ -276,3 +289,11 @@ Table: Files added or changed in this update, in commit `7de1459`.
 | `tests/test-telnet.lisp` | **New** | Telnet tests |
 | `tests/test-pty.lisp` | **New** | PTY tests |
 | `AGENTS.md` | Modified | The `:skip-slow` run command |
+
+### Outstanding Work
+
+- **A recorded negotiation.** A recording from a real TN3270E server can
+  replace the scripted peer when one is made
+  (LEXTER-DRAFT-terminal-fixes-1e-D16).
+- **The export of `screen-attributes`** is repaired with the other export
+  faults of LEXTER-O37.

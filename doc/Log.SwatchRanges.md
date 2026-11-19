@@ -21,7 +21,7 @@ relates-to:
   - LEXTER-0024
   - LEXTER-0020
   - LEXTER-0010
-  - LEXTER-DRAFT-workspace-repaint
+  - LEXTER-0026
 ---
 
 # Swatch Ranges (Phase 2): Development Log
@@ -309,4 +309,4 @@ Table: Files added or changed in Phase 2: the code and tests in commit `8451a08`
   workspace-switch repaint (LEXTER-D71). Since done: the questions are
   settled by LEXTER-D124 to LEXTER-D129, all but how the characters that join
   a cell are drawn, which the gate lets wait; and the repaint has landed
-  ([LEXTER-DRAFT-workspace-repaint](Log.WorkspaceRepaint.md)).
+  ([LEXTER-0026](Log.WorkspaceRepaint.md)).

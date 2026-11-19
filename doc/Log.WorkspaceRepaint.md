@@ -1,5 +1,5 @@
 ---
-id:            LEXTER-DRAFT-workspace-repaint
+id:            LEXTER-0026
 title:         "The Workspace-Switch Repaint: Development Log"
 genre:         Log
 scope:         project

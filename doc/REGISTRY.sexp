@@ -249,3 +249,4 @@
 (:id "LEXTER-0023" :kind :document :draft "LEXTER-DRAFT-pane-profiles-log" :path "doc/Log.PaneProfiles.md" :date "2026-11-19" :by "Andrew Sengul")
 (:id "LEXTER-0024" :kind :document :draft "LEXTER-DRAFT-first-edition-repairs" :path "doc/Log.FirstEditionRepairs.md" :date "2026-11-19" :by "Andrew Sengul")
 (:id "LEXTER-0025" :kind :document :draft "LEXTER-DRAFT-swatch-ranges" :path "doc/Log.SwatchRanges.md" :date "2026-11-19" :by "Andrew Sengul")
+(:id "LEXTER-0026" :kind :document :draft "LEXTER-DRAFT-workspace-repaint" :path "doc/Log.WorkspaceRepaint.md" :date "2026-11-19" :by "Andrew Sengul")

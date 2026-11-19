@@ -5,10 +5,14 @@ genre:         Log
 scope:         project
 project:       Lexter
 language:      en
-status:        Draft
+status:        Accepted
+authors:
+  - Andrew Sengul
+approved-by:   Andrew Sengul
+reviewed:      2026-11-05
 provenance:
   assistant:   opencode
-  session:     "Phase 1: the first edition repaired (2026-11-17)"
+  session:     "Phase 1: the first edition repaired (2026-11-17); review revisions (2026-11-19)"
 relates-to:
   - LEXTER-0017
   - LEXTER-0016
@@ -29,30 +33,34 @@ This document records Phase 1 of the cell-model revision
 repaired in place for the cell-model findings of the critique
 ([LEXTER-0014](Eval.Critique.DataStructures1e.md)), LEXTER-O19, LEXTER-O26,
 LEXTER-O27, LEXTER-O28, LEXTER-O36, and LEXTER-O40, as LEXTER-D97 decides,
-with the width table of LEXTER-D117 and LEXTER-D122,
-the atlas's reserved positions of LEXTER-D89, and the cursor of LEXTER-D101.
-Every reproduction test of those findings that Phase 0 wrote
-([LEXTER-0020](Log.RegressionSuite.md)) now passes.
+with the width table of LEXTER-D117 and LEXTER-D122, the atlas's reserved
+positions of LEXTER-D89, and the cursor of LEXTER-D101. Every reproduction
+test of those findings that Phase 0 wrote
+([LEXTER-0020](Log.RegressionSuite.md)) now passes. As the plan's order of
+work requires, Phase 1 followed the consolidation of the two terminal stacks
+([LEXTER-0021](Log.TerminalStacks.md)), so that its repairs landed once, and
+the pane-profiles plan's history drawing ([LEXTER-0023](Log.PaneProfiles.md)),
+so that it repaired the flush as the history drawing left it.
 
 ## Problem
 
 Double-width characters never reached the GPU from a screen: the VT handler
 wrote them narrow and advanced by one
-(`src/vt-handler.lisp:%print-codepoint@6bac50d`), the flush broke the pairs
-it was given, and the cursor rewrote its cell without them (LEXTER-O19). The
+(`src/vt-handler.lisp:%print-codepoint@6bac50d`), the flush broke the pairs it
+was given, and the cursor rewrote its cell without them (LEXTER-O19). The
 operations that move or clear cells left wide flags behind (LEXTER-O26).
-Layered cells drifted apart between the model and the grid (LEXTER-O27).
-Glyph 0 meant both a blank and the first glyph packed, and codepoint 32 was
-written as a blank glyph (LEXTER-O28). Constants were defined twice
-(LEXTER-O36), and `build-render-data` claimed incremental rebuilds it did not
-make (LEXTER-O40). A codepoint no font covered was skipped without moving the
-cursor, and widths came from the font that happened to be loaded.
+Layered cells drifted apart between the model and the grid (LEXTER-O27). Glyph
+0 meant both a blank and the first glyph packed, and codepoint 32 was written
+as a blank glyph (LEXTER-O28). Constants were defined twice (LEXTER-O36), and
+`build-render-data` claimed incremental rebuilds it did not make (LEXTER-O40).
+A codepoint no font covered was skipped without moving the cursor, and widths
+came from the font that happened to be loaded.
 
 ## Design Decisions
 
 The decisions are the plan's and the architecture's: LEXTER-D97, LEXTER-D98,
-LEXTER-D101, LEXTER-D117, LEXTER-D122, and
-LEXTER-D89. Choices made while building:
+LEXTER-D101, LEXTER-D117, LEXTER-D122, and LEXTER-D89. Choices made while
+building:
 
 - **The data files by checksum.** At the steward's choice, the Unicode 17.0
   data files are not committed: the generator downloads them into
@@ -78,11 +86,11 @@ LEXTER-D89. Choices made while building:
   diagonals; where the cell is too narrow for the diagonals to show inside the
   box, the box is filled, and where even the box is solid, the glyph is a
   checkerboard, so that the two are always told apart.
-- **A wide uncovered character.** LEXTER-D122 draws
-  the "no glyph" glyph in each cell of a wide character. The first edition
-  draws a pair as one instance two cells wide from its left half's glyph, so
-  the box shows in the left cell and the right cell is empty; the halves of
-  Phase 3 draw it in both.
+- **A wide uncovered character.** LEXTER-D122 draws the "no glyph" glyph in
+  each cell of a wide character. The first edition draws a pair as one
+  instance two cells wide from its left half's glyph, so the box shows in the
+  left cell and the right cell is empty; the halves of Phase 3 draw it in
+  both.
 - **Wrapping a wide character.** With autowrap on, a pair that would begin in
   the last column blanks it and wraps first; with autowrap off, it is written
   in the last two columns. `put-char`, the model's cursor-relative writer,
@@ -103,26 +111,25 @@ LEXTER-D89. Choices made while building:
 
 ### The width table
 
-- `tools/gen-width-table.lisp` (new) downloads and checks the three data
-  files of Unicode 17.0 and writes `src/width-data.lisp` (new), 673 ranges of
-  code points whose width is not 1, by class: 0, 2, or ambiguous.
+- `tools/gen-width-table.lisp` (new) downloads and checks the three data files
+  of Unicode 17.0 and writes `src/width-data.lisp` (new), 673 ranges of code
+  points whose width is not 1, by class: 0, 2, or ambiguous.
 - `src/width.lisp` (new) and the package `lexter/width`:
-  `src/width.lisp:width-policy@3627e50`, with
-  the width of ambiguous characters and overrides of single code points or
-  ranges; `*default-width-policy*`; `unicode-width-class`; and
-  `src/width.lisp:char-width@3627e50`,
-  which bisects the table. It needs no GL and no font.
+  `src/width.lisp:width-policy@3627e50`, with the width of ambiguous
+  characters and overrides of single code points or ranges;
+  `*default-width-policy*`; `unicode-width-class`; and
+  `src/width.lisp:char-width@3627e50`, which bisects the table. It needs no GL
+  and no font.
 
 ### The atlas, `src/atlas.lisp`
 
-`src/atlas.lisp:pack-atlas@3627e50` reserves positions 0–63 and packs font glyphs
-from position 64.
-It generates the empty glyph, the full block, underline, bar, and outlined
-block cursors, the replacement glyph, and the "no glyph" glyph at positions 0
-to 6, named from 0x110000 in the codepoint table, in place of the private-use
-codepoints the cursor glyphs had. It plans the fitting of glyphs to the width
-policy (`src/atlas.lisp:%plan-atlas@3627e50`, `src/atlas.lisp:%fit-glyph@3627e50`): a
-glyph of the right width from the
+`src/atlas.lisp:pack-atlas@3627e50` reserves positions 0–63 and packs font
+glyphs from position 64. It generates the empty glyph, the full block,
+underline, bar, and outlined block cursors, the replacement glyph, and the "no
+glyph" glyph at positions 0 to 6, named from 0x110000 in the codepoint table,
+in place of the private-use codepoints the cursor glyphs had. It plans the
+fitting of glyphs to the width policy (`src/atlas.lisp:%plan-atlas@3627e50`,
+`src/atlas.lisp:%fit-glyph@3627e50`): a glyph of the right width from the
 chain, or a narrow glyph centred at column cell-width / 2 (`%pad-glyph`), or a
 wide glyph cropped to the window centred on its ink (`%crop-glyph`), or the
 replacement glyph. The atlas records its width policy and a table of fitted
@@ -130,30 +137,30 @@ glyphs; `build-atlas` and `atlas-columns-for` take the policy.
 
 ### The VT handler, `src/vt-handler.lisp`
 
-`src/vt-handler.lisp:%print-codepoint@3627e50` decides each character's width from
-the table through the
-atlas's policy: a character of width 0 is dropped; a pair that would begin in
-the last column wraps first; and `src/vt-handler.lisp:%write-printed-char@3627e50`
-writes the character
-with the glyph fitted to its width, or the "no glyph" glyph, as a pair when it
-is wide, and advances by its width. The screen's blank is the empty glyph.
+`src/vt-handler.lisp:%print-codepoint@3627e50` decides each character's width
+from the table through the atlas's policy: a character of width 0 is dropped;
+a pair that would begin in the last column wraps first; and
+`src/vt-handler.lisp:%write-printed-char@3627e50` writes the character with
+the glyph fitted to its width, or the "no glyph" glyph, as a pair when it is
+wide, and advances by its width. The screen's blank is the empty glyph.
 
 ### The model, `src/model.lisp`
 
 - Every range operation repairs a pair it cuts at its edges
-  (`src/model.lisp:%repair-pair-edges@3627e50`): the erases, through `%erase-range`; `insert-chars`
-  and `delete-chars`, which move cells whole (`%move-cell`), layered entries
-  included; and `resize-screen`, at a narrower right edge. `%copy-row` and
-  `%clear-row` carry the wide flags. `%erase-cell` clears the wide flag.
+  (`src/model.lisp:%repair-pair-edges@3627e50`): the erases, through
+  `%erase-range`; `insert-chars` and `delete-chars`, which move cells whole
+  (`%move-cell`), layered entries included; and `resize-screen`, at a narrower
+  right edge. `%copy-row` and `%clear-row` carry the wide flags. `%erase-cell`
+  clears the wide flag.
 - `write-char-at` never begins a pair in the last column, and on a layered
   cell takes the swatch and attributes as a simple cell does; `cell-swatch`
   reads a layered cell's swatch.
 - The flush checks each row it copies for a left half without its right half
   (`src/model.lisp:%check-row-pairs@3627e50`, called from
-  `src/model.lisp:flush-to-display@3627e50`), writes each pair once from its left half, clips a pair
-  at the grid's right edge, rebuilds a layered cell whole so that a cleared
-  layer is cleared in the grid, and draws the cursor with
-  `src/grid.lisp:exchange-cell-slots@3627e50`.
+  `src/model.lisp:flush-to-display@3627e50`), writes each pair once from its
+  left half, clips a pair at the grid's right edge, rebuilds a layered cell
+  whole so that a cleared layer is cleared in the grid, and draws the cursor
+  with `src/grid.lisp:exchange-cell-slots@3627e50`.
 - The blank is the empty glyph: a fresh screen, `delete-char`, and an absent
   layer's glyph. `+max-layers+` and `+swatch-slots+` are imported from the
   grid; the screen's struct default for `cursor-blink` matches its
@@ -185,8 +192,8 @@ constructor's.
 The new suite `width` (8 tests) covers the table: Unicode 17.0, wide
 ideographs and emoji, unassigned ideographs, zero-width characters, narrow
 characters, ambiguous characters under two policies, overrides, and bad
-overrides. The suite `atlas` gains 7 tests: the generated glyphs' positions,
-a narrow glyph centred, a wide glyph cropped, the replacement glyph, a glyph
+overrides. The suite `atlas` gains 7 tests: the generated glyphs' positions, a
+narrow glyph centred, a wide glyph cropped, the replacement glyph, a glyph
 from the chain, the natural glyph without a width, and fitting by the policy.
 The suite `handler` gains 4: a zero-width character dropped, an uncovered
 character drawn with the "no glyph" glyph at its width, width from the table
@@ -199,15 +206,15 @@ line.
 - **The suite.** `(asdf:test-system :lexter)` runs 92 tests and 201 checks:
   176 checks pass and 25 fail. Every reproduction test of LEXTER-O19,
   LEXTER-O26, LEXTER-O27, LEXTER-O28, LEXTER-O36, and LEXTER-O40 passes, and
-  so does LEXTER-O20's, since its trigger was the cursor's writes to the grid's
-  swatch table, which LEXTER-D101 removes. The 18 tests that fail belong to
-  Phase 2 (LEXTER-O22, LEXTER-O23, LEXTER-O24) and to the terminal-fixes plan
-  (LEXTER-O21, LEXTER-O25, LEXTER-O29, LEXTER-O31, LEXTER-O33, LEXTER-O34,
-  LEXTER-O35). All 19 new tests pass.
+  so does LEXTER-O20's, since its trigger was the cursor's writes to the
+  grid's swatch table, which LEXTER-D101 removes. The 18 tests that fail
+  belong to Phase 2 (LEXTER-O22, LEXTER-O23, LEXTER-O24) and to the
+  terminal-fixes plan (LEXTER-O21, LEXTER-O25, LEXTER-O29, LEXTER-O31,
+  LEXTER-O33, LEXTER-O34, LEXTER-O35). All 19 new tests pass.
 - **Pixels.** In the test rig's hidden terminal, the fixture of colours,
   reverse video, cursor movement, and a palette change gives the same checksum
-  as before Phase 1, in Terminus and in Unifont: the moved atlas positions, the
-  empty blank, and the cursor by exchanged slots draw the same pixels. The
+  as before Phase 1, in Terminus and in Unifont: the moved atlas positions,
+  the empty blank, and the cursor by exchanged slots draw the same pixels. The
   fixture with CJK text changes, as it should: in Unifont the ideographs are
   now drawn two cells wide, and in Terminus, which has no glyph for them, they
   take two cells with the "no glyph" glyph, so the text after them stays in
@@ -216,7 +223,11 @@ line.
   runs, reports its new size to the child, and stops when the child exits.
 - **The other test systems.** `lexter/mouse-tests` passes, 32 checks;
   `lexter/origin-tests` gives its same 23 passes and 28 failures.
-- **Loading.** Every system loads with no warnings.
+- **Loading.** Every system loads with no warnings, except four that a fresh
+  compile reports in `src/width.lisp`, whose three tables are defined inside a
+  `multiple-value-bind` and so are undefined variables where
+  `src/width.lisp:unicode-width-class@3627e50` reads them. Phase 2 repaired
+  them ([LEXTER-DRAFT-swatch-ranges](Log.SwatchRanges.md)).
 
 ## Files
 
@@ -247,16 +258,19 @@ Table: Files added or changed in Phase 1, in commit `3627e50`.
 
 ## Outstanding Work
 
-- **Phase 2.** The swatch ranges, which the reproduction tests of
-  LEXTER-O22, LEXTER-O23, and LEXTER-O24 wait for, after LEXTER-O58 and
-  LEXTER-O59 are settled. Since done
-  ([LEXTER-DRAFT-swatch-ranges](Log.SwatchRanges.md)).
+- **Phase 2.** The swatch ranges, which the reproduction tests of LEXTER-O22,
+  LEXTER-O23, and LEXTER-O24 wait for, after LEXTER-O58 and LEXTER-O59 are
+  settled. Since done ([LEXTER-DRAFT-swatch-ranges](Log.SwatchRanges.md)).
 - **Autowrap and the scrolling region.** A pair that wraps uses the same
-  wrapping as a narrow character, which still ignores the region
-  (LEXTER-O33); the terminal-fixes plan's LEXTER-D69 repairs both together.
+  wrapping as a narrow character, which still ignores the region (LEXTER-O33);
+  the terminal-fixes plan's LEXTER-D69 repairs both together.
 - **The 3270 pane** still falls back to the glyph of the space for a character
-  it cannot find, and keeps its own path to the grid (LEXTER-O66).
+  it cannot find, and keeps its own path to the grid (LEXTER-O66). The plan
+  has since settled it: the pane's screen becomes a Lexter screen, written
+  through the model (LEXTER-D128); the work is Phase 3's.
 - **Wide uncovered characters** show the "no glyph" glyph in their left cell
   only, until the halves of Phase 3.
 - **Grapheme clusters.** Zero-width characters are dropped; the text grid of
-  Phase 3 keeps them, and how they are drawn is LEXTER-O63.
+  Phase 3 keeps them, and how they are drawn is LEXTER-O63. The plan has since
+  settled how a text cell holds them (LEXTER-D127); how they are drawn remains
+  open.

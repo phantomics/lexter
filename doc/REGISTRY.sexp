@@ -230,3 +230,5 @@
 (:id "LEXTER-D129" :kind :decision :draft "LEXTER-DRAFT-cell-model-revision-D30" :host "LEXTER-0017" :date "2026-11-19" :by "Andrew Sengul")
 (:id "LEXTER-D130" :kind :decision :draft "LEXTER-DRAFT-cell-model-revision-D31" :host "LEXTER-0017" :date "2026-11-19" :by "Andrew Sengul")
 (:id "LEXTER-0020" :kind :document :draft "LEXTER-DRAFT-regression-suite" :path "doc/Log.RegressionSuite.md" :date "2026-11-19" :by "Andrew Sengul")
+(:id "LEXTER-0021" :kind :document :draft "LEXTER-DRAFT-terminal-stacks" :path "doc/Log.TerminalStacks.md" :date "2026-11-19" :by "Andrew Sengul")
+(:id "LEXTER-D131" :kind :decision :draft "LEXTER-DRAFT-terminal-stacks-D1" :host "LEXTER-0021" :date "2026-11-19" :by "Andrew Sengul")

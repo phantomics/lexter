@@ -14,7 +14,7 @@ relates-to:
   - LEXTER-0016
   - LEXTER-0014
   - LEXTER-0020
-  - LEXTER-DRAFT-terminal-stacks
+  - LEXTER-0021
   - LEXTER-DRAFT-pane-profiles-log
 cites:
   - title:    "Unicode Character Database 17.0.0"

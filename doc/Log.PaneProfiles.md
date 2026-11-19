@@ -14,7 +14,7 @@ relates-to:
   - LEXTER-DRAFT-pane-profiles
   - LEXTER-0017
   - LEXTER-0014
-  - LEXTER-DRAFT-terminal-stacks
+  - LEXTER-0021
   - LEXTER-0020
 ---
 

@@ -1,11 +1,15 @@
 ---
-id:            LEXTER-DRAFT-terminal-stacks
+id:            LEXTER-0021
 title:         "Consolidating the Terminal Stacks: Development Log"
 genre:         Log
 scope:         project
 project:       Lexter
 language:      en
-status:        Draft
+status:        Accepted
+authors:
+  - Andrew Sengul
+approved-by:   Andrew Sengul
+reviewed:      2026-11-19
 provenance:
   assistant:   opencode
   session:     "Consolidating the terminal stacks (2026-11-17); review revisions (2026-11-19)"
@@ -20,7 +24,7 @@ relates-to:
   - LEXTER-DRAFT-first-edition-repairs
   - LEXTER-DRAFT-swatch-ranges
 decisions:
-  - LEXTER-DRAFT-terminal-stacks-D1
+  - LEXTER-D131
 ---
 
 # Consolidating the Terminal Stacks: Development Log
@@ -97,7 +101,7 @@ provides ([LEXTER-DRAFT-pane-profiles](Plan.PaneProfiles.md)).
 
 Where the standalone terminal now lives is recorded as a decision of its own:
 
-### LEXTER-DRAFT-terminal-stacks-D1 — The standalone terminal moves into `lexter/panes`
+### LEXTER-D131 — The standalone terminal moves into `lexter/panes`
 
 **Status:** Proposed
 

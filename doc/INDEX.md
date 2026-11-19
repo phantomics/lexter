@@ -30,6 +30,7 @@ Table: Documents in the LEXTER namespace.
 | [LEXTER-0018](Eval.CellModels.PriorArt.md) | Cell Models: Prior-Art Evaluation | Eval (prior-art) | project | Accepted | — |
 | [LEXTER-0019](Survey.HostProtocol.md) | Exposing Lexter's Colour and Graphics to Hosts: Survey | Survey | project | Accepted | — |
 | [LEXTER-0020](Log.RegressionSuite.md) | Regression Suite (Phase 0): Development Log | Log | project | Accepted | — |
+| [LEXTER-0021](Log.TerminalStacks.md) | Consolidating the Terminal Stacks: Development Log | Log | project | Accepted | — |
 | [LEXTER-DRAFT-cell-field-format](Survey.CellFieldFormat.md) | Cell Field Format: Survey | Survey | component | Deprecated | renderer |
 | [LEXTER-DRAFT-data-structures-1e](Spec.DataStructures1e.md) | Data Structures, First Edition: Specification | Spec | project | Deprecated | — |
 | [LEXTER-DRAFT-first-edition-repairs](Log.FirstEditionRepairs.md) | The First Edition Repaired (Phase 1): Development Log | Log | project | Draft | — |
@@ -37,7 +38,6 @@ Table: Documents in the LEXTER namespace.
 | [LEXTER-DRAFT-pane-profiles](Plan.PaneProfiles.md) | Pane Profiles and Scrollback Viewing: Development Plan | Plan | component | Accepted | panes |
 | [LEXTER-DRAFT-pane-profiles-log](Log.PaneProfiles.md) | Pane Profiles and Scrollback Viewing: Development Log | Log | component | Draft | panes |
 | [LEXTER-DRAFT-swatch-ranges](Log.SwatchRanges.md) | Swatch Ranges (Phase 2): Development Log | Log | project | Draft | — |
-| [LEXTER-DRAFT-terminal-stacks](Log.TerminalStacks.md) | Consolidating the Terminal Stacks: Development Log | Log | project | Draft | — |
 | [LEXTER-DRAFT-workspace-repaint](Log.WorkspaceRepaint.md) | The Workspace-Switch Repaint: Development Log | Log | project | Draft | — |
 
 Table: Decision, open-question, and memo records in the LEXTER namespace.
@@ -174,6 +174,7 @@ Table: Decision, open-question, and memo records in the LEXTER namespace.
 | [LEXTER-D128](Plan.CellModelRevision.md#lexter-d128--the-3270-panes-screen-is-a-lexter-screen-with-its-field-state-beside-it) | Decision | The 3270 pane's screen is a Lexter screen, with its field state beside it | Accepted | LEXTER-0017 |
 | [LEXTER-D129](Plan.CellModelRevision.md#lexter-d129--the-composed-grid-lives-in-a-lisp-array-behind-generated-accessors) | Decision | The composed grid lives in a Lisp array, behind generated accessors | Accepted | LEXTER-0017 |
 | [LEXTER-D130](Plan.CellModelRevision.md#lexter-d130--the-descriptor-is-a-set-of-specops-manifests-in-8-bit-units-and-the-shader-is-written-against-it-by-hand) | Decision | The descriptor is a set of SpecOps manifests in 8-bit units, and the shader is written against it by hand | Accepted | LEXTER-0017 |
+| [LEXTER-D131](Log.TerminalStacks.md#lexter-d131--the-standalone-terminal-moves-into-lexterpanes) | Decision | The standalone terminal moves into lexter/panes | Proposed | LEXTER-0021 |
 | [LEXTER-DRAFT-mouse-reporting-D1](Log.MouseReporting.md#lexter-draft-mouse-reporting-d1--coordinates-are-pane-content-relative) | Decision | Coordinates are pane-content-relative | Proposed | LEXTER-DRAFT-mouse-reporting |
 | [LEXTER-DRAFT-mouse-reporting-D2](Log.MouseReporting.md#lexter-draft-mouse-reporting-d2--drag-capture) | Decision | Drag capture | Proposed | LEXTER-DRAFT-mouse-reporting |
 | [LEXTER-DRAFT-mouse-reporting-D3](Log.MouseReporting.md#lexter-draft-mouse-reporting-d3--cell-granularity-motion) | Decision | Cell-granularity motion | Proposed | LEXTER-DRAFT-mouse-reporting |
@@ -191,7 +192,6 @@ Table: Decision, open-question, and memo records in the LEXTER namespace.
 | [LEXTER-DRAFT-pane-profiles-D8](Plan.PaneProfiles.md#lexter-draft-pane-profiles-d8--unseen-output-is-pane-state-polled-by-the-decorator) | Decision | Unseen output is pane state, polled by the decorator | Implemented | LEXTER-DRAFT-pane-profiles |
 | [LEXTER-DRAFT-pane-profiles-D9](Plan.PaneProfiles.md#lexter-draft-pane-profiles-d9--terminal-events-reach-the-apl-layer-through-a-generic-function) | Decision | Terminal events reach the APL layer through a generic function | Implemented | LEXTER-DRAFT-pane-profiles |
 | [LEXTER-DRAFT-terminal-fixes-1e-D16](Plan.TerminalFixes1e.md#lexter-draft-terminal-fixes-1e-d16--the-protocol-tests-talk-to-a-scripted-peer-over-a-loopback-socket) | Decision | The protocol tests talk to a scripted peer over a loopback socket | Proposed | LEXTER-0015 |
-| [LEXTER-DRAFT-terminal-stacks-D1](Log.TerminalStacks.md#lexter-draft-terminal-stacks-d1--the-standalone-terminal-moves-into-lexterpanes) | Decision | The standalone terminal moves into lexter/panes | Proposed | LEXTER-DRAFT-terminal-stacks |
 | [LEXTER-O1](Log.EncodingRanges.md#lexter-o1--where-utf-8-is-decoded-relative-to-cl-vt) | Open question | Where UTF-8 is decoded relative to cl-vt | — | LEXTER-0009 |
 | [LEXTER-O2](Plan.CompassMigration.md#lexter-o2--which-documents-are-numbered-first) | Open question | Which documents are numbered first | — | LEXTER-0011 |
 | [LEXTER-O3](Plan.CompassMigration.md#lexter-o3--a-compiled-readme) | Open question | A compiled README | — | LEXTER-0011 |

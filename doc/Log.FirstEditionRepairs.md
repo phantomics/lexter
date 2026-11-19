@@ -13,7 +13,7 @@ relates-to:
   - LEXTER-0017
   - LEXTER-0016
   - LEXTER-0014
-  - LEXTER-DRAFT-regression-suite
+  - LEXTER-0020
   - LEXTER-DRAFT-terminal-stacks
   - LEXTER-DRAFT-pane-profiles-log
 cites:
@@ -32,7 +32,7 @@ LEXTER-O27, LEXTER-O28, LEXTER-O36, and LEXTER-O40, as LEXTER-D97 decides,
 with the width table of LEXTER-D117 and LEXTER-D122,
 the atlas's reserved positions of LEXTER-D89, and the cursor of LEXTER-D101.
 Every reproduction test of those findings that Phase 0 wrote
-([LEXTER-DRAFT-regression-suite](Log.RegressionSuite.md)) now passes.
+([LEXTER-0020](Log.RegressionSuite.md)) now passes.
 
 ## Problem
 

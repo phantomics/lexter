@@ -13,7 +13,7 @@ relates-to:
   - LEXTER-0015
   - LEXTER-0017
   - LEXTER-0014
-  - LEXTER-DRAFT-regression-suite
+  - LEXTER-0020
 ---
 
 # The Workspace-Switch Repaint: Development Log

@@ -22,7 +22,7 @@ relates-to:
   - LEXTER-0005
   - LEXTER-0006
   - LEXTER-0010
-  - LEXTER-DRAFT-regression-suite
+  - LEXTER-0020
 decisions:
   - LEXTER-D66
   - LEXTER-D67
@@ -481,7 +481,7 @@ negotiation and the telnet fixes against an in-memory stream. When the tests
 were written, no TN3270E server was at hand to record a negotiation from. The
 in-memory stream would exercise the telnet client's string writer, which
 LEXTER-D73 moves into the pane, so a test of it would not test what the pane
-sends ([LEXTER-DRAFT-regression-suite](Log.RegressionSuite.md)).
+sends ([LEXTER-0020](Log.RegressionSuite.md)).
 
 **Decision:** The TN3270 and telnet tests connect the real client, and a real
 telnet pane, over a loopback socket in the same image, to a peer in the test

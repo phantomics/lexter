@@ -229,3 +229,4 @@
 (:id "LEXTER-D128" :kind :decision :draft "LEXTER-DRAFT-cell-model-revision-D29" :host "LEXTER-0017" :date "2026-11-19" :by "Andrew Sengul")
 (:id "LEXTER-D129" :kind :decision :draft "LEXTER-DRAFT-cell-model-revision-D30" :host "LEXTER-0017" :date "2026-11-19" :by "Andrew Sengul")
 (:id "LEXTER-D130" :kind :decision :draft "LEXTER-DRAFT-cell-model-revision-D31" :host "LEXTER-0017" :date "2026-11-19" :by "Andrew Sengul")
+(:id "LEXTER-0020" :kind :document :draft "LEXTER-DRAFT-regression-suite" :path "doc/Log.RegressionSuite.md" :date "2026-11-19" :by "Andrew Sengul")

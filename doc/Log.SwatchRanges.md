@@ -15,7 +15,7 @@ relates-to:
   - LEXTER-0015
   - LEXTER-0014
   - LEXTER-DRAFT-first-edition-repairs
-  - LEXTER-DRAFT-regression-suite
+  - LEXTER-0020
 ---
 
 # Swatch Ranges (Phase 2): Development Log
@@ -27,7 +27,7 @@ and ranges of one GPU store (LEXTER-D99), screens storing global indices
 LEXTER-D123 decides, and palettes and swatches kept on
 the GPU as integers (LEXTER-D109). The reproduction tests of LEXTER-O22,
 LEXTER-O23, and LEXTER-O24 that Phase 0 wrote
-([LEXTER-DRAFT-regression-suite](Log.RegressionSuite.md)) now pass, and so does
+([LEXTER-0020](Log.RegressionSuite.md)) now pass, and so does
 that of LEXTER-O29, whose palette copy the terminal-fixes plan's LEXTER-D70
 asks for in the function this phase changed.
 
@@ -251,7 +251,7 @@ Table: Files added or changed in Phase 2, in commit `8451a08`.
 - **The palette half of LEXTER-O23 is untested.** Two screens' palette
   generations can be equal for different palettes, which the regression
   suite's Log left to be tested once uploads are recorded by owner
-  ([LEXTER-DRAFT-regression-suite](Log.RegressionSuite.md)). The renderer now
+  ([LEXTER-0020](Log.RegressionSuite.md)). The renderer now
   records them (`src/renderer.lisp:upload-palette@8451a08`), but its decision
   is made beside the GL calls, so no headless test reaches it; separating the
   decision from the upload, as `plan-swatch-uploads` is separated for

@@ -15,7 +15,7 @@ relates-to:
   - LEXTER-0017
   - LEXTER-0014
   - LEXTER-DRAFT-terminal-stacks
-  - LEXTER-DRAFT-regression-suite
+  - LEXTER-0020
 ---
 
 # Pane Profiles and Scrollback Viewing: Development Log

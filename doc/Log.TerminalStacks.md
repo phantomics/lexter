@@ -15,7 +15,7 @@ relates-to:
   - LEXTER-0014
   - LEXTER-0005
   - LEXTER-0010
-  - LEXTER-DRAFT-regression-suite
+  - LEXTER-0020
 ---
 
 # Consolidating the Terminal Stacks: Development Log

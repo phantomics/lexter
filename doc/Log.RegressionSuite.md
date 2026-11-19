@@ -1,11 +1,15 @@
 ---
-id:            LEXTER-DRAFT-regression-suite
+id:            LEXTER-0020
 title:         "Regression Suite (Phase 0): Development Log"
 genre:         Log
 scope:         project
 project:       Lexter
 language:      en
-status:        Draft
+status:        Accepted
+authors:
+  - Andrew Sengul
+approved-by:   Andrew Sengul
+reviewed:      2026-11-19
 provenance:
   assistant:   opencode
   session:     "Phase 0: the regression suite (2026-11-17)"

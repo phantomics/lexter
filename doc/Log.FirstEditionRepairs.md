@@ -1,5 +1,5 @@
 ---
-id:            LEXTER-DRAFT-first-edition-repairs
+id:            LEXTER-0024
 title:         "The First Edition Repaired (Phase 1): Development Log"
 genre:         Log
 scope:         project

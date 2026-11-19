@@ -21,7 +21,7 @@ relates-to:
   - LEXTER-0010
   - LEXTER-0020
   - LEXTER-0022
-  - LEXTER-DRAFT-first-edition-repairs
+  - LEXTER-0024
   - LEXTER-DRAFT-swatch-ranges
 decisions:
   - LEXTER-D131
@@ -254,7 +254,7 @@ Table: Files added or changed by the consolidation, in commit `ee026f2`.
   initialisation, whose colour 7 differs from the model's default; the pane's
   palette replaces it at the first frame, but the two definitions remain until
   LEXTER-O36's repair in Phase 1. Since done
-  ([LEXTER-DRAFT-first-edition-repairs](Log.FirstEditionRepairs.md)).
+  ([LEXTER-0024](Log.FirstEditionRepairs.md)).
 - **Globals.** `*prefix-key*` and `*cursor-blink-on*` are still set globally;
   LEXTER-D77 moves them into the compositor.
 - **The Origin tests' failures** are outside the cell-model and terminal-fixes

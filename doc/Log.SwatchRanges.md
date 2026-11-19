@@ -14,7 +14,7 @@ relates-to:
   - LEXTER-0016
   - LEXTER-0015
   - LEXTER-0014
-  - LEXTER-DRAFT-first-edition-repairs
+  - LEXTER-0024
   - LEXTER-0020
 ---
 

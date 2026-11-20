@@ -8,7 +8,7 @@ language:      en
 status:        Draft
 provenance:
   assistant:   opencode
-  session:     "Phase 3, step 1: the manifests and their accessors (2026-11-20); step 2: the screen as text and styles (2026-11-20)"
+  session:     "Phase 3, step 1: the manifests and their accessors (2026-11-20); step 2: the screen as text and styles (2026-11-20); step 3: records in the composed grid (2026-11-20)"
 relates-to:
   - LEXTER-0017
   - LEXTER-0016
@@ -379,27 +379,31 @@ Choices made while building:
 ### Implementation
 
 - **`src/styles.lisp`**, new: colours, `style`, the style table with its
-  swatch cache and the cache of erased styles, `style-swatch`, which applies
-  the presentation rules, and `rgb-to-256`.
+  swatch cache and the cache of erased styles,
+  `src/styles.lisp:style-swatch@0d4b524`, which applies the presentation
+  rules, and `rgb-to-256`.
 - **`src/model.lisp`**, rewritten from the cell representation down:
   - the screen holds `text`, `clusters`, `terminal-rows`, and `styles`;
-  - `write-char-at`, `put-char`, `write-string-at`, and `join-character`
-    write codepoints;
+  - `write-char-at`, `put-char`, `write-string-at`, and
+    `src/model.lisp:join-character@0d4b524` write codepoints;
   - the erase, insert, delete, line, scroll, and resize operations move and
     clear text cells, joined codepoints, and terminal rows together;
-  - `history-row` is the form of history;
-  - `%build-row` is the one function that builds a terminal row, and
-    `flush-to-display` calls it for the screen and for the history.
-- **`src/manifests.lisp`:** the `terminal-row` manifest and its accessors,
+  - `src/model.lisp:history-row@0d4b524` is the form of history;
+  - `src/model.lisp:%build-row@0d4b524` is the one function that builds a
+    terminal row, and `src/model.lisp:flush-to-display@0d4b524` calls it
+    for the screen and for the history.
+- **`src/manifests.lisp`:** the `src/manifests.lisp:terminal-row@0d4b524`
+  manifest and its accessors,
   and `copy-text-cells` and `clear-text-cells`.
 - **`src/vt-handler.lisp`:**
   - the current, saved, and alternate-saved styles replace the colour and
     attribute slots;
-  - `handle-sgr` builds a new style;
+  - `src/vt-handler.lisp:handle-sgr@0d4b524` builds a new style;
   - `%print-codepoint` joins characters of width 0;
-  - `%write-printed-char` writes the style's id and sets or clears the soft
-    wrap;
-  - `vt-handler-bold-as-bright` reads and sets the style table's setting.
+  - `src/vt-handler.lisp:%write-printed-char@0d4b524` writes the style's
+    id and sets or clears the soft wrap;
+  - `src/vt-handler.lisp:vt-handler-bold-as-bright@0d4b524` reads and sets the
+    style table's setting.
 - **`src/panes/vt-pane.lisp`:** the flush passes the handler's atlas, and
   the screen's blank glyph is gone.
 - **`lexter.asd`:** SpecOps 0.2.4, and the new source file. In
@@ -484,5 +488,207 @@ Table: Files changed by step 2.
   [LEXTER-DRAFT-data-structures-1e](Spec.DataStructures1e.md) still
   describes the screen's cells as they were. It is superseded by the second
   edition's specification at the end of the plan, rather than amended now.
+- **Code references.** Done: the update's references are pinned to
+  `0d4b524`, the commit that holds it.
+
+## Update 2026-11-20 — Step 3: records in the composed grid
+
+Step 3 makes the composed grid an array of records (LEXTER-D129), with a
+change stamp for each row (LEXTER-D113), and builds a terminal's rows into
+it as records. The build applies the presentation rules: reverse video
+through the background slot, invisible text as no glyphs, the underline as a
+mask in the text's colour, and the blink flag. The interim cursor transforms
+its cell. The renderer that draws records is step 6. Until then, the grid's
+records are turned into the first edition's instances. That is enough for
+reverse video and the underline to be drawn now, which the first edition
+never drew.
+
+### Problem
+
+The grid held the first edition's cells:
+- a glyph and swatch for each cell, with wide and continuation flags;
+- a hash table of layered cells;
+- a dirty bit for each row, which nothing read (LEXTER-O40).
+
+Reverse video, invisible text, and the underline were kept in the
+handler's attributes but never drawn. LEXTER-D129 has the grid hold
+records, read and written only through their accessors, and LEXTER-D113
+has each row carry a change stamp in place of the dirty bit.
+
+### Design Decisions
+
+The decisions are the plan's and the architecture's: LEXTER-D129,
+LEXTER-D113, LEXTER-D86, LEXTER-D88, LEXTER-D89, LEXTER-D94, LEXTER-D101,
+and LEXTER-D126. The steward settled four more before this step was built:
+
+- **Records drawn through the first edition's renderer until step 6.**
+  `build-render-data` turns the records into the first edition's
+  instances:
+  - a cell of one glyph layer in ink slot 1 over background slot 0 is a
+    simple instance, drawn as before;
+  - any other plain cell is layered instances, its first layer opaque over
+    its background slot;
+  - a union mask that cuts one layer is drawn as a layer in that layer's
+    ink, which colours the same pixels;
+  - other masks and blink are not drawn until step 6.
+- **The first edition's writers, over records.** The function pane, the
+  workspace's decorations, the 3270 pane, and the demo keep writing
+  through `set-simple-cell`, `set-cell-layer`, and their companions, which
+  now write records. A transparent side maps as LEXTER-D86 has it: `:bg` is
+  a selector of 0, `:fg` a selector of 1, and `:none` on layer 0 gives the
+  cell its background slot. Steps 4 and 5 move these writers to records.
+- **Stamps on the grid now, on screens later.** The grid's rows carry
+  change stamps. A screen keeps its dirty bits while the flush is their
+  only reader.
+- **The underline from the font's ascent.** The single underline, atlas
+  position 9, is drawn from the font's ascent: one row below the baseline,
+  max(1, cell height ÷ 16) thick, kept inside the cell. The PCF loader does
+  not read the XLFD properties that LEXTER-D89 would place it by.
+
+Choices made while building:
+
+- **What the build writes.** Each cell is a plain record:
+  - its glyph as layer 0 in ink slot 1, over background slot 0;
+  - its style's swatch, and the terminal's palette slot, which the VT pane
+    passes to the flush;
+  - for reverse video, background slot 1 and ink slot 0, in the same swatch
+    as without it, so that no reversed swatch is interned (LEXTER-D86,
+    LEXTER-O24);
+  - for invisible text, a glyph count of 0;
+  - for an underline, the line glyph of the style's line style as a union
+    mask reaching one layer (LEXTER-D88);
+  - for blink, the blink flag.
+
+  An empty cell is a record with no glyphs, rather than the empty glyph.
+- **The halves of a wide character.** Both halves are wide, and the second
+  sets the right-half bit. The right half names the glyph's position plus 1
+  when the glyph is a wide entry of the atlas, and otherwise the same
+  narrow glyph, such as the "no glyph" glyph (LEXTER-D126). The underline
+  mask is narrow, and each half carries it.
+- **The interim cursor.** The cursor's cell has its background slot
+  exchanged with its topmost layer's ink slot, past any mask, as an overlay
+  will copy the cell in Phase 4 (LEXTER-D93). It changes both halves of a
+  wide character, so that they still match. A cell with no layer takes
+  slot 1 as its background. On a cell of one layer this draws the same
+  pixels as the first edition's exchange.
+- **One counter for stamps.** `next-change-stamp` takes the next value of
+  one counter, which every write of a record to a grid takes. Making,
+  resizing, or touching a whole grid gives every row a new stamp. The
+  renderer still builds every row each frame; uploads by stamp, and the
+  clock masks that renderers derive, come with step 6.
+- **An adapter that costs little.** A first version of the adapter read
+  every record's layers into a list. It took 1.8 ms and allocated 750 KB a
+  frame for a grid of 200 by 60. Text cells now take a path that reads
+  their few fields at once, at 0.40 ms with nothing allocated; the first
+  edition's builder took 0.08 ms.
+- **Accessors for the grid.** Rather than reach the manifests' internals,
+  the grid uses new exported accessors: a glyph word's selector
+  (`record-selector`), a mask's operation and reach (`record-mask`), and a
+  record's glyph count and type bits (`record-type-bits`).
+
+### Implementation
+
+- **`src/grid.lisp`**, rewritten:
+  - the grid holds `records` and `stamps`;
+  - `write-text-record` writes a cell of text, `clear-cell` a record of
+    zeros, and `exchange-cell-slots` draws the interim cursor;
+  - `cell-glyph`, `cell-swatch`, `wide-left-p`, and `continuation-p` read
+    the records;
+  - the first edition's writers write records;
+  - `build-render-data` builds the first edition's instances from the
+    records;
+  - `resize-grid` copies records;
+  - `row-stamp`, `touch-row`, and `touch-all-rows` replace the dirty bits.
+- **`src/model.lisp`:** `%build-row` writes text records with the
+  presentation rules, and `flush-to-display` takes the palette slot.
+- **`src/atlas.lisp`:** the single underline at position 9, named
+  `+underline-glyph+`, and `line-glyph-position`.
+- **`src/manifests.lisp`:** `record-selector`, `record-mask`, and
+  `record-type-bits`.
+- **`src/packages.lisp`:** `lexter/manifests` is defined before
+  `lexter/grid`, which imports its accessors; the grid's dirty-bit
+  functions are gone.
+- **Panes:** the VT pane passes its palette slot to the flush, and the
+  compositor and `clear-grid` touch every row where they marked every row
+  dirty.
+- **`tools/check-pixel-fixtures.lisp`:** the new checksums of "colours" and
+  "palette".
+
+### Tests
+
+- **The helpers** that read the grid read its records, and a new one,
+  `grid-record`, reads a whole record. Every existing test passes
+  unchanged.
+- **New in `grid`, 14 tests:**
+  - a character built as one layer;
+  - reverse video through the background slot;
+  - invisible text with no glyphs;
+  - the underline as a mask;
+  - the blink flag;
+  - the two halves of a wide character;
+  - every built record keeping the invariants;
+  - the cursor's exchange, and on a wide character;
+  - stamps on writing, and on resizing;
+  - the first edition's transparent sides as selectors;
+  - reverse video and the underline reaching the first edition's
+    instances;
+  - the grid holding records only.
+- **New in `atlas`:** the single underline at position 9.
+
+### Verification
+
+- **The suite.** `(asdf:test-system :lexter)` runs 182 tests and 534 checks:
+  521 pass and 13 fail. The failures are the same as before, those of
+  LEXTER-D72, LEXTER-D73, and LEXTER-D74.
+- **The instances, compared.** The first edition's instances were built
+  from each fixture before and after this step, in a headless terminal of
+  40 by 8. They differ only where expected:
+  - the cells of "reverse" in "colours" and of "rev" in "palette" are now
+    layered instances in exchanged slots;
+  - on the cursor over an empty cell, ink 1 over background 1 replaces ink
+    0 over background 1, which with the empty glyph draws the same pixels.
+- **Pixels.** On the NVIDIA driver, in both fonts and both orders, "cjk",
+  "alt", and "many" keep their checksums. "colours" and "palette" take new
+  ones, which show their reverse video drawn. The GPU's stores match
+  everywhere. The new checksums are recorded in
+  `tools/check-pixel-fixtures.lisp`, with the reason.
+- **The other test systems.** `lexter/mouse-tests` passes, 32 checks;
+  `lexter/origin-tests` gives its same 23 passes and 28 failures.
+- **Loading.** Every system loads with the same style warnings as before.
+
+### Files
+
+Table: Files changed by step 3.
+
+| File | Action | Description |
+|---|---|---|
+| `src/grid.lisp` | Modified | Records and stamps; the first edition's writers and instances over records |
+| `src/model.lisp` | Modified | Rows built as text records with the presentation rules |
+| `src/atlas.lisp` | Modified | The single underline at position 9 |
+| `src/manifests.lisp` | Modified | Accessors of selectors, masks, and type bits |
+| `src/packages.lisp` | Modified | The grid's imports and exports |
+| `src/panes/vt-pane.lisp` | Modified | The palette slot passed to the flush |
+| `src/panes/compositor.lisp` | Modified | Every row touched on resizing |
+| `src/panes/workspace.lisp` | Modified | Every row touched on clearing |
+| `tools/check-pixel-fixtures.lisp` | Modified | New checksums of "colours" and "palette" |
+| `tests/helpers.lisp` | Modified | Readers of records |
+| `tests/test-grid.lisp` | Modified | Records, the cursor, stamps, and the adapter |
+| `tests/test-atlas.lisp` | Modified | The underline glyph |
+
+### Outstanding Work
+
+- **Stamps on screens** (LEXTER-D113), when partial redraw or a second
+  reader needs them.
+- **Uploads by stamp, clock masks, and blink,** with the renderer of step 6,
+  which also removes the adapter and the first edition's instances.
+- **The underline from XLFD properties,** when the PCF loader reads them.
+- **Assertions in debugging builds** of the invariants, which the built
+  records already keep (the test of step 3), with the API's writers of
+  step 4.
+- **An opaque layer above the first.** `set-cell-layer` maps `:none` on a
+  layer above the first to a layer whose glyph covers, where the first
+  edition drew it opaque, hiding the layers beneath. No caller writes one:
+  the demo, the only caller of `set-cell-layer`, uses `:none` on layer 0
+  alone. The API of step 4 replaces it.
 - **Code references.** The update's references name files and functions
   without a revision; they are pinned once it is committed.

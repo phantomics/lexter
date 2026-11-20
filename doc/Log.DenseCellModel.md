@@ -8,7 +8,7 @@ language:      en
 status:        Draft
 provenance:
   assistant:   opencode
-  session:     "Phase 3, step 1: the manifests and their accessors (2026-11-20); step 2: the screen as text and styles (2026-11-20); step 3: records in the composed grid (2026-11-20); step 4: the API and surfaces (2026-11-20)"
+  session:     "Phase 3, step 1: the manifests and their accessors (2026-11-20); step 2: the screen as text and styles (2026-11-20); step 3: records in the composed grid (2026-11-20); step 4: the API and surfaces (2026-11-20); step 5: the 3270 pane on a Lexter screen (2026-11-20)"
 relates-to:
   - LEXTER-0017
   - LEXTER-0016
@@ -775,21 +775,28 @@ Choices made while building:
 ### Implementation
 
 - **`src/surface.lisp`**, new, the package `lexter/surface`:
-  - `put-char`, `put-string`, `put-glyph`, and `put-cell` write cells;
+  - `src/surface.lisp:put-char@2c398a9`, `put-string`, `put-glyph`, and
+    `src/surface.lisp:put-cell@2c398a9` write cells;
   - `fill-cells` and `clear-cells` fill and clear them;
   - `char-glyph` looks a character's glyph up in the atlas;
   - `surface-char` and `surface-string` read a surface's text;
-  - `compose-surface` copies a surface into the composed grid.
+  - `src/surface.lisp:compose-surface@2c398a9` copies a surface into the
+    composed grid.
 - **`src/grid.lisp`:** the `surface` structure, which includes the display
-  grid's, with `make-surface` and `resize-surface`; the grid's `atlas` and
-  `palette-slot`; `cell-index`; and the layered API removed.
-- **`src/manifests.lisp`:** `*check-records*` and `check-record`.
+  grid's, with `src/grid.lisp:make-surface@2c398a9` and `resize-surface`;
+  the grid's `atlas` and `palette-slot`; `cell-index`; and the layered API
+  removed.
+- **`src/manifests.lisp`:** `*check-records*` and
+  `src/manifests.lisp:check-record@2c398a9`.
 - **`src/panes/function-pane.lisp`:** the pane keeps its atlas and a surface
-  of its size. Its render function is called with the pane and the surface,
-  in the pane's own coordinates, and its flush copies the surface into the
-  grid. `write-pane-string` and `clear-pane-region` write the surface.
+  of its size
+  (`src/panes/function-pane.lisp:function-pane-ensure-surface@2c398a9`). Its
+  render function is called with the pane and the surface, in the pane's own
+  coordinates, and its flush copies the surface into the grid.
+  `write-pane-string` and `clear-pane-region` write the surface.
 - **`src/panes/workspace.lisp`:** the decoration list is written with
-  `put-glyph`, and `clear-grid` with `fill-cells`.
+  `put-glyph`, and `src/panes/workspace.lisp:clear-grid@2c398a9` with
+  `fill-cells`.
 - **`src/panes/compositor.lisp`:** the composed grid is made with the atlas.
 - **`src/demo.lisp`:** the scenes are written through the API.
 - **`src/packages.lisp`** and **`lexter.asd`:** the new package and file.
@@ -870,6 +877,159 @@ Table: Files changed by step 4.
   surface's stamps would let it copy only the rows changed since the copy
   before, if the copies are measured to cost.
 - **Chrome as text,** if selection or screen readers come to need it.
-- **The 3270 pane's writer** and the cursor exchange, which step 5 replaces.
+- **The 3270 pane's writer.** Done in step 5 (the update below).
+- **Code references.** Done: the update's references are pinned to
+  `2c398a9`, the commit that holds it.
+
+## Update 2026-11-20 — Step 5: the 3270 pane on a Lexter screen
+
+Step 5 puts the 3270 pane on a Lexter screen, as LEXTER-D128 decides. The
+3270 screen's characters are held once, in a Lexter screen of its geometry,
+written through the model's operations. Its field state lies beside the
+Lexter screen, and its pane builds the screen into the composed grid as every
+terminal pane does (LEXTER-D124). The pane's own path to the grid is gone,
+and with it `set-simple-cell`, the last of the first edition's writers.
+
+### Problem
+
+The 3270 pane drew a screen of its own:
+- buffers of codepoints, field attributes, extended colours, and
+  highlights;
+- written to the grid cell by cell, in swatches of its own;
+- with the cursor drawn by exchanging slots.
+
+It never touched the model, and it ignored a field's intensity, so a
+password typed into a non-display field was shown. Its screen's arrays were
+made 80 by 24 whatever its geometry, the fault of LEXTER-O31 that the
+terminal-fixes plan's LEXTER-D72 repairs.
+
+### Design Decisions
+
+The decision is LEXTER-D128. The steward settled two more before this step
+was built:
+
+- **Intensity styles a field's cells.** A non-display field's cells are
+  written invisible, with their text kept, and an intensified field's are
+  written bold.
+- **Background colours wait.** The extended attribute for background colour
+  stays ignored.
+
+Choices made while building:
+
+- **One copy.** A `tn3270-screen` holds a Lexter screen of its geometry,
+  mode `:3270`, with no history and a blinking cursor. Beside it, it keeps
+  the field attribute at each address and each cell's extended colour and
+  highlight. Characters are read from the Lexter screen, by the client's
+  Read Modified reply among others. `lexter/tn3270` now depends on `lexter`.
+- **The cursor** is the Lexter screen's cursor: the user's cursor, which IC
+  and local keys move. The host's paint pointer, the buffer address, stays
+  apart in the 3270 screen.
+- **Blank cells are spaces,** as the old buffer held them, so that Read
+  Modified replies send what they sent before. A field attribute's
+  position is a blank cell, in the plain style.
+- **Restyling.** A cell's style is made from its field's intensity and its
+  own extended colour and highlight. The colour maps to the palette as the
+  pane mapped it, and reverse, underscore, and blink are the style's
+  attributes. Every cell is restyled after each record of the data stream
+  and each keystroke, in one pass that follows the field attributes in
+  order, wrapping round. Only cells whose style changes mark their rows
+  dirty. Styles are kept by intensity, colour, and highlight, so each is
+  interned once.
+- **Widths.** Every buffer address is one narrow cell, as the data stream
+  decides (LEXTER-D117).
+- **The pane** flushes the Lexter screen with the atlas and the default pane
+  palette slot. When its workspace is switched to, it marks every row dirty
+  (LEXTER-D71).
+- **What changes on screen.** Reverse video is drawn through the background
+  slot, the same pixels as the pane's reversed swatch, and the extended
+  underscore is now drawn. Blink is carried as the blink flag, which the
+  renderer draws in step 6. A character that no font covers is now the "no
+  glyph" glyph, where the pane drew a space (LEXTER-D122).
+- **LEXTER-O31's geometry.** Every per-cell array is now made from the
+  screen's geometry, so the reproduction test of a 132-by-27 screen passes.
+  It belongs to LEXTER-D72, whose record framing, the other half of
+  LEXTER-O31, and negotiation (LEXTER-O25) still fail.
+
+### Implementation
+
+- **`src/tn3270/screen.lisp`**, rewritten:
+  - the screen holds `model`, a Lexter screen, beside `field-attrs`,
+    `colors`, and `highlights`;
+  - every write goes through the model;
+  - `screen-restyle` gives every cell its style;
+  - `screen-cursor-address`, `screen-dirty`, and `screen-get-char` read the
+    Lexter screen;
+  - `screen-erase-char` and `screen-set-field-attr` are new;
+  - the colour map moved here from the pane.
+- **`src/tn3270/parser.lisp`:** EUA, Erase All Unprotected, and MF write
+  through the screen's functions, and each stream ends with a restyle.
+- **`src/tn3270/client.lisp`:** Read Modified reads each field's characters
+  from the Lexter screen.
+- **`src/tn3270-pane/tn3270-pane.lisp`:** the flush builds the Lexter screen
+  through `flush-to-display`; the pane marks its screen dirty when asked;
+  and its keys write through the screen's functions.
+- **`src/model.lisp`:** `make-screen` takes `:scrollback-enabled` and
+  `:cursor-blink`, which the VT handler's alternate screen now uses in place
+  of `::`, and `set-cell-style` restyles a cell.
+- **`src/grid.lisp`:** `set-simple-cell` is removed.
+- **`lexter.asd`:** `lexter/tn3270` depends on `lexter`, and `lexter/tests`
+  on `lexter/tn3270-pane`.
+
+### Tests
+
+- **Migrated.** LEXTER-O31's geometry test now checks the Lexter screen and
+  the arrays beside it, and passes. The grid's test of a resized pair writes
+  its pair through the API.
+- **New in `tn3270`, 8 tests:**
+  - the data stream writing the Lexter screen;
+  - a field attribute in a blank cell;
+  - a field's intensity styling its cells;
+  - a changed field attribute restyling its field;
+  - extended attributes as the style;
+  - the pane built as a terminal is, with its cursor;
+  - Read Modified sending what was typed;
+  - the pane writing the grid only through the model.
+
+### Verification
+
+- **The suite.** `(asdf:test-system :lexter)` runs 206 tests and 617 checks:
+  609 pass and 8 fail. The failures are those of LEXTER-D72's negotiation
+  and framing, LEXTER-D73, and LEXTER-D74; the 5 checks of LEXTER-O31's
+  geometry now pass.
+- **Pixels.** `tools/check-pixel-fixtures.lisp` reproduces every checksum,
+  in both fonts and both orders, and the GPU's stores match.
+- **The other test systems.** `lexter/mouse-tests` passes, 32 checks;
+  `lexter/origin-tests` gives its same 23 passes and 28 failures.
+- **Loading.** Every system loads with the same style warnings as before.
+
+### Files
+
+Table: Files changed by step 5.
+
+| File | Action | Description |
+|---|---|---|
+| `src/tn3270/screen.lisp` | Modified | The screen as a Lexter screen with its field state beside it |
+| `src/tn3270/parser.lisp` | Modified | Writes through the screen; a restyle after each stream |
+| `src/tn3270/client.lisp` | Modified | Read Modified from the Lexter screen |
+| `src/tn3270/packages.lisp` | Modified | The screen's new exports |
+| `src/tn3270-pane/tn3270-pane.lisp` | Modified | Built through the model; its own path to the grid removed |
+| `src/model.lisp` | Modified | `:scrollback-enabled`, `:cursor-blink`, and `set-cell-style` |
+| `src/vt-handler.lisp` | Modified | The alternate screen made without history through `make-screen` |
+| `src/grid.lisp` | Modified | `set-simple-cell` removed |
+| `src/packages.lisp` | Modified | The model's and the grid's exports |
+| `lexter.asd` | Modified | `lexter/tn3270` on `lexter`; the tests on the 3270 pane |
+| `tests/test-tn3270.lisp` | Modified | The geometry test migrated; the 3270 screen on the model |
+| `tests/test-grid.lisp` | Modified | A resized pair written through the API |
+
+### Outstanding Work
+
+- **LEXTER-D72's status.** LEXTER-O31's geometry is repaired by this step;
+  its record framing, and LEXTER-O25's negotiation, remain. Updating the
+  terminal-fixes plan is the steward's.
+- **Background colours** (XA X'45'), and the character set attribute.
+- **Erase/Write Alternate** still clears without switching to the alternate
+  geometry, and double-byte characters are not yet two cells (LEXTER-D117).
+- **The pane's palette slot.** The 3270 pane draws in the default pane
+  slot, as before, until the allocator of step 6 gives it one.
 - **Code references.** The update's references name files and functions
   without a revision; they are pinned once it is committed.

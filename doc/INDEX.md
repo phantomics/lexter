@@ -24,7 +24,7 @@ Table: Documents in the LEXTER namespace.
 | [LEXTER-0012](Log.CompassMigration.md) | Compass Migration: Development Log | Log | project | Implemented | — |
 | [LEXTER-0013](Survey.LayerMechanics.md) | Layer Mechanics: Survey | Survey | component | Accepted | renderer |
 | [LEXTER-0014](Eval.Critique.DataStructures1e.md) | Data Structures, First Edition: Critique | Eval (critique) | project | Accepted | — |
-| [LEXTER-0015](Plan.TerminalFixes1e.md) | Terminal Fixes, First Edition: Development Plan | Plan | project | Accepted | — |
+| [LEXTER-0015](Plan.TerminalFixes1e.md) | Terminal Fixes, First Edition: Development Plan | Plan | project | Implemented | — |
 | [LEXTER-0016](Arch.CellModel.md) | The Cell Model Architecture | Architecture | project | Accepted | — |
 | [LEXTER-0017](Plan.CellModelRevision.md) | Cell Model Revision: Development Plan | Plan | project | Accepted | — |
 | [LEXTER-0018](Eval.CellModels.PriorArt.md) | Cell Models: Prior-Art Evaluation | Eval (prior-art) | project | Accepted | — |
@@ -109,21 +109,21 @@ Table: Decision, open-question, and memo records in the LEXTER namespace.
 | [LEXTER-D63](Log.CompassMigration.md#lexter-d63--pinning-is-brought-forward-into-phase-2) | Decision | Pinning is brought forward into Phase 2 | Implemented | LEXTER-0012 |
 | [LEXTER-D64](Log.CompassMigration.md#lexter-d64--a-decision-written-as-a-section-becomes-a-record-placed-first) | Decision | A decision written as a section becomes a record, placed first | Implemented | LEXTER-0012 |
 | [LEXTER-D65](Log.CompassMigration.md#lexter-d65--a-stewards-answer-to-an-open-question-is-recorded-as-a-resolution) | Decision | A steward's answer to an open question is recorded as a Resolution | Implemented | LEXTER-0012 |
-| [LEXTER-D66](Plan.TerminalFixes1e.md#lexter-d66--the-plan-covers-the-first-editions-fixes-outside-the-cell-model) | Decision | The plan covers the first edition's fixes outside the cell model | Accepted | LEXTER-0015 |
-| [LEXTER-D67](Plan.TerminalFixes1e.md#lexter-d67--the-standalone-terminal-becomes-a-compositor-with-one-pane-and-this-comes-first) | Decision | The standalone terminal becomes a compositor with one pane, and this comes first | Accepted | LEXTER-0015 |
-| [LEXTER-D68](Plan.TerminalFixes1e.md#lexter-d68--host-input-is-checked-at-the-boundary-never-trusted-against-a-slots-type) | Decision | Host input is checked at the boundary, never trusted against a slot's type | Accepted | LEXTER-0015 |
-| [LEXTER-D69](Plan.TerminalFixes1e.md#lexter-d69--autowrap-and-line-feed-share-one-path-which-owns-the-scrolling-region) | Decision | Autowrap and line feed share one path, which owns the scrolling region | Accepted | LEXTER-0015 |
-| [LEXTER-D70](Plan.TerminalFixes1e.md#lexter-d70--every-reader-of-a-terminals-screen-goes-through-the-handler) | Decision | Every reader of a terminal's screen goes through the handler | Accepted | LEXTER-0015 |
-| [LEXTER-D71](Plan.TerminalFixes1e.md#lexter-d71--a-workspace-switch-marks-every-screen-and-its-decorations-dirty) | Decision | A workspace switch marks every screen and its decorations dirty | Accepted | LEXTER-0015 |
-| [LEXTER-D72](Plan.TerminalFixes1e.md#lexter-d72--the-tn3270-client-follows-rfc-2355-and-its-screen-is-sized-from-its-geometry) | Decision | The TN3270 client follows RFC 2355, and its screen is sized from its geometry | Accepted | LEXTER-0015 |
-| [LEXTER-D73](Plan.TerminalFixes1e.md#lexter-d73--the-telnet-client-encodes-before-escaping-and-keeps-option-state-by-the-q-method) | Decision | The telnet client encodes before escaping, and keeps option state by the Q method | Accepted | LEXTER-0015 |
-| [LEXTER-D74](Plan.TerminalFixes1e.md#lexter-d74--the-pty-separates-the-childs-life-from-the-descriptors) | Decision | The PTY separates the child's life from the descriptor's | Accepted | LEXTER-0015 |
-| [LEXTER-D75](Plan.TerminalFixes1e.md#lexter-d75--backends-are-sized-from-the-screen-the-handler-made) | Decision | Backends are sized from the screen the handler made | Accepted | LEXTER-0015 |
-| [LEXTER-D76](Plan.TerminalFixes1e.md#lexter-d76--exports-name-only-what-exists-and-packages-read-each-other-through-them) | Decision | Exports name only what exists, and packages read each other through them | Accepted | LEXTER-0015 |
-| [LEXTER-D77](Plan.TerminalFixes1e.md#lexter-d77--instance-state-leaves-the-globals) | Decision | Instance state leaves the globals | Accepted | LEXTER-0015 |
-| [LEXTER-D78](Plan.TerminalFixes1e.md#lexter-d78--mode-state-has-one-home-the-handler) | Decision | Mode state has one home, the handler | Accepted | LEXTER-0015 |
-| [LEXTER-D79](Plan.TerminalFixes1e.md#lexter-d79--keystrokes-are-encoded-without-babels-internals) | Decision | Keystrokes are encoded without babel's internals | Accepted | LEXTER-0015 |
-| [LEXTER-D80](Plan.TerminalFixes1e.md#lexter-d80--every-fix-gets-a-headless-regression-test) | Decision | Every fix gets a headless regression test | Accepted | LEXTER-0015 |
+| [LEXTER-D66](Plan.TerminalFixes1e.md#lexter-d66--the-plan-covers-the-first-editions-fixes-outside-the-cell-model) | Decision | The plan covers the first edition's fixes outside the cell model | Implemented | LEXTER-0015 |
+| [LEXTER-D67](Plan.TerminalFixes1e.md#lexter-d67--the-standalone-terminal-becomes-a-compositor-with-one-pane-and-this-comes-first) | Decision | The standalone terminal becomes a compositor with one pane, and this comes first | Implemented | LEXTER-0015 |
+| [LEXTER-D68](Plan.TerminalFixes1e.md#lexter-d68--host-input-is-checked-at-the-boundary-never-trusted-against-a-slots-type) | Decision | Host input is checked at the boundary, never trusted against a slot's type | Implemented | LEXTER-0015 |
+| [LEXTER-D69](Plan.TerminalFixes1e.md#lexter-d69--autowrap-and-line-feed-share-one-path-which-owns-the-scrolling-region) | Decision | Autowrap and line feed share one path, which owns the scrolling region | Implemented | LEXTER-0015 |
+| [LEXTER-D70](Plan.TerminalFixes1e.md#lexter-d70--every-reader-of-a-terminals-screen-goes-through-the-handler) | Decision | Every reader of a terminal's screen goes through the handler | Implemented | LEXTER-0015 |
+| [LEXTER-D71](Plan.TerminalFixes1e.md#lexter-d71--a-workspace-switch-marks-every-screen-and-its-decorations-dirty) | Decision | A workspace switch marks every screen and its decorations dirty | Implemented | LEXTER-0015 |
+| [LEXTER-D72](Plan.TerminalFixes1e.md#lexter-d72--the-tn3270-client-follows-rfc-2355-and-its-screen-is-sized-from-its-geometry) | Decision | The TN3270 client follows RFC 2355, and its screen is sized from its geometry | Implemented | LEXTER-0015 |
+| [LEXTER-D73](Plan.TerminalFixes1e.md#lexter-d73--the-telnet-client-encodes-before-escaping-and-keeps-option-state-by-the-q-method) | Decision | The telnet client encodes before escaping, and keeps option state by the Q method | Implemented | LEXTER-0015 |
+| [LEXTER-D74](Plan.TerminalFixes1e.md#lexter-d74--the-pty-separates-the-childs-life-from-the-descriptors) | Decision | The PTY separates the child's life from the descriptor's | Implemented | LEXTER-0015 |
+| [LEXTER-D75](Plan.TerminalFixes1e.md#lexter-d75--backends-are-sized-from-the-screen-the-handler-made) | Decision | Backends are sized from the screen the handler made | Implemented | LEXTER-0015 |
+| [LEXTER-D76](Plan.TerminalFixes1e.md#lexter-d76--exports-name-only-what-exists-and-packages-read-each-other-through-them) | Decision | Exports name only what exists, and packages read each other through them | Implemented | LEXTER-0015 |
+| [LEXTER-D77](Plan.TerminalFixes1e.md#lexter-d77--instance-state-leaves-the-globals) | Decision | Instance state leaves the globals | Implemented | LEXTER-0015 |
+| [LEXTER-D78](Plan.TerminalFixes1e.md#lexter-d78--mode-state-has-one-home-the-handler) | Decision | Mode state has one home, the handler | Implemented | LEXTER-0015 |
+| [LEXTER-D79](Plan.TerminalFixes1e.md#lexter-d79--keystrokes-are-encoded-without-babels-internals) | Decision | Keystrokes are encoded without babel's internals | Implemented | LEXTER-0015 |
+| [LEXTER-D80](Plan.TerminalFixes1e.md#lexter-d80--every-fix-gets-a-headless-regression-test) | Decision | Every fix gets a headless regression test | Implemented | LEXTER-0015 |
 | [LEXTER-D81](Arch.CellModel.md#lexter-d81--the-format-word-comes-first-with-one-job-for-each-of-its-bytes) | Decision | The format word comes first, with one job for each of its bytes | Accepted | LEXTER-0016 |
 | [LEXTER-D82](Arch.CellModel.md#lexter-d82--one-namespace-of-formats-names-every-cell) | Decision | One namespace of formats names every cell | Accepted | LEXTER-0016 |
 | [LEXTER-D83](Arch.CellModel.md#lexter-d83--a-glyph-format-gives-its-glyph-count-and-type-bits-in-the-format-word-and-they-are-authoritative) | Decision | A glyph format gives its glyph count and type bits in the format word, and they are authoritative | Accepted | LEXTER-0016 |
@@ -184,6 +184,7 @@ Table: Decision, open-question, and memo records in the LEXTER namespace.
 | [LEXTER-D138](Plan.PaneProfiles.md#lexter-d138--the-wheel-factor-applies-to-local-scrolling-only) | Decision | The wheel factor applies to local scrolling only | Implemented | LEXTER-0022 |
 | [LEXTER-D139](Plan.PaneProfiles.md#lexter-d139--unseen-output-is-pane-state-polled-by-the-decorator) | Decision | Unseen output is pane state, polled by the decorator | Implemented | LEXTER-0022 |
 | [LEXTER-D140](Plan.PaneProfiles.md#lexter-d140--terminal-events-reach-the-apl-layer-through-a-generic-function) | Decision | Terminal events reach the APL layer through a generic function | Implemented | LEXTER-0022 |
+| [LEXTER-D141](Plan.TerminalFixes1e.md#lexter-d141--the-protocol-tests-talk-to-a-scripted-peer-over-a-loopback-socket) | Decision | The protocol tests talk to a scripted peer over a loopback socket | Implemented | LEXTER-0015 |
 | [LEXTER-DRAFT-mouse-reporting-D1](Log.MouseReporting.md#lexter-draft-mouse-reporting-d1--coordinates-are-pane-content-relative) | Decision | Coordinates are pane-content-relative | Proposed | LEXTER-DRAFT-mouse-reporting |
 | [LEXTER-DRAFT-mouse-reporting-D2](Log.MouseReporting.md#lexter-draft-mouse-reporting-d2--drag-capture) | Decision | Drag capture | Proposed | LEXTER-DRAFT-mouse-reporting |
 | [LEXTER-DRAFT-mouse-reporting-D3](Log.MouseReporting.md#lexter-draft-mouse-reporting-d3--cell-granularity-motion) | Decision | Cell-granularity motion | Proposed | LEXTER-DRAFT-mouse-reporting |
@@ -191,7 +192,6 @@ Table: Decision, open-question, and memo records in the LEXTER namespace.
 | [LEXTER-DRAFT-mouse-reporting-D5](Log.MouseReporting.md#lexter-draft-mouse-reporting-d5--direct-host-write-back) | Decision | Direct host write-back | Proposed | LEXTER-DRAFT-mouse-reporting |
 | [LEXTER-DRAFT-mouse-reporting-D6](Log.MouseReporting.md#lexter-draft-mouse-reporting-d6--substrate-fall-through) | Decision | Substrate fall-through | Proposed | LEXTER-DRAFT-mouse-reporting |
 | [LEXTER-DRAFT-mouse-reporting-D7](Log.MouseReporting.md#lexter-draft-mouse-reporting-d7--redirect-captures-the-pointer-too) | Decision | Redirect captures the pointer too | Proposed | LEXTER-DRAFT-mouse-reporting |
-| [LEXTER-DRAFT-terminal-fixes-1e-D16](Plan.TerminalFixes1e.md#lexter-draft-terminal-fixes-1e-d16--the-protocol-tests-talk-to-a-scripted-peer-over-a-loopback-socket) | Decision | The protocol tests talk to a scripted peer over a loopback socket | Proposed | LEXTER-0015 |
 | [LEXTER-O1](Log.EncodingRanges.md#lexter-o1--where-utf-8-is-decoded-relative-to-cl-vt) | Open question | Where UTF-8 is decoded relative to cl-vt | — | LEXTER-0009 |
 | [LEXTER-O2](Plan.CompassMigration.md#lexter-o2--which-documents-are-numbered-first) | Open question | Which documents are numbered first | — | LEXTER-0011 |
 | [LEXTER-O3](Plan.CompassMigration.md#lexter-o3--a-compiled-readme) | Open question | A compiled README | — | LEXTER-0011 |

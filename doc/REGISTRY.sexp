@@ -250,3 +250,4 @@
 (:id "LEXTER-0024" :kind :document :draft "LEXTER-DRAFT-first-edition-repairs" :path "doc/Log.FirstEditionRepairs.md" :date "2026-11-19" :by "Andrew Sengul")
 (:id "LEXTER-0025" :kind :document :draft "LEXTER-DRAFT-swatch-ranges" :path "doc/Log.SwatchRanges.md" :date "2026-11-19" :by "Andrew Sengul")
 (:id "LEXTER-0026" :kind :document :draft "LEXTER-DRAFT-workspace-repaint" :path "doc/Log.WorkspaceRepaint.md" :date "2026-11-19" :by "Andrew Sengul")
+(:id "LEXTER-D141" :kind :decision :draft "LEXTER-DRAFT-terminal-fixes-1e-D16" :host "LEXTER-0015" :date "2026-11-19" :by "Andrew Sengul")

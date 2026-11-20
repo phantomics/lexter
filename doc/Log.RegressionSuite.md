@@ -218,7 +218,7 @@ load, so its tests could not be written until a build fault was repaired.
   2355 lays it out. The telnet tests do the same with a real telnet pane, in
   place of the in-memory stream LEXTER-D80 names, so that they test what the
   pane sends rather than the client's string writer, which LEXTER-D73 moves
-  into the pane. The plan records this as LEXTER-DRAFT-terminal-fixes-1e-D16.
+  into the pane. The plan records this as LEXTER-D141.
 - **Slow tests.** The two tests that fork `/bin/true` on a PTY are in the
   suite `pty-slow`, which `run-all-tests` omits when given `:skip-slow`
   (`tests/helpers.lisp:run-all-tests@7de1459`).
@@ -298,6 +298,6 @@ Table: Files added or changed in this update, in commit `7de1459`.
 
 - **A recorded negotiation.** A recording from a real TN3270E server can
   replace the scripted peer when one is made
-  (LEXTER-DRAFT-terminal-fixes-1e-D16).
+  (LEXTER-D141).
 - **The export of `screen-attributes`** is repaired with the other export
   faults of LEXTER-O37.

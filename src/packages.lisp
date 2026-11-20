@@ -94,6 +94,8 @@
            ;; Invariants
            #:record-invariant-violations
            #:half-pair-violations
+           #:*check-records*
+           #:check-record
            ;; Text cells
            #:text-array
            #:make-text-array
@@ -123,14 +125,24 @@
                 #:read-record-common #:patch-record-common #:record-format
                 #:copy-records #:clear-records
                 #:record-glyph #:record-ink-slot #:record-selector #:record-mask
-                #:record-type-bits #:record-layer-p #:record-topmost-layer)
+                #:record-type-bits #:record-layer-p #:record-topmost-layer
+                #:text-array #:make-text-array)
   (:export ;; Grid creation and access
            #:make-display-grid
            #:display-grid
            #:display-grid-cols
            #:display-grid-rows
            #:display-grid-records
+           #:display-grid-atlas
+           #:display-grid-palette-slot
+           #:cell-index
            #:resize-grid
+           ;; Surfaces
+           #:surface
+           #:surface-p
+           #:make-surface
+           #:resize-surface
+           #:surface-text
            ;; Records
            #:write-text-record
            #:clear-cell
@@ -139,12 +151,8 @@
            #:continuation-p
            #:wide-left-p
            #:exchange-cell-slots
-           ;; The first edition's writers, over records
+           ;; The 3270 pane's writer, over records, until step 5
            #:set-simple-cell
-           #:set-cell-swatch
-           #:set-cell-layer
-           #:clear-cell-layers
-           #:cell-layered-p
            ;; Change stamps (LEXTER-D113)
            #:next-change-stamp
            #:row-stamp
@@ -157,6 +165,30 @@
            #:+swatch-slots+
            #:+simple-stride+
            #:+layered-stride+))
+
+(defpackage #:lexter/surface
+  (:use #:cl)
+  (:import-from #:lexter/manifests
+                #:+continuation-marker+ #:*check-records* #:check-record
+                #:write-plain-record #:patch-plain-record #:read-record-common
+                #:patch-record-common #:copy-records
+                #:record-glyph #:record-ink-slot #:record-selector
+                #:write-text-cell #:read-text-cell)
+  (:import-from #:lexter/grid
+                #:display-grid-cols #:display-grid-rows #:display-grid-records
+                #:display-grid-atlas #:display-grid-palette-slot
+                #:surface-p #:surface-text #:cell-index #:touch-row
+                #:continuation-p #:wide-left-p)
+  (:export #:char-glyph
+           #:put-char
+           #:put-string
+           #:put-glyph
+           #:put-cell
+           #:fill-cells
+           #:clear-cells
+           #:surface-char
+           #:surface-string
+           #:compose-surface))
 
 (defpackage #:lexter/swatches
   (:use #:cl)
@@ -383,7 +415,7 @@
            #:run-gui-loop))
 
 (defpackage #:lexter/demo
-  (:use #:cl #:lexter/pcf #:lexter/atlas #:lexter/grid #:lexter/renderer)
+  (:use #:cl #:lexter/pcf #:lexter/atlas #:lexter/grid #:lexter/renderer #:lexter/surface)
   (:import-from #:lexter/swatches
                 #:make-swatch-store #:swatch-store-display-table #:intern-swatch)
   (:export #:run-demo

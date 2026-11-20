@@ -18,10 +18,12 @@
 ;;;;   Slot 2 = primary overlay (cursor, layer 1)
 ;;;;   Slot 3 = secondary overlay (selection, layer 2)
 ;;;;
+;;;; A surface is a grid with text beside its records: a rectangle that the API
+;;;; writes (surface.lisp), and copies into the composed grid (LEXTER-D124).
+;;;;
 ;;;; Until the renderer draws records (step 6 of Phase 3), BUILD-RENDER-DATA
-;;;; turns them into the first edition's instances, and the first edition's
-;;;; writers reach the grid through SET-SIMPLE-CELL and SET-CELL-LAYER, which
-;;;; write records.
+;;;; turns them into the first edition's instances, and the 3270 pane reaches
+;;;; the grid through SET-SIMPLE-CELL, which writes records, until step 5.
 
 ;;; --------------------------------------------------------------------------
 ;;; Constants
@@ -62,6 +64,10 @@
   (records (make-record-array 0) :type record-array)
   ;; The drawn rows' change stamps (LEXTER-D113)
   (stamps  (make-array 0 :element-type '(unsigned-byte 64)) :type (simple-array (unsigned-byte 64) (*)))
+  ;; The atlas whose glyphs the API writes by codepoint, and the palette slot
+  ;; its records draw in
+  (atlas nil)
+  (palette-slot 0 :type (unsigned-byte 8))
   ;; --- The first edition's instance buffers, built from the records ---
   (simple-buffer   nil)
   (simple-count    0   :type fixnum)
@@ -86,19 +92,49 @@
 (defun %stamp-array (rows)
   (make-array rows :element-type '(unsigned-byte 64) :initial-element (next-change-stamp)))
 
-(defun make-display-grid (&key (cols 80) (rows 24))
+(defun make-display-grid (&key (cols 80) (rows 24) atlas)
   "Create a display grid with COLS columns and ROWS rows, every cell a record
-   of zeros, a blank in global swatch 0, the default colours (LEXTER-D83).
-   Every row is newer than any stamp a reader took before."
-  (let ((grid (%make-display-grid :cols cols :rows rows
+   of zeros, a blank in global swatch 0, the default colours (LEXTER-D83),
+   whose API writes take glyphs from ATLAS. Every row is newer than any stamp
+   a reader took before."
+  (let ((grid (%make-display-grid :cols cols :rows rows :atlas atlas
                                   :records (make-record-array (* cols rows))
                                   :stamps (%stamp-array rows))))
     (%allocate-render-buffers grid)
     grid))
 
+(defstruct (surface (:include display-grid) (:constructor %make-surface))
+  "A rectangle of records with text beside them, written only through the
+   API, whose rows are copied into the composed grid (LEXTER-D124). Its text
+   cells hold each character's codepoint and wide bit, in style 0, for
+   selection, copying, and search (LEXTER-D119)."
+  (text (make-text-array 0) :type text-array))
+
+(defun make-surface (&key (cols 1) (rows 1) atlas (palette-slot 0))
+  "Make a surface of COLS by ROWS, every record of zeros and every text cell
+   empty, whose glyphs come from ATLAS and whose records draw in
+   PALETTE-SLOT."
+  (%make-surface :cols cols :rows rows :atlas atlas :palette-slot palette-slot
+                 :records (make-record-array (* cols rows))
+                 :text (make-text-array (* cols rows))
+                 :stamps (%stamp-array rows)))
+
+(defun resize-surface (surface cols rows)
+  "Give SURFACE COLS by ROWS cells, all empty, and new stamps in every row."
+  (setf (display-grid-cols surface) cols
+        (display-grid-rows surface) rows
+        (display-grid-records surface) (make-record-array (* cols rows))
+        (surface-text surface) (make-text-array (* cols rows))
+        (display-grid-stamps surface) (%stamp-array rows))
+  surface)
+
 (declaim (inline %idx))
 (defun %idx (grid col row)
   (+ (* row (display-grid-cols grid)) col))
+
+(defun cell-index (grid col row)
+  "The index of the record at COL, ROW of GRID in its array of records."
+  (%idx grid col row))
 
 (defun row-stamp (grid row)
   "The change stamp of ROW of GRID: the stamp taken when a record in it was
@@ -205,21 +241,6 @@
                             (third (first layers)))
                       layers))))))))
 
-(defun cell-layered-p (grid col row)
-  "True when the first edition draws the cell at COL, ROW with layers: when it
-   is more than one glyph layer in ink slot 1 over background slot 0."
-  (let ((records (display-grid-records grid))
-        (index (%idx grid col row)))
-    (and (eq (record-format records index) :plain)
-         (not (%simple-record-p records index)))))
-
-(defun %simple-record-p (records index)
-  (and (zerop (read-plain-record records index :background-slot))
-       (let ((layers (%first-edition-layers records index)))
-         (or (null layers)
-             (and (null (rest layers))
-                  (equal '(0 1) (rest (first layers))))))))
-
 ;;; --------------------------------------------------------------------------
 ;;; The interim cursor
 ;;; --------------------------------------------------------------------------
@@ -250,14 +271,11 @@
     (touch-row grid row)))
 
 ;;; --------------------------------------------------------------------------
-;;; The first edition's writers, over records
+;;; The 3270 pane's writer, over records
 ;;; --------------------------------------------------------------------------
 ;;;
-;;; The function pane, the workspace's decorations, the 3270 pane, and the
-;;; demo write the grid through these until steps 4 and 5 of Phase 3 move
-;;; them to records. A layer's transparent side maps as LEXTER-D86 has it:
-;;; :BG is a selector of 0, :FG a selector of 1, and :NONE on layer 0 gives
-;;; the cell its background slot.
+;;; The 3270 pane writes the grid through SET-SIMPLE-CELL until step 5 of
+;;; Phase 3 puts it on a Lexter screen (LEXTER-D128).
 
 (defun %unpair (grid col row)
   "Before the cell at COL, ROW is written, break the double-width pair it is
@@ -285,71 +303,6 @@
     (when (and wide (< (1+ col) cols))
       (write-text-record grid (1+ col) row :glyph (1+ glyph-idx) :swatch swatch-idx
                                            :wide t :right-half t))))
-
-(defun %layers (records index)
-  "The glyph words of record INDEX of RECORDS, a plain record of layers, as a
-   list of (glyph selector ink-slot), and its background slot."
-  (values (loop :for i :below (min (read-plain-record records index :glyph-count)
-                                   +plain-glyph-words+)
-                :when (record-layer-p records index i)
-                  :collect (list (record-glyph records index i)
-                                 (record-selector records index i)
-                                 (record-ink-slot records index i)))
-          (read-plain-record records index :background-slot)))
-
-(defun %write-layers (grid col row layers background)
-  "Write the cell at COL, ROW as a plain record of LAYERS, each (glyph
-   selector ink-slot), over BACKGROUND, keeping its swatch, palette slot, and
-   drawing flags."
-  (let* ((records (display-grid-records grid))
-         (index (%idx grid col row)))
-    (multiple-value-bind (swatch palette wide right-half blink)
-        (read-record-common records index :swatch :palette-slot :wide :right-half :blink)
-      (write-plain-record records index
-        :glyph-count (length layers) :swatch swatch :palette-slot palette
-        :background-slot background :wide wide :right-half right-half :blink blink)
-      (loop :for (glyph selector ink) :in layers
-            :for i :from 0
-            :do (setf (record-glyph records index i) glyph
-                      (record-selector records index i) selector
-                      (record-ink-slot records index i) ink))
-      (touch-row grid row))))
-
-(defun set-cell-swatch (grid col row swatch-idx)
-  "Set the swatch index of the cell at (COL, ROW)."
-  (patch-record-common (display-grid-records grid) (%idx grid col row) :swatch swatch-idx)
-  (touch-row grid row))
-
-(defun set-cell-layer (grid col row layer-num glyph-idx ink-slot
-                       &key (bg-slot 0) (transparent-side :none))
-  "Define layer LAYER-NUM (0-2) at (COL, ROW) as the first edition's layered
-   cells had it: INK-SLOT and BG-SLOT are swatch slots, and TRANSPARENT-SIDE
-   is :none (opaque), :bg (ink on the glyph's pixels), or :fg (ink off them).
-   Layers between those defined are empty."
-  (assert (<= 0 layer-num (1- +max-layers+)) (layer-num)
-          "Layer number must be 0-~d" (1- +max-layers+))
-  (let ((records (display-grid-records grid))
-        (index (%idx grid col row)))
-    (multiple-value-bind (layers background) (%layers records index)
-      (when (null layers)
-        (setf layers (list (list 0 0 1))))
-      (loop :while (<= (length layers) layer-num)
-            :do (setf layers (append layers (list (list 0 0 ink-slot)))))
-      (setf (nth layer-num layers)
-            (list glyph-idx (if (eq transparent-side :fg) 1 0) ink-slot))
-      (when (and (zerop layer-num) (eq transparent-side :none))
-        (setf background bg-slot))
-      (%write-layers grid col row layers background))))
-
-(defun clear-cell-layers (grid col row)
-  "Return the cell at (COL, ROW) to its first layer alone, in ink slot 1 over
-   background slot 0."
-  (let ((records (display-grid-records grid))
-        (index (%idx grid col row)))
-    (let ((layers (%layers records index)))
-      (%write-layers grid col row
-                     (if layers (list (list (first (first layers)) 0 1)) '())
-                     0))))
 
 ;;; --------------------------------------------------------------------------
 ;;; The first edition's instances, built from the records

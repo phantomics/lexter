@@ -13,6 +13,7 @@
                (:file "src/pcf")
                (:file "src/atlas")
                (:file "src/grid")
+               (:file "src/surface")
                (:file "src/swatches")
                (:file "src/shaders")
                (:file "src/renderer")
@@ -90,7 +91,8 @@
                              (:file "test-profiles")
                              (:file "test-scrollback")
                              (:file "test-workspaces")
-                             (:file "test-manifests"))))
+                             (:file "test-manifests")
+                             (:file "test-surfaces"))))
   :perform (asdf:test-op (o s)
              (uiop:symbol-call '#:lexter-tests '#:run-all-tests)))
 

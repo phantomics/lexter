@@ -357,6 +357,32 @@
     (nreverse violations)))
 
 ;;; --------------------------------------------------------------------------
+;;; Checks in debugging builds
+;;; --------------------------------------------------------------------------
+
+(defvar *check-records* #+lexter-debug t #-lexter-debug nil
+  "True in debugging builds, those compiled with the :LEXTER-DEBUG feature:
+   the API then asserts the invariants of every record it writes
+   (LEXTER-D130). A test may bind it to check the records of a build without
+   the feature.")
+
+(defun check-record (records index &key pair (wide-first-column-p (constantly nil)))
+  "Signal an error naming the invariants that record INDEX of RECORDS breaks,
+   and, when PAIR, that it and the record after it break as the two halves of
+   a double-width glyph, by WIDE-FIRST-COLUMN-P as HALF-PAIR-VIOLATIONS takes
+   it. Return INDEX when they keep them all."
+  (let ((violations (append (record-invariant-violations records index)
+                            (and pair
+                                 (append (record-invariant-violations records (1+ index))
+                                         (half-pair-violations
+                                          records index
+                                          :wide-first-column-p wide-first-column-p))))))
+    (when violations
+      (error "Record ~d breaks the invariants of a record: ~{~(~a~)~^, ~}."
+             index violations))
+    index))
+
+;;; --------------------------------------------------------------------------
 ;;; Text cells
 ;;; --------------------------------------------------------------------------
 

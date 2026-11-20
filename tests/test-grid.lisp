@@ -244,21 +244,8 @@ whole grid again (LEXTER-D113)."
       (is (> (lexter/grid:row-stamp grid row) stamp)))))
 
 ;;; ------------------------------------------------------------
-;;; The first edition's writers and renderer, over records
+;;; The first edition's renderer, over records
 ;;; ------------------------------------------------------------
-
-(def-test the-first-edition-s-layers-map-to-selectors ()
-  "A first-edition layer whose transparent side is :fg inks off its glyph's
-pixels, a selector of 1, and one whose side is :bg on them, a selector of 0;
-an opaque layer 0 gives the cell its background slot (LEXTER-D86)."
-  (let ((grid (make-test-grid :cols 2 :rows 1)))
-    (lexter/grid:set-cell-layer grid 0 0 0 70 1 :bg-slot 2 :transparent-side :none)
-    (lexter/grid:set-cell-layer grid 0 0 1 71 3 :transparent-side :fg)
-    (let ((record (grid-record grid 0 0)))
-      (is (= 2 (getf record :glyph-count)))
-      (is (= 2 (getf record :background-slot)))
-      (is (equal '(:glyph 70 :selector 0 :ink-slot 1) (getf record :g0)))
-      (is (equal '(:glyph 71 :selector 1 :ink-slot 3) (getf record :g1))))))
 
 (def-test reverse-and-underline-reach-the-first-edition-s-instances ()
   "Until the renderer draws records, a plain text cell is a simple instance, a

@@ -96,6 +96,7 @@
    #:function-pane-render-fn
    #:function-pane-state
    #:function-pane-dirty
+   #:function-pane-surface
    #:make-function-pane
    ;; Chrome pane mixin (scroll bar, header, footer)
    #:chrome-pane

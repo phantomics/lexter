@@ -489,7 +489,7 @@ new context current, so the atlas/renderer GL objects belong to it."
       (let ((atlas (lexter/atlas:build-atlas font-list
                                              :width-policy (compositor-width-policy comp))))
         (lexter/atlas:add-cursor-glyphs atlas)
-        (let ((display (lexter/grid:make-display-grid :cols cols :rows rows))
+        (let ((display (lexter/grid:make-display-grid :cols cols :rows rows :atlas atlas))
               (renderer (lexter/renderer:make-renderer atlas win-w win-h
                                                        :pixel-scale scale))
               (palette (make-xterm-palette)))
@@ -659,7 +659,8 @@ new context current, so the atlas/renderer GL objects belong to it."
    new grid."
   (setf (compositor-display comp)
         (lexter/grid:make-display-grid :cols (compositor-cols comp)
-                                       :rows (compositor-rows comp))))
+                                       :rows (compositor-rows comp)
+                                       :atlas (compositor-atlas comp))))
 
 ;;; --------------------------------------------------------------------------
 ;;; Helper functions

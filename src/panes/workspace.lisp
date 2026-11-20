@@ -132,10 +132,12 @@ private profile PROFILE-PARENT as its parent, when one is given."
   (let ((dec (workspace-decorations workspace)))
     (etypecase dec
       (null nil)
-      (list 
+      (list
+       ;; Each (col row glyph swatch): an atlas position, written through the
+       ;; API onto the grid (LEXTER-D124)
        (dolist (d dec)
          (destructuring-bind (col row glyph swatch) d
-           (lexter/grid:set-simple-cell grid col row glyph swatch))))
+           (lexter/surface:put-glyph grid col row glyph :swatch swatch))))
       (function
        (funcall dec workspace grid))))
   ;; New decorator system: call with :borders mode for workspace-level decorations
@@ -175,12 +177,14 @@ private profile PROFILE-PARENT as its parent, when one is given."
 ;;; --------------------------------------------------------------------------
 
 (defun clear-grid (grid &key (glyph lexter/atlas:+empty-glyph-position+) (swatch 0))
-  "Clear the entire grid with GLYPH, by default the atlas's empty glyph, and
-   SWATCH, a global index, by default global swatch 0, the default colours of
-   the display's table."
+  "Clear the entire grid with GLYPH, by default the atlas's empty glyph, which
+   leaves every cell with no glyph, and SWATCH, a global index, by default
+   global swatch 0, the default colours of the display's table."
   (let ((cols (lexter/grid:display-grid-cols grid))
         (rows (lexter/grid:display-grid-rows grid)))
-    (dotimes (row rows)
-      (dotimes (col cols)
-        (lexter/grid:set-simple-cell grid col row glyph swatch)))
+    (if (= glyph lexter/atlas:+empty-glyph-position+)
+        (lexter/surface:fill-cells grid 0 0 cols rows :swatch swatch)
+        (dotimes (row rows)
+          (dotimes (col cols)
+            (lexter/surface:put-glyph grid col row glyph :swatch swatch))))
     (lexter/grid:touch-all-rows grid)))

@@ -75,6 +75,10 @@
   :description "The record, the text cell, and the texels, as their manifests write and read them"
   :in lexter)
 
+(def-suite surfaces
+  :description "The API: records and text written by Lexter's own writers, and surfaces composed into the grid"
+  :in lexter)
+
 (def-suite pty-slow
   :description "The PTY's descriptor and child after the child exits; spawns a process (excluded by :skip-slow)"
   :in lexter)
@@ -85,7 +89,7 @@
 
 (defparameter *fast-suites*
   '(atlas handler model grid swatches structure tn3270 telnet pty
-    width profiles scrollback workspaces manifests)
+    width profiles scrollback workspaces manifests surfaces)
   "The child suites run when slow tests are skipped.")
 
 (defun run-all-tests (&key skip-slow)
@@ -232,6 +236,19 @@ its own."
 record of zeros, and *TEXT-CELLS* to a fresh array of COUNT text cells."
   `(let ((*records* (lexter/manifests:make-record-array ,count))
          (*text-cells* (lexter/manifests:make-text-array ,count)))
+     ,@body))
+
+(defvar *surface* nil "The surface WITH-CLEAN-SURFACE makes.")
+
+(defmacro with-clean-surface ((&key (cols 6) (rows 2) (palette-slot 0)) &body body)
+  "Run BODY with *ATLAS* bound to a fresh packed atlas, *SURFACE* to a fresh
+surface of COLS by ROWS in it, drawing in PALETTE-SLOT, and *GRID* to a fresh
+display grid of twice its size in the same atlas."
+  `(let* ((*atlas* (make-test-atlas))
+          (*surface* (lexter/grid:make-surface :cols ,cols :rows ,rows :atlas *atlas*
+                                               :palette-slot ,palette-slot))
+          (*grid* (lexter/grid:make-display-grid :cols (* 2 ,cols) :rows (* 2 ,rows)
+                                                 :atlas *atlas*)))
      ,@body))
 
 (defmacro with-clean-terminal ((&key (cols 10) (rows 3)) &body body)

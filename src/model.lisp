@@ -82,7 +82,8 @@
 ;;; --------------------------------------------------------------------------
 
 (defun make-screen (&key (cols 80) (rows 24) (mode :unix)
-                         (scrollback-max 2000) styles swatches palette)
+                         (scrollback-max 2000) (scrollback-enabled t) cursor-blink
+                         styles swatches palette)
   "Create a new screen whose text is written in styles of STYLES, a style
    table, and built in swatches of SWATCHES, a swatch table, and whose colours
    are PALETTE, a palette the screen copies. Without STYLES or SWATCHES the
@@ -90,7 +91,8 @@
    terminal's screens share their terminal's tables, the swatch table from the
    store of the compositor that draws them
    (LEXTER-DRAFT-cell-model-revision-D24). Without PALETTE the screen has the
-   default palette. Every cell starts empty, in style 0."
+   default palette. Every cell starts empty, in style 0. SCROLLBACK-ENABLED
+   false keeps no history; CURSOR-BLINK true makes the cursor blink."
   (%make-screen
    :cols            cols
    :rows            rows
@@ -102,6 +104,8 @@
    :swatches        (or swatches (make-swatch-table (make-swatch-store)))
    :scroll-top      0
    :scroll-bottom   (1- rows)
+   :cursor-blink    (and cursor-blink t)
+   :scrollback-enabled (and scrollback-enabled t)
    :scrollback-max  scrollback-max
    :scrollback-lines (make-array scrollback-max :initial-element nil)
    :row-dirty       (make-array rows :element-type 'bit :initial-element 1)
@@ -214,6 +218,15 @@
 (defun cell-continuation-p (screen col row)
   "True when the cell at COL, ROW is covered by the character before it."
   (text-cell-continuation-p (screen-text screen) (%idx screen col row)))
+
+(defun set-cell-style (screen col row style)
+  "Give the cell at COL, ROW the style whose id is STYLE, keeping its
+   characters, as a writer restyles text it wrote; its row is marked dirty
+   when the style changes."
+  (let ((index (%idx screen col row)))
+    (unless (= style (read-text-cell (screen-text screen) index :style))
+      (patch-text-cell (screen-text screen) index :style style)
+      (%mark-dirty screen row))))
 
 (defun cell-codepoints (screen col row)
   "The codepoints of the cell at COL, ROW, as a list: its first, then those of

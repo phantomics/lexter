@@ -151,8 +151,6 @@
            #:continuation-p
            #:wide-left-p
            #:exchange-cell-slots
-           ;; The 3270 pane's writer, over records, until step 5
-           #:set-simple-cell
            ;; Change stamps (LEXTER-D113)
            #:next-change-stamp
            #:row-stamp
@@ -350,6 +348,7 @@
            #:cell-wide-p
            #:cell-continuation-p
            #:cell-codepoints
+           #:set-cell-style
            ;; Terminal rows
            #:row-soft-wrap-p
            #:set-row-soft-wrap

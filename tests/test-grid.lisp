@@ -60,8 +60,8 @@ in the grid."
 (def-test resize-grid-keeps-wide-pair ()
   "LEXTER-O26: resizing the grid keeps the wide and continuation flags of the
 cells that remain."
-  (let ((grid (make-test-grid :cols 10 :rows 2)))
-    (lexter/grid:set-simple-cell grid 0 0 100 0 :wide t)
+  (let ((grid (lexter/grid:make-display-grid :cols 10 :rows 2 :atlas (make-test-atlas))))
+    (lexter/surface:put-char grid 0 0 (code-char #x4E00))
     (lexter/grid:resize-grid grid 12 2)
     (is-true (grid-wide-p grid 0 0))
     (is-true (grid-continuation-p grid 1 0))))

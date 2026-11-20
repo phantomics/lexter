@@ -425,8 +425,7 @@
    Returns new position."
   (let* ((screen (client-screen client))
          (size (screen-size screen))
-         (attrs (screen-field-attrs screen))
-         (data (screen-buffer screen)))
+         (attrs (screen-field-attrs screen)))
     ;; Find all modified fields
     (loop :for fa-addr :from 0 :below size
           :when (and (plusp (aref attrs fa-addr))
@@ -444,7 +443,7 @@
                 ;; Field data (EBCDIC encoded)
                 (loop :for addr = start :then (mod (1+ addr) size)
                       :until (= addr end)
-                      :for char = (aref data addr)
+                      :for char = (screen-get-char screen addr)
                       :do (let ((ebcdic (char-to-ebcdic (code-char char))))
                             (setf (aref buf pos) ebcdic)
                             (incf pos)))))

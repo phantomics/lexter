@@ -128,7 +128,7 @@
                  :for fa-addr = (find-field-attr-before screen addr)
                  :for fa = (if fa-addr (aref (screen-field-attrs screen) fa-addr) 0)
                  :unless (and fa-addr (field-protected-p fa))
-                 :do (setf (aref (screen-buffer screen) addr) 32))
+                 :do (screen-erase-char screen addr))
            (screen-set-buffer-address screen stop-addr)))
        (+ pos 3))
 
@@ -157,7 +157,7 @@
                          :for value = (aref data (+ pos 3 (* 2 i)))
                          :do (cond
                                ((= type +xa-3270+)
-                                (setf (aref (screen-field-attrs screen) fa-addr) value))
+                                (screen-set-field-attr screen fa-addr value))
                                (t (screen-set-attribute screen type value)))))))
              (+ pos len))
            (+ pos 2)))
@@ -258,7 +258,7 @@
                    :for fa-addr = (find-field-attr-before screen addr)
                    :for fa = (if fa-addr (aref (screen-field-attrs screen) fa-addr) 0)
                    :unless (and fa-addr (field-protected-p fa))
-                   :do (setf (aref (screen-buffer screen) addr) 32))))
+                   :do (screen-erase-char screen addr))))
           ;; Read Modified - host wants our data (handled at client level)
           ((= cmd +cmd-read-modified+)
            nil)  ; Response built by client
@@ -270,4 +270,7 @@
            nil)
           ;; Unknown command
           (t
-           (format *debug-io* "~&Unknown 3270 command: #x~2,'0X~%" cmd)))))))
+           (format *debug-io* "~&Unknown 3270 command: #x~2,'0X~%" cmd)))
+        ;; Field attributes and extended attributes may have changed: the
+        ;; cells of their fields take their styles again (LEXTER-D128)
+        (screen-restyle screen)))))

@@ -19,9 +19,13 @@
    #:make-tn3270-screen
    #:screen-cols
    #:screen-rows
-   #:screen-buffer
-   #:screen-attributes
+   #:screen-model
+   #:screen-field-attrs
    #:screen-cursor-address
+   #:screen-dirty
+   #:screen-restyle
+   #:screen-erase-char
+   #:map-3270-color
    #:screen-field-at
    #:screen-get-char
    #:screen-put-char

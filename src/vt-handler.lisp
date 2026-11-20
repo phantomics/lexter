@@ -657,9 +657,9 @@
                                :mode (screen-mode primary)
                                :styles (screen-styles primary)
                                :swatches (screen-swatches primary)
-                               :palette (screen-palette primary))))
-        ;; Alternate screen has no scrollback (it is exactly viewport-sized).
-        (setf (lexter/model::screen-scrollback-enabled alt) nil)
+                               :palette (screen-palette primary)
+                               ;; Exactly viewport-sized, with no scrollback
+                               :scrollback-enabled nil)))
         (setf (vt-handler-alt-screen handler) alt))))
 
 (defun %clear-screen-buffer (screen)

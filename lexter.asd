@@ -71,7 +71,7 @@
   :license "BSD"
   :version "0.1.0"
   :depends-on (#:lexter #:lexter/unix #:lexter/panes #:lexter/tn3270
-               #:lexter/telnet-pane #:babel #:usocket #:sb-introspect #:sb-posix
+               #:lexter/tn3270-pane #:lexter/telnet-pane #:babel #:usocket #:sb-introspect #:sb-posix
                #:fiveam #:hamcrest/fiveam)
   :serial t
   :components ((:module "tests"
@@ -109,12 +109,13 @@
   :perform (asdf:test-op (o s)
              (uiop:symbol-call :lexter/panes :run-all-tests)))
 
-;;; TN3270 client library (standalone, no pane dependency)
+;;; TN3270 client library: no pane dependency, but its screen is a Lexter
+;;; screen (LEXTER-D128)
 (asdf:defsystem #:lexter/tn3270
   :description "TN3270/TN3270E client library for Lexter"
   :license "BSD"
   :version "0.1.0"
-  :depends-on (#:usocket #:babel #:tacle.tn3270/lexicon #:specops.map.ebcdic)
+  :depends-on (#:lexter #:usocket #:babel #:tacle.tn3270/lexicon #:specops.map.ebcdic)
   :serial t
   :components ((:file "src/tn3270/packages")
                (:file "src/tn3270/codec")

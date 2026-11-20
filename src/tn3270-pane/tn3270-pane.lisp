@@ -1,33 +1,10 @@
 ;;;; TN3270 pane: a pane that connects to a 3270 host.
 ;;;;
-;;;; This pane uses the lexter/tn3270 client library and renders
-;;;; the 3270 screen to the display grid.
+;;;; This pane uses the lexter/tn3270 client library, whose screen is a Lexter
+;;;; screen with the 3270 field state beside it, and builds that screen into
+;;;; the composed grid as every terminal pane does (LEXTER-D128, LEXTER-D124).
 
 (in-package #:lexter/tn3270-pane)
-
-;;; --------------------------------------------------------------------------
-;;; 3270 color mapping
-;;; --------------------------------------------------------------------------
-
-(defparameter *3270-color-map*
-  ;; Map 3270 color codes to xterm palette indices
-  ;; 3270 colors: default(0), blue(#xF1), red(#xF2), pink(#xF3),
-  ;;              green(#xF4), turquoise(#xF5), yellow(#xF6), white(#xF7)
-  (let ((table (make-hash-table)))
-    (setf (gethash #x00 table) 7    ; default -> white
-          (gethash #xF1 table) 12   ; blue -> bright blue
-          (gethash #xF2 table) 9    ; red -> bright red
-          (gethash #xF3 table) 13   ; pink -> bright magenta
-          (gethash #xF4 table) 10   ; green -> bright green
-          (gethash #xF5 table) 14   ; turquoise -> bright cyan
-          (gethash #xF6 table) 11   ; yellow -> bright yellow
-          (gethash #xF7 table) 15)  ; white -> bright white
-    table)
-  "Map 3270 color codes to xterm-256 palette indices.")
-
-(defun map-3270-color (color-code)
-  "Map a 3270 color code to palette index."
-  (gethash color-code *3270-color-map* 7))
 
 ;;; --------------------------------------------------------------------------
 ;;; 3270 key mapping
@@ -107,7 +84,8 @@
              (lexter/swatches:make-swatch-store))))
   (let* ((cols (lexter/panes:pane-width pane))
          (rows (lexter/panes:pane-height pane))
-         (screen (lexter/tn3270:make-tn3270-screen :cols cols :rows rows))
+         (screen (lexter/tn3270:make-tn3270-screen :cols cols :rows rows
+                                                   :swatches (tn3270-pane-swatches pane)))
          (client (lexter/tn3270:make-tn3270-client
                   :host (tn3270-pane-host pane)
                   :port (tn3270-pane-port pane)
@@ -126,66 +104,24 @@
 ;;; Flush to display grid
 ;;; --------------------------------------------------------------------------
 
-(defmethod lexter/panes:pane-flush ((pane tn3270-pane) grid)
-  "Render 3270 screen to the display grid."
-  (let* ((client (tn3270-pane-client pane))
-         (screen (when client (lexter/tn3270::client-screen client)))
-         (atlas (tn3270-pane-atlas pane)))
-    (unless (and screen atlas)
-      (return-from lexter/panes:pane-flush nil))
-    (let* ((cols (lexter/tn3270:screen-cols screen))
-           (rows (lexter/tn3270:screen-rows screen))
-           (buf (lexter/tn3270:screen-buffer screen))
-           (colors (lexter/tn3270::screen-colors screen))
-           (highlights (lexter/tn3270::screen-highlights screen))
-           (field-attrs (lexter/tn3270::screen-field-attrs screen))
-           (cursor-addr (lexter/tn3270:screen-cursor-address screen))
-           (col-offset (lexter/panes:pane-col pane))
-           (row-offset (lexter/panes:pane-row pane)))
-      ;; Render each cell
-      (dotimes (r rows)
-        (dotimes (c cols)
-          (let* ((addr (+ (* r cols) c))
-                 (char-code (aref buf addr))
-                 (color (aref colors addr))
-                 (highlight (aref highlights addr))
-                 (fa (aref field-attrs addr))
-                 ;; Map to display coordinates
-                 (gc (+ c col-offset))
-                 (gr (+ r row-offset))
-                 ;; Get glyph index
-                 (glyph-idx (or (lexter/atlas:atlas-glyph-index atlas char-code)
-                                (lexter/atlas:atlas-glyph-index atlas 32)))
-                 ;; Compute swatch
-                 (fg-color (if (plusp fa)
-                               7  ; field attr displays dim
-                               (map-3270-color color)))
-                 (bg-color 0)
-                 ;; Handle reverse video highlight
-                 (reverse-p (= highlight tacle/tn3270.lexicon:+highlight-reverse+))
-                 (actual-fg (if reverse-p bg-color fg-color))
-                 (actual-bg (if reverse-p fg-color bg-color))
-                 (swatch (pane-swatch pane actual-bg actual-fg)))
-            (lexter/grid:set-simple-cell grid gc gr glyph-idx swatch))))
-      ;; Render cursor as reverse-video on the current cell, by exchanging the
-      ;; ink and background slots of the cell just written, as the model draws
-      ;; the cursor (LEXTER-D101): the character under the cursor stays visible,
-      ;; and no reversed swatch is interned.
-      (let* ((cursor-row (floor cursor-addr cols))
-             (cursor-col (mod cursor-addr cols))
-             (gc (+ cursor-col col-offset))
-             (gr (+ cursor-row row-offset)))
-        (when (and lexter/panes::*cursor-blink-on*
-                   (< gc (+ col-offset cols))
-                   (< gr (+ row-offset rows)))
-          (lexter/grid:exchange-cell-slots grid gc gr)))
-      ;; Mark screen as clean
-      (setf (lexter/tn3270::screen-dirty screen) nil))))
+(defun tn3270-pane-screen (pane)
+  "The pane's 3270 screen, or NIL before it is initialized."
+  (let ((client (tn3270-pane-client pane)))
+    (and client (lexter/tn3270::client-screen client))))
 
-(defun pane-swatch (pane bg fg)
-  "The global index of the swatch of background BG and foreground FG, xterm-256
-   palette indices, in PANE's swatch table."
-  (lexter/swatches:intern-swatch (tn3270-pane-swatches pane) bg fg fg bg))
+(defmethod lexter/panes:pane-flush ((pane tn3270-pane) grid)
+  "Build the 3270 screen's dirty rows into the grid, as every terminal pane's
+   are built, with its cursor (LEXTER-D124)."
+  (let ((screen (tn3270-pane-screen pane))
+        (atlas (tn3270-pane-atlas pane)))
+    (when (and screen atlas)
+      (lexter/model:flush-to-display
+       (lexter/tn3270:screen-model screen) grid
+       :atlas atlas
+       :palette-slot lexter/renderer:+default-pane-palette-slot+
+       :col-offset (lexter/panes:pane-col pane)
+       :row-offset (lexter/panes:pane-row pane)
+       :cursor-blink-on lexter/panes::*cursor-blink-on*))))
 
 ;;; --------------------------------------------------------------------------
 ;;; Key handling
@@ -212,26 +148,21 @@
             (:up
              (lexter/tn3270::screen-set-cursor
               screen (mod (- cursor-addr cols) size))
-             (setf (lexter/tn3270::screen-dirty screen) t)
              t)
             (:down
              (lexter/tn3270::screen-set-cursor
               screen (mod (+ cursor-addr cols) size))
-             (setf (lexter/tn3270::screen-dirty screen) t)
              t)
             (:left
              (lexter/tn3270::screen-set-cursor
               screen (mod (1- cursor-addr) size))
-             (setf (lexter/tn3270::screen-dirty screen) t)
              t)
             (:right
              (lexter/tn3270::screen-set-cursor
               screen (mod (1+ cursor-addr) size))
-             (setf (lexter/tn3270::screen-dirty screen) t)
              t)
             (:home
              (lexter/tn3270::screen-set-cursor screen 0)
-             (setf (lexter/tn3270::screen-dirty screen) t)
              t)
             (:tab
              ;; Tab to next unprotected field
@@ -243,21 +174,19 @@
                (multiple-value-bind (fa-addr fa)
                    (lexter/tn3270:screen-field-at screen new-addr)
                  (unless (and fa-addr (lexter/tn3270:field-protected-p fa))
-                   (setf (aref (lexter/tn3270:screen-buffer screen) new-addr) 32)
+                   (lexter/tn3270:screen-erase-char screen new-addr)
                    (lexter/tn3270::screen-set-cursor screen new-addr)
                    (when fa-addr
-                     (lexter/tn3270::set-field-modified screen fa-addr))
-                   (setf (lexter/tn3270::screen-dirty screen) t))))
+                     (lexter/tn3270::set-field-modified screen fa-addr)))))
              t)
             (:delete
              ;; Clear current position
              (multiple-value-bind (fa-addr fa)
                  (lexter/tn3270:screen-field-at screen cursor-addr)
                (unless (and fa-addr (lexter/tn3270:field-protected-p fa))
-                 (setf (aref (lexter/tn3270:screen-buffer screen) cursor-addr) 32)
+                 (lexter/tn3270:screen-erase-char screen cursor-addr)
                  (when fa-addr
-                   (lexter/tn3270::set-field-modified screen fa-addr))
-                 (setf (lexter/tn3270::screen-dirty screen) t)))
+                   (lexter/tn3270::set-field-modified screen fa-addr))))
              t)
             (otherwise nil)))))))
 
@@ -271,7 +200,6 @@
           :for fa = (aref attrs addr)
           :when (and (plusp fa) (not (lexter/tn3270:field-protected-p fa)))
           :do (lexter/tn3270::screen-set-cursor screen (mod (1+ addr) size))
-              (setf (lexter/tn3270::screen-dirty screen) t)
               (return t))))
 
 ;;; --------------------------------------------------------------------------
@@ -317,10 +245,15 @@
 
 (defmethod lexter/panes:pane-dirty-p ((pane tn3270-pane))
   "Check if the 3270 screen needs re-rendering."
-  (let ((client (tn3270-pane-client pane)))
-    (when client
-      (let ((screen (lexter/tn3270::client-screen client)))
-        (and screen (lexter/tn3270::screen-dirty screen))))))
+  (let ((screen (tn3270-pane-screen pane)))
+    (and screen (lexter/tn3270:screen-dirty screen))))
+
+(defmethod lexter/panes:pane-mark-dirty ((pane tn3270-pane))
+  "Mark every row of the 3270 screen to be built again, as switching to the
+   pane's workspace asks (LEXTER-D71)."
+  (let ((screen (tn3270-pane-screen pane)))
+    (when screen
+      (lexter/model:mark-screen-dirty (lexter/tn3270:screen-model screen)))))
 
 ;;; --------------------------------------------------------------------------
 ;;; Cleanup

@@ -22,8 +22,7 @@
 ;;;; writes (surface.lisp), and copies into the composed grid (LEXTER-D124).
 ;;;;
 ;;;; Until the renderer draws records (step 6 of Phase 3), BUILD-RENDER-DATA
-;;;; turns them into the first edition's instances, and the 3270 pane reaches
-;;;; the grid through SET-SIMPLE-CELL, which writes records, until step 5.
+;;;; turns them into the first edition's instances.
 
 ;;; --------------------------------------------------------------------------
 ;;; Constants
@@ -269,40 +268,6 @@
             ((and (continuation-p grid col row) (plusp col))
              (exchange (1- col)))))
     (touch-row grid row)))
-
-;;; --------------------------------------------------------------------------
-;;; The 3270 pane's writer, over records
-;;; --------------------------------------------------------------------------
-;;;
-;;; The 3270 pane writes the grid through SET-SIMPLE-CELL until step 5 of
-;;; Phase 3 puts it on a Lexter screen (LEXTER-D128).
-
-(defun %unpair (grid col row)
-  "Before the cell at COL, ROW is written, break the double-width pair it is
-   half of: a left half keeps its glyph, narrow, and a right half is emptied."
-  (let ((records (display-grid-records grid))
-        (cols (display-grid-cols grid)))
-    (cond ((and (continuation-p grid col row) (plusp col))
-           (patch-record-common records (%idx grid (1- col) row) :wide 0 :right-half 0))
-          ((and (wide-left-p grid col row) (< (1+ col) cols))
-           (let ((right (%idx grid (1+ col) row)))
-             (write-plain-record records right
-               :swatch (read-record-common records right :swatch)))))))
-
-(defun set-simple-cell (grid col row glyph-idx swatch-idx &key wide)
-  "Set the cell at (COL, ROW) to GLYPH-IDX in ink slot 1 over background slot
-   0 of SWATCH-IDX. WIDE marks a double-width glyph: the cell is its left half,
-   and (COL+1, ROW) its right half, naming the glyph's second column
-   (LEXTER-D126)."
-  (let ((cols (display-grid-cols grid)))
-    (%unpair grid col row)
-    (when (and wide (< (1+ col) cols))
-      (%unpair grid (1+ col) row))
-    (write-text-record grid col row :glyph glyph-idx :swatch swatch-idx
-                                    :wide (and wide (< (1+ col) cols)))
-    (when (and wide (< (1+ col) cols))
-      (write-text-record grid (1+ col) row :glyph (1+ glyph-idx) :swatch swatch-idx
-                                           :wide t :right-half t))))
 
 ;;; --------------------------------------------------------------------------
 ;;; The first edition's instances, built from the records

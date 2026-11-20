@@ -8,7 +8,7 @@ language:      en
 status:        Draft
 provenance:
   assistant:   opencode
-  session:     "Phase 3, step 1: the manifests and their accessors (2026-11-20)"
+  session:     "Phase 3, step 1: the manifests and their accessors (2026-11-20); step 2: the screen as text and styles (2026-11-20)"
 relates-to:
   - LEXTER-0017
   - LEXTER-0016
@@ -146,34 +146,38 @@ A new file and package, `lexter/manifests`, loaded after the package
 definitions and before everything else of `lexter`.
 
 - **Manifests.** `glyph-layer` and `glyph-mask`, the two forms of a glyph
-  word; `plain-record`; `record-common`, the shared view; `text-cell`; and
-  `swatch-texel` and `palette-texel`.
+  word; `src/manifests.lisp:plain-record@e62caa7`; `record-common`, the shared
+  view; `text-cell`; and `swatch-texel` and `palette-texel`.
 - **Enumerations.** `record-format`, the formats of LEXTER-D82, and
   `mask-operation`, the operations of LEXTER-D84.
-- **Record arrays.** `make-record-array` makes an array of records of zeros.
+- **Record arrays.** `src/manifests.lisp:make-record-array@e62caa7` makes an
+  array of records of zeros.
   The macros `write-plain-record`, `patch-plain-record`, `read-plain-record`,
   `read-record-common`, and `patch-record-common` take an array, a record's
   index, and the manifest's fields. `record-format`, `copy-records`, and
   `clear-records` are functions.
-- **Glyph words by number.** `record-glyph` and `record-ink-slot` are read
+- **Glyph words by number.** `src/manifests.lisp:record-glyph@e62caa7` and
+  `record-ink-slot` are read
   and written with `setf`, through one branch for each glyph word;
   `record-layer-p` and `record-topmost-layer` read the glyph count and type
   bits.
-- **Invariants.** `record-invariant-violations` and `half-pair-violations`.
+- **Invariants.** `src/manifests.lisp:record-invariant-violations@e62caa7` and
+  `src/manifests.lisp:half-pair-violations@e62caa7`.
 - **Text cells.** `make-text-array`, the macros `write-text-cell`,
   `patch-text-cell`, and `read-text-cell`, and `text-cell-continuation-p`.
-- **Texels.** `write-swatch-texel`, `read-swatch-texel`,
-  `write-palette-texel`, and `read-palette-texel`, inline functions.
+- **Texels.** `src/manifests.lisp:write-swatch-texel@e62caa7`,
+  `read-swatch-texel`, `write-palette-texel`, and `read-palette-texel`,
+  inline functions.
 
 ### The texels' writers
 
 - `src/swatches.lisp`: a table's entries are written and read as swatch
-  texels, and the default palette and the distance between two colours
-  through palette texels.
-- `src/model.lisp`: `set-palette-entry` and `get-palette-entry` write and
-  read a palette texel.
+  texels (`src/swatches.lisp:%add-entry@e62caa7`), and the default palette
+  and the distance between two colours through palette texels.
+- `src/model.lisp`: `src/model.lisp:set-palette-entry@e62caa7` and
+  `get-palette-entry` write and read a palette texel.
 - `src/vt-handler.lisp`: OSC 104 reads the default colour of an entry as a
-  palette texel.
+  palette texel (`src/vt-handler.lisp:%osc-reset-color-104@e62caa7`).
 - `src/packages.lisp` defines `lexter/manifests` and imports the texel
   accessors into `lexter/swatches` and `lexter/model`; `lexter.asd` requires
   SpecOps and loads the new file.
@@ -181,8 +185,8 @@ definitions and before everything else of `lexter`.
 ### Tests
 
 A new suite, `manifests`, in `tests/test-manifests.lisp`, has 25 tests, with
-a fixture, `with-clean-records`, that binds fresh arrays of records and text
-cells:
+a fixture, `tests/helpers.lisp:with-clean-records@e62caa7`, that binds fresh
+arrays of records and text cells:
 
 - **The worked records.** Each record of the architecture's Appendices in the
   plain format is written and compared byte for byte:
@@ -253,15 +257,232 @@ Table: Files changed by step 1.
 
 ## Outstanding Work
 
-- **SpecOps's warnings.** The report for SpecOps names the binding in
-  `marshal`'s expansion of a sub-manifest and its fix. Once it is fixed and
-  Lexter's required version raised, the two macros stop muffling style
-  warnings.
+- **SpecOps's warnings.** Done: SpecOps 0.2.4 declares the bindings
+  ignorable, and Lexter requires it and no longer muffles warnings (the
+  update of 2026-11-20 below).
 - **Unchecked reads** for the paths that draw, with the first such path.
 - **Assertions in debugging builds** of the invariants, with the writers of
   steps 3 and 4.
-- **The terminal row**, the soft wrap, prompt kind, and line size of each row
-  (LEXTER-D119), with the screen in step 2.
-- **Code references.** The references above name files and functions without
-  a revision; they are pinned to the commit that holds this step once it is
-  made.
+- **The terminal row.** Done in step 2 (the update below).
+- **Code references.** Done: the references above are pinned to `e62caa7`,
+  the commit that holds this step.
+
+## Update 2026-11-20 — Step 2: the screen as text and styles
+
+Step 2 makes a terminal's screen hold what the terminal wrote rather than
+what it draws (LEXTER-D124):
+- a text grid of text cells (LEXTER-D127);
+- a terminal row beside each row (LEXTER-D119);
+- the styles the cells were written in (LEXTER-D118, LEXTER-D125);
+- a history of text and styles (LEXTER-D118).
+
+Its rows are built into the display grid by one function, which builds the
+history's rows too. Until step 3 brings the record, that function builds
+the first edition's grid, so nothing on screen changes: every pixel fixture
+keeps its checksum. Lexter also now requires SpecOps 0.2.4, whose writes of
+sub-manifests raise no warnings, and the two record-writing macros no
+longer muffle them.
+
+### Problem
+
+The first edition's screen held, for each cell, the atlas position of its
+glyph, its swatch, and an attribute word, beside a hash table of layered
+cells. The handler decided all three as it wrote: it looked the glyph up in
+the atlas, applied bold-as-bright to the colours, and mapped 24-bit colour
+to the palette. A row could therefore not be drawn again under another
+font, setting, or palette slot, and history kept the drawn cells, not what
+the host sent. LEXTER-D124 has the screen keep text and styles, with every
+row built from them, and LEXTER-D125 has the presentation rules applied
+when rows are built.
+
+### Design Decisions
+
+The decisions are the plan's: LEXTER-D118, LEXTER-D119, LEXTER-D124,
+LEXTER-D125, and LEXTER-D127. The steward settled four more before this
+step was built:
+
+- **The screen's layered cells are removed.** No source file wrote them,
+  and four tests of LEXTER-O27 did. Layers belong to the API's surfaces,
+  which arrive in step 4 (LEXTER-D124). The tests are retired, and their
+  invariants return as tests of surfaces.
+- **A full style table gives the default style.** Style ids are 16 bits, so
+  a terminal holds at most 65,536 styles. Styles are never freed in Phase 3,
+  since LEXTER-D118 leaves freeing to the packing of history. Once the table
+  is full it interns nothing, and new text takes style 0.
+- **OSC 133 is not parsed yet.** The terminal row's prompt kind is kept
+  through scrolling and history, and is always 0 for now. The line size
+  stays 0 until DEC double-size lines are built (LEXTER-D114).
+- **The soft wrap follows xterm.** Autowrap sets it, and so does a wide
+  character that wraps early because it cannot begin in the last column.
+  Several things clear it:
+  - an erase that reaches the row's last column, since the row's text no
+    longer runs on;
+  - a delete of characters, which shifts blanks into the last column;
+  - a character written in the last column with autowrap off;
+  - a row cleared whole, by scrolling or by inserting or deleting lines.
+
+  Cursor movement leaves it alone, as in xterm.
+
+Choices made while building:
+
+- **A colour is an integer.** Its top two bits say whether it is the
+  default, a palette index, or a 24-bit value, so that SGR 39 and 49 are
+  told apart from palette colours 7 and 0. Bold-as-bright depends on that
+  difference, since it leaves the default foreground alone (LEXTER-D125).
+- **A style is a structure, interned by its slots** in an `equalp` table. It
+  holds three colours and the flags of bold, underline and the line style,
+  strikethrough, overline, reverse video, blink, and invisible. The handler
+  now records SGR 9, 29, 53, 55, 58, and 59, so that the style holds what the
+  host sent, though none of them is drawn yet.
+- **The handler interns lazily.** Each SGR makes a fresh copy of the current
+  style, and the copy is interned when the first character is written in
+  it. An interned style is never changed.
+- **The settings belong to the style table.** The table is shared by a
+  terminal's screens, so bold-as-bright moves there from the handler. The
+  table also caches each style's swatch under the settings. Changing the
+  setting clears the cache, and the handler marks both screens dirty.
+- **The interim build.** `flush-to-display` gives each cell of a dirty row:
+  - its glyph, from the atlas by its codepoint and width;
+  - its swatch, from its style under the presentation rules.
+
+  The swatch's four slots are the background, the foreground twice, and 0,
+  exactly as the handler interned them. Reverse video, underline, and
+  invisible text are still not drawn, as in the first edition; the record
+  draws them in step 3. The flush now takes the atlas, which the VT pane
+  passes from its handler.
+- **An empty cell's content is 0.** C0 controls are never printed, so 0
+  means no character. The build draws an empty cell in the atlas's empty
+  glyph at position 0 (LEXTER-O28), and a screen has no blank glyph of its
+  own.
+- **An erased cell keeps its colours.** It is erased to a style of its
+  foreground and background alone, cached for each style, as the first
+  edition's erase kept a cell's swatch and cleared its attributes. A first
+  version kept only the background. It changed the "colours" fixture's
+  checksum, because the block cursor exchanges a blank cell's slots and so
+  showed its foreground, and it was not kept. Erasing in the current
+  background, as xterm does, would be a change of behaviour of its own.
+- **Both halves of a wide character set the wide bit,** and the right half
+  holds the continuation marker, so that each cell describes itself
+  (LEXTER-D119).
+- **Joined codepoints are kept by row,** in an alist of columns for each
+  row. They move with their cells under inserting, deleting, scrolling, and
+  resizing, and go with the row into history. A character of width 0 joins
+  the cell before the cursor. At the start of a row, it joins the last cell
+  of the row before if that row is soft-wrapped; otherwise it is dropped.
+- **A history row** keeps its text cells without continuations, its joined
+  codepoints by their place in the row, and its terminal row. The build
+  passes over continuations, so a screen row and a history row are built
+  by the same loop.
+- **24-bit colour.** `rgb-to-256` moves from the handler to the model, which
+  maps a style's 24-bit colour as rows are built.
+
+### Implementation
+
+- **`src/styles.lisp`**, new: colours, `style`, the style table with its
+  swatch cache and the cache of erased styles, `style-swatch`, which applies
+  the presentation rules, and `rgb-to-256`.
+- **`src/model.lisp`**, rewritten from the cell representation down:
+  - the screen holds `text`, `clusters`, `terminal-rows`, and `styles`;
+  - `write-char-at`, `put-char`, `write-string-at`, and `join-character`
+    write codepoints;
+  - the erase, insert, delete, line, scroll, and resize operations move and
+    clear text cells, joined codepoints, and terminal rows together;
+  - `history-row` is the form of history;
+  - `%build-row` is the one function that builds a terminal row, and
+    `flush-to-display` calls it for the screen and for the history.
+- **`src/manifests.lisp`:** the `terminal-row` manifest and its accessors,
+  and `copy-text-cells` and `clear-text-cells`.
+- **`src/vt-handler.lisp`:**
+  - the current, saved, and alternate-saved styles replace the colour and
+    attribute slots;
+  - `handle-sgr` builds a new style;
+  - `%print-codepoint` joins characters of width 0;
+  - `%write-printed-char` writes the style's id and sets or clears the soft
+    wrap;
+  - `vt-handler-bold-as-bright` reads and sets the style table's setting.
+- **`src/panes/vt-pane.lisp`:** the flush passes the handler's atlas, and
+  the screen's blank glyph is gone.
+- **`lexter.asd`:** SpecOps 0.2.4, and the new source file. In
+  `src/manifests.lisp`, the two record-writing macros no longer muffle style
+  warnings.
+
+### Tests
+
+- **Migrated.** Tests that read atlas positions from the screen now read
+  codepoints, and the helper `screen-glyph` is replaced by `screen-char`. The
+  "no glyph" test, the blank test of LEXTER-O28, and the light grey of
+  LEXTER-O21 now check the grid after a flush, where the glyph and colours
+  are decided. The swatch suite's tests write cells in styles of the colours
+  they need, and check the swatch the build gives: the same swatches, from
+  the same table.
+- **Rewritten.** The zero-width test now asserts that the character joins
+  the cell before it (LEXTER-D119), with two new tests: one across a soft
+  wrap, and one with nothing to join.
+- **Retired.** The four tests of LEXTER-O27's layered cells in screens.
+- **New in `handler`, 9 tests:**
+  - SGR kept as sent;
+  - default colours told apart from palette colours;
+  - DECSC and DECRC with the style;
+  - the alternate screen sharing the style table;
+  - five tests of the soft wrap.
+- **New in `model`, 11 tests:**
+  - a wide character's two cells;
+  - writing over a right half;
+  - joined codepoints moving and clearing;
+  - an erased cell's style;
+  - interning, and a full style table;
+  - bold-as-bright at the build, a changed setting, and 24-bit colour
+    mapped at the build;
+  - history's text and its build.
+- **New in `structure`:** a terminal's screen holds text and styles only.
+
+### Verification
+
+- **The suite.** `(asdf:test-system :lexter)` runs 167 tests and 441 checks:
+  428 pass and 13 fail. The failures are the same as before, those of
+  LEXTER-D72, LEXTER-D73, and LEXTER-D74.
+- **Pixels.** `tools/check-pixel-fixtures.lisp` reproduces every checksum of
+  the Phase 2 fixtures, in both orders and both fonts, and the GPU's stores
+  match.
+- **The other test systems.** `lexter/mouse-tests` passes, 32 checks;
+  `lexter/origin-tests` gives its same 23 passes and 28 failures.
+- **Loading.** Every system loads with the same style warnings as before,
+  and the record writers raise none under SpecOps 0.2.4.
+
+### Files
+
+Table: Files changed by step 2.
+
+| File | Action | Description |
+|---|---|---|
+| `src/styles.lisp` | **New** | Colours, styles, the style table, and the presentation rules |
+| `src/model.lisp` | Modified | The screen as text, joined codepoints, terminal rows, and styles; history rows; the one build |
+| `src/manifests.lisp` | Modified | The terminal row; copying and clearing text cells; no muffled warnings |
+| `src/packages.lisp` | Modified | The model's new exports and imports |
+| `src/vt-handler.lisp` | Modified | Styles for SGR state; codepoints, joining, and soft wraps written |
+| `src/panes/vt-pane.lisp` | Modified | The atlas passed to the flush |
+| `lexter.asd` | Modified | SpecOps 0.2.4; `src/styles.lisp` |
+| `tests/helpers.lisp` | Modified | Helpers that read and write screens through the model's API |
+| `tests/test-handler.lisp` | Modified | Migrated; zero-width joining; styles and soft wraps |
+| `tests/test-model.lisp` | Modified | Migrated; the text grid, styles, and history |
+| `tests/test-grid.lisp` | Modified | The tests of layered cells in screens retired |
+| `tests/test-swatches.lisp` | Modified | Swatches from styles |
+| `tests/test-scrollback.lisp` | Modified | The empty glyph as history's padding |
+| `tests/test-workspaces.lisp` | Modified | Codepoints written |
+| `tests/test-structure.lisp` | Modified | Screens hold text and styles only |
+
+### Outstanding Work
+
+- **Drawing what styles hold.** Reverse video, underline, invisible text,
+  and blink are drawn from styles once the record is built, in step 3.
+- **Freeing styles,** with the packing of history (LEXTER-D118).
+- **Erasing in the current background,** as xterm does, if the steward
+  wants that change.
+- **OSC 133 and DEC double-size lines,** which would write the terminal
+  row's prompt kind and line size.
+- **The first edition's specification.**
+  [LEXTER-DRAFT-data-structures-1e](Spec.DataStructures1e.md) still
+  describes the screen's cells as they were. It is superseded by the second
+  edition's specification at the end of the plan, rather than amended now.
+- **Code references.** The update's references name files and functions
+  without a revision; they are pinned once it is committed.

@@ -12,6 +12,12 @@
 ;;;;   sampling renderer is pixel-deterministic, so exact-checksum comparison is
 ;;;;   sound (unlike vector-font terminals, which need tolerance comparison).
 ;;;;
+;;;;   Beside each pixel checksum, a fixture has a cell checksum: of the
+;;;;   composed grid's records, normalised, and the palettes they draw in
+;;;;   (LEXTER-D108). It needs no GL, so a terminal without a window computes
+;;;;   it on any machine; a changed cell checksum places a failure before the
+;;;;   renderer, a changed pixel checksum alone in or after it.
+;;;;
 ;;;; Blob format (".ptyb"):
 ;;;;   bytes 0-3  magic  "PTYB" (#x50 #x54 #x59 #x42)
 ;;;;   byte  4    version (currently 1)
@@ -22,6 +28,8 @@
   (:use #:cl #:lexter/unix-term #:lexter/vt-handler)
   (:export ;; Checksum
            #:fnv1a-64
+           #:cell-checksum
+           #:terminal-cell-checksum
            ;; Blob API
            #:write-blob
            #:read-blob
@@ -32,7 +40,10 @@
            ;; Testing
            #:with-terminal-test-config
            #:test-pixels
+           #:test-cells
            #:replay-blob
+           #:replay-cells
+           #:renderer-description
            #:*test-terminal*
            ;; The GPU's stores
            #:check-gpu-stores
@@ -64,6 +75,95 @@
     (loop :for b :across flat
           :do (setf hash (logand (* (logxor hash b) +fnv64-prime+) +u64-mask+)))
     hash))
+
+;;; --------------------------------------------------------------------------
+;;; Cell checksum (LEXTER-D108)
+;;; --------------------------------------------------------------------------
+
+(defun %plain-glyph-fields (word)
+  "The fields of WORD, a glyph word's plist, as integers: its atlas position,
+   its selector, and its ink slot, or its operation and reach."
+  (list* (getf word :glyph) (getf word :selector)
+         (if (getf word :operation)
+             (list (position (getf word :operation)
+                             '(:union :intersection :exclusion :mask-less-coverage))
+                   (getf word :reach))
+             (list (getf word :ink-slot)))))
+
+(defun %record-fields (records index store)
+  "The fields of record INDEX of RECORDS that its format defines, as a list of
+   integers, read without their reserved bits: the format byte, the drawing
+   flags, the palette and background slots, the four palette indices its
+   swatch resolves to in STORE in place of the swatch, and for the plain
+   format the glyphs in use, with the type bits of those alone."
+  (let* ((start (* index lexter/manifests:+record-bytes+))
+         (common (specops:unmarshal lexter/manifests::record-common records
+                                    (:at start :check nil)))
+         ;; The format byte, the record's first in every format (LEXTER-D81)
+         (fields (list (aref records start)
+                       (getf common :wide) (getf common :right-half) (getf common :blink)
+                       (getf common :line-size) (getf common :magnified-half)
+                       (getf common :palette-slot) (getf common :background-slot))))
+    (setf fields (append fields (multiple-value-list
+                                 (lexter/swatches:store-swatch store (getf common :swatch)))))
+    (if (eq (getf common :format) :plain)
+        (let* ((plain (specops:unmarshal lexter/manifests::plain-record records
+                                         (:at start :check nil)))
+               (n (min (getf plain :glyph-count) lexter/manifests:+plain-glyph-words+)))
+          (append fields
+                  (list n)
+                  (loop :for i :from 1 :below n
+                        :collect (getf plain (intern (format nil "TYPE-~d" i) :keyword)))
+                  (loop :for i :below n
+                        :append (%plain-glyph-fields
+                                 (getf plain (intern (format nil "G~d" i) :keyword))))))
+        ;; No other format is built: its structure and parameters, as they are
+        (append fields (list (getf common :structure) (getf common :parameters)
+                             (getf common :format-flags) (getf common :colour-parameters))))))
+
+(defun cell-checksum (grid store palettes
+                      &key (palette-slots lexter/swatches:+default-palette-slots+))
+  "A 64-bit FNV-1a checksum of GRID's records, normalised, and the palettes
+   they draw in (LEXTER-D108). Each record contributes the fields its format
+   defines, so reserved bits, unused glyph words, and the type bits beyond
+   the glyph count count as zero, and its swatch the four palette indices it
+   resolves to in STORE, so the order of interning does not count. Glyphs
+   stay atlas positions. Then each palette slot a record draws in, a slot
+   beyond the PALETTE-SLOTS of the store being slot 0, contributes its number
+   and the palette PALETTES, an alist of slots and palettes, gives it, or a
+   mark that it has none. Every integer is hashed as four little-endian
+   bytes."
+  (let ((hash +fnv64-offset+)
+        (records (lexter/grid:display-grid-records grid))
+        (slots '()))
+    (declare (type (unsigned-byte 64) hash))
+    (flet ((add (n)
+             (dotimes (k 4)
+               (setf hash (logand (* (logxor hash (ldb (byte 8 (* 8 k)) n)) +fnv64-prime+)
+                                  +u64-mask+)))))
+      (add (lexter/grid:display-grid-cols grid))
+      (add (lexter/grid:display-grid-rows grid))
+      (dotimes (index (lexter/manifests:record-array-count records))
+        (let ((slot (lexter/manifests:read-record-common records index :palette-slot)))
+          (pushnew (if (< slot palette-slots) slot 0) slots))
+        (mapc #'add (%record-fields records index store)))
+      (dolist (slot (sort slots #'<))
+        (add slot)
+        (let ((palette (cdr (assoc slot palettes))))
+          (add (if palette 1 0))
+          (when palette
+            (loop :for b :across palette :do (add b))))))
+    hash))
+
+(defun terminal-cell-checksum (term)
+  "The cell checksum of TERM's composed grid, in its compositor's swatch store
+   and palettes (CELL-CHECKSUM). Run after composing, as capture does."
+  (let ((comp (unix-terminal-compositor term)))
+    (cell-checksum (lexter/panes:compositor-display comp)
+                   (lexter/panes:compositor-swatch-store comp)
+                   (lexter/panes:compositor-palettes comp)
+                   :palette-slots (lexter/swatches:palette-slot-count
+                                   (lexter/panes:compositor-palette-slots comp)))))
 
 ;;; --------------------------------------------------------------------------
 ;;; Blob framing
@@ -200,46 +300,68 @@
   (process-output (unix-terminal-vt-handler term) bytes)
   (terminal-capture term))
 
+(defun replay-cells (term bytes)
+  "Reset TERM to a blank screen, replay the raw BYTES through its VT handler,
+   compose its grid, and return the cell checksum (LEXTER-D108). Needs no GL,
+   so TERM may have no window."
+  (terminal-reset term)
+  (process-output (unix-terminal-vt-handler term) bytes)
+  (terminal-compose term)
+  (terminal-cell-checksum term))
+
 (defun call-with-terminal-test-config (thunk &key font-path fonts cols rows
                                                   cell-width cell-height
-                                                  pixel-scale)
-  "Functional core of WITH-TERMINAL-TEST-CONFIG. Owns the GLFW lifecycle, builds
-   one headless (:NO-PTY, hidden) terminal from the config, binds *TEST-TERMINAL*
-   to it for the dynamic extent of THUNK, and tears everything down afterwards."
-  (glfw:initialize)
-  (let ((term (make-terminal nil
-                             :no-pty t :visible nil
-                             :font-path (or font-path "../terminus-18n.pcf")
-                             :fonts fonts
-                             :cols cols :rows rows
-                             :pixel-scale (or pixel-scale 1))))
-    (unwind-protect
-         (progn
-           (gui-initialize term)
-           ;; The font determines cell dimensions; if the config declared them,
-           ;; verify they match so a font swap can't silently shift the geometry.
-           (let ((cfg (terminal-config-plist term)))
-             (when (and cell-width (/= cell-width (getf cfg :cell-width)))
-               (warn "Test config :CELL-WIDTH ~d disagrees with loaded font ~d."
-                     cell-width (getf cfg :cell-width)))
-             (when (and cell-height (/= cell-height (getf cfg :cell-height)))
-               (warn "Test config :CELL-HEIGHT ~d disagrees with loaded font ~d."
-                     cell-height (getf cfg :cell-height))))
-           (let ((*test-terminal* term))
-             (funcall thunk)))
-      (gui-destroy term)
-      (glfw:terminate))))
+                                                  pixel-scale atlas-cols (window t))
+  "Functional core of WITH-TERMINAL-TEST-CONFIG. Builds one headless (:NO-PTY)
+   terminal from the config, binds *TEST-TERMINAL* to it for the dynamic
+   extent of THUNK, and tears everything down afterwards. With WINDOW, it has
+   a hidden window and owns the GLFW lifecycle; without, it has no window and
+   no GL context, and computes cell checksums alone. Floating-point traps are
+   masked throughout, as Mesa's llvmpipe needs (LEXTER-D112)."
+  (sb-int:with-float-traps-masked (:invalid :divide-by-zero :overflow :inexact)
+    (when window
+      (glfw:initialize))
+    (let ((term (make-terminal nil
+                               :no-pty t :visible nil
+                               :font-path (or font-path "../terminus-18n.pcf")
+                               :fonts fonts
+                               :cols cols :rows rows
+                               :pixel-scale (or pixel-scale 1)
+                               :atlas-cols atlas-cols)))
+      (unwind-protect
+           (progn
+             (if window
+                 (gui-initialize term)
+                 (terminal-initialize-windowless term))
+             ;; The font determines cell dimensions; if the config declared them,
+             ;; verify they match so a font swap can't silently shift the geometry.
+             (let ((cfg (terminal-config-plist term)))
+               (when (and cell-width (/= cell-width (getf cfg :cell-width)))
+                 (warn "Test config :CELL-WIDTH ~d disagrees with loaded font ~d."
+                       cell-width (getf cfg :cell-width)))
+               (when (and cell-height (/= cell-height (getf cfg :cell-height)))
+                 (warn "Test config :CELL-HEIGHT ~d disagrees with loaded font ~d."
+                       cell-height (getf cfg :cell-height))))
+             (let ((*test-terminal* term))
+               (funcall thunk)))
+        (gui-destroy term)
+        (when window
+          (glfw:terminate))))))
 
 (defmacro with-terminal-test-config ((&key font-path fonts (cols 80) (rows 24)
-                                           cell-width cell-height (pixel-scale 1))
+                                           cell-width cell-height (pixel-scale 1)
+                                           atlas-cols (window t))
                                      &body body)
   "Establish a headless replay terminal from a durable config and run BODY (a
-   series of TEST-PIXELS forms) against it. The terminal is built once and
-   reused across all enclosed TEST-PIXELS forms (each resets the screen first).
+   series of TEST-PIXELS or TEST-CELLS forms) against it. The terminal is built
+   once and reused across all enclosed forms (each resets the screen first).
+   ATLAS-COLS fixes the atlas's column count, so that the cell checksum does
+   not depend on the GPU (LEXTER-D108). With WINDOW NIL the terminal has no
+   window, needs no display, and runs TEST-CELLS alone.
 
    Example:
      (with-terminal-test-config (:font-path \"unifont-17.0.04.pcf.gz\"
-                                 :cols 80 :rows 24
+                                 :cols 80 :rows 24 :atlas-cols 256
                                  :cell-width 8 :cell-height 16 :pixel-scale 1)
        (test-pixels \"./1044.ptyb\" #xAABBCCDDEEFF0011)
        (test-pixels \"./1051.ptyb\" #x1122334455667788))"
@@ -248,12 +370,13 @@
     :font-path ,font-path :fonts ,fonts
     :cols ,cols :rows ,rows
     :cell-width ,cell-width :cell-height ,cell-height
-    :pixel-scale ,pixel-scale))
+    :pixel-scale ,pixel-scale :atlas-cols ,atlas-cols :window ,window))
 
-(defun test-pixels (blob-path expected &key on-mismatch)
+(defun test-pixels (blob-path expected &key cells on-mismatch)
   "Replay the .ptyb blob at BLOB-PATH through *TEST-TERMINAL* and assert its
-   pixel checksum equals EXPECTED. Silent on success (returns T); signals an
-   error on mismatch.
+   pixel checksum equals EXPECTED, and, when CELLS is given, that the cell
+   checksum of the grid it drew equals CELLS (LEXTER-D108). Silent on success
+   (returns T); signals an error on mismatch.
 
    ON-MISMATCH, if supplied, is called before the error with the actual capture
    using the same keyword signature as DUMP-TERMINAL's PIXEL-FN (e.g. to write
@@ -263,6 +386,12 @@
   (let* ((bytes  (read-blob blob-path))
          (pixels (replay-blob *test-terminal* bytes))
          (actual (fnv1a-64 pixels)))
+    (when cells
+      (let ((actual-cells (terminal-cell-checksum *test-terminal*)))
+        (unless (= actual-cells cells)
+          (error "TEST-PIXELS: the drawn grid of ~a has the wrong cell checksum:~%  ~
+                  expected #x~16,'0X~%  actual   #x~16,'0X"
+                 blob-path cells actual-cells))))
     (unless (= actual expected)
       (when on-mismatch
         (multiple-value-bind (h w c) (%pixel-dims pixels)
@@ -273,6 +402,24 @@
       (error "TEST-PIXELS mismatch for ~a:~%  expected #x~16,'0X~%  actual   #x~16,'0X"
              blob-path expected actual))
     t))
+
+(defun test-cells (blob-path expected)
+  "Replay the .ptyb blob at BLOB-PATH through *TEST-TERMINAL*, which may have
+   no window, and assert its cell checksum equals EXPECTED (LEXTER-D108).
+   Silent on success (returns T); signals an error on mismatch."
+  (unless *test-terminal*
+    (error "TEST-CELLS called outside WITH-TERMINAL-TEST-CONFIG."))
+  (let ((actual (replay-cells *test-terminal* (read-blob blob-path))))
+    (unless (= actual expected)
+      (error "TEST-CELLS mismatch for ~a:~%  expected #x~16,'0X~%  actual   #x~16,'0X"
+             blob-path expected actual))
+    t))
+
+(defun renderer-description (&optional (term *test-terminal*))
+  "The GL renderer and version strings of TERM's context, which name the
+   driver its pixel checksums were taken on (LEXTER-D112)."
+  (glfw:make-context-current (unix-terminal-window term))
+  (values (gl:get-string :renderer) (gl:get-string :version)))
 
 ;;; --------------------------------------------------------------------------
 ;;; The GPU's stores against their sources (LEXTER-D106)

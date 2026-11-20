@@ -89,7 +89,13 @@
   (profile      (make-instance 'pane-profile))
   ;; How character widths are decided: the atlas fits its glyphs to this
   ;; policy, and every VT handler on the atlas follows it (LEXTER-D117)
-  (width-policy lexter/width:*default-width-policy*))
+  (width-policy lexter/width:*default-width-policy*)
+  ;; The atlas's column count, or NIL to choose it from the GPU's maximum
+  ;; texture size; a fixture fixes it, so that glyph positions do not depend
+  ;; on the machine (LEXTER-D108)
+  (atlas-cols   nil :type (or null (integer 2)))
+  ;; True from the panes' initialization until GUI-DESTROY releases them
+  (assembled    nil :type boolean))
 
 (defmethod own-profile ((comp compositor))
   (compositor-profile comp))
@@ -401,7 +407,8 @@
                                    (visible t)
                                    (headless nil)
                                    (layout-fn nil)
-                                   (width-policy lexter/width:*default-width-policy*))
+                                   (width-policy lexter/width:*default-width-policy*)
+                                   (atlas-cols nil))
   "Create an uninitialized COMPOSITOR for the given WORKSPACES.
 
 The window, OpenGL context, and renderer are NOT created yet -- call
@@ -422,7 +429,9 @@ HEADLESS:   when T, keep running although no pane has a live backend (a
 LAYOUT-FN:  a function of the compositor, columns, and rows, called after the
             window is resized to lay out the panes; NIL leaves them as they are
 WIDTH-POLICY: how character widths are decided (LEXTER/WIDTH:MAKE-WIDTH-POLICY);
-            by default Unicode's tables, with ambiguous characters narrow"
+            by default Unicode's tables, with ambiguous characters narrow
+ATLAS-COLS: the atlas's column count; NIL chooses it from the GPU's maximum
+            texture size, and a compositor without a window needs it"
   (unless workspaces
     (error "At least one workspace is required"))
   (let ((comp (make-compositor :workspaces workspaces
@@ -437,12 +446,57 @@ WIDTH-POLICY: how character widths are decided (LEXTER/WIDTH:MAKE-WIDTH-POLICY);
                                :visible visible
                                :headless headless
                                :layout-fn layout-fn
-                               :width-policy width-policy)))
+                               :width-policy width-policy
+                               :atlas-cols atlas-cols)))
     ;; Each workspace refers back to its compositor, so that its panes find
     ;; the compositor's profile (LEXTER-DRAFT-pane-profiles-O2).
     (dolist (ws workspaces)
       (setf (workspace-compositor ws) comp))
     comp))
+
+(defun %compositor-font-list (comp)
+  "The fonts COMP draws with: its fonts, or else the font at its font path."
+  (or (compositor-fonts comp)
+      (let ((font-path (compositor-font-path comp)))
+        (format t "~&Loading font ~a ...~%" font-path)
+        (list (if (search ".bdf" font-path :test #'char-equal)
+                  (lexter/pcf:load-bdf font-path)
+                  (lexter/pcf:load-pcf font-path))))))
+
+(defun %compositor-assemble (comp atlas font-list)
+  "Give COMP ATLAS, made from FONT-LIST, and a display grid of its size, and
+   initialize every pane with ATLAS. Needs no GL."
+  (let ((primary (first font-list)))
+    (setf (compositor-atlas comp) atlas
+          (compositor-display comp) (lexter/grid:make-display-grid
+                                     :cols (compositor-cols comp)
+                                     :rows (compositor-rows comp)
+                                     :atlas atlas)
+          (compositor-palette comp) (make-xterm-palette)
+          (compositor-cell-w comp) (lexter/pcf:bitmap-font-cell-width primary)
+          (compositor-cell-h comp) (lexter/pcf:bitmap-font-cell-height primary))
+    (dolist (ws (compositor-workspaces comp))
+      (dolist (pane (workspace-panes ws))
+        (pane-initialize pane atlas)))
+    (clear-grid (compositor-display comp))
+    (setf (compositor-assembled comp) t)
+    comp))
+
+(defun compositor-initialize-windowless (comp)
+  "Make COMP's atlas, display grid, and panes without a window or GL context,
+   so that its panes can be fed and composed with COMPOSITOR-COMPOSE on a
+   machine with no display, as the cell checksum of a fixture is computed
+   (LEXTER-D108). The atlas is packed with COMP's fixed column count, which
+   it must have. Returns COMP."
+  (let ((cols (or (compositor-atlas-cols comp)
+                  (error "A compositor without a window needs a fixed atlas ~
+                          column count (:ATLAS-COLS).")))
+        (font-list (%compositor-font-list comp)))
+    (%compositor-assemble comp
+                          (lexter/atlas:pack-atlas font-list
+                                                   :cols cols
+                                                   :width-policy (compositor-width-policy comp))
+                          font-list)))
 
 (defmethod gui-initialize ((comp compositor))
   "Create COMP's GLFW window, OpenGL context, renderer, and initialize all panes.
@@ -451,13 +505,7 @@ new context current, so the atlas/renderer GL objects belong to it."
   ;; Set global prefix key
   (setf *prefix-key* (compositor-prefix-key comp))
   (format t "~&=== lexter panes v0.1 ===~%")
-  (let* ((font-path (compositor-font-path comp))
-         (font-list (or (compositor-fonts comp)
-                        (progn
-                          (format t "~&Loading font ~a ...~%" font-path)
-                          (list (if (search ".bdf" font-path :test #'char-equal)
-                                    (lexter/pcf:load-bdf font-path)
-                                    (lexter/pcf:load-pcf font-path))))))
+  (let* ((font-list (%compositor-font-list comp))
          (primary (first font-list))
          (cell-w (lexter/pcf:bitmap-font-cell-width primary))
          (cell-h (lexter/pcf:bitmap-font-cell-height primary))
@@ -483,26 +531,20 @@ new context current, so the atlas/renderer GL objects belong to it."
       (gl:viewport 0 0 win-w win-h)
       ;; Build atlas with all fonts, then add cursor glyphs, then renderer.
       (let ((atlas (lexter/atlas:build-atlas font-list
+                                             :cols (compositor-atlas-cols comp)
                                              :width-policy (compositor-width-policy comp))))
         (lexter/atlas:add-cursor-glyphs atlas)
-        (let ((display (lexter/grid:make-display-grid :cols cols :rows rows :atlas atlas))
-              (renderer (lexter/renderer:make-renderer
+        (let ((renderer (lexter/renderer:make-renderer
                          atlas win-w win-h
                          :pixel-scale scale
                          :palette-slots (lexter/swatches:palette-slot-count
-                                         (compositor-palette-slots comp))))
-              (palette (make-xterm-palette)))
+                                         (compositor-palette-slots comp)))))
           ;; The renderer gives palette slot 0 the default palette, and global
           ;; swatch 0 is the default swatch of the display's table, so a fresh
           ;; grid draws in the default colours.
           ;; Populate the persistent compositor object.
           (setf (compositor-window   comp) win
-                (compositor-atlas    comp) atlas
-                (compositor-display  comp) display
                 (compositor-renderer comp) renderer
-                (compositor-palette  comp) palette
-                (compositor-cell-w   comp) cell-w
-                (compositor-cell-h   comp) cell-h
                 (compositor-win-w    comp) win-w
                 (compositor-win-h    comp) win-h)
           ;; Set up GLFW callbacks, bound to this compositor's window.
@@ -541,24 +583,23 @@ new context current, so the atlas/renderer GL objects belong to it."
                                                  width height)
                 (schedule-compositor-resize comp new-cols new-rows))))
           (glfw:set-framebuffer-size-callback 'fb-size-callback win)
-          ;; Initialize all panes with the atlas
+          ;; The atlas, the display grid, and the panes
           (format t "~&Initializing panes...~%")
-          (dolist (ws (compositor-workspaces comp))
-            (dolist (pane (workspace-panes ws))
-              (pane-initialize pane atlas)))
-          ;; Clear grid initially
-          (clear-grid display)
+          (%compositor-assemble comp atlas font-list)
           (setf (compositor-running comp) t
                 (compositor-last-tick-time comp) (glfw:get-time))
           comp)))))
 
 (defmethod gui-destroy ((comp compositor))
-  "Release COMP's panes, renderer, and GLFW window. Idempotent."
+  "Release COMP's panes, renderer, and GLFW window, or the panes alone of a
+   compositor without a window. Idempotent."
   (let ((window (compositor-window comp)))
-    (when window
+    (when (compositor-assembled comp)
       (format t "~&Shutting down panes...~%")
       (dolist (ws (compositor-workspaces comp))
         (destroy-workspace ws))
+      (setf (compositor-assembled comp) nil))
+    (when window
       (when (compositor-renderer comp)
         (glfw:make-context-current window)
         (lexter/renderer:destroy-renderer (compositor-renderer comp)))
@@ -620,6 +661,33 @@ new context current, so the atlas/renderer GL objects belong to it."
 ;;; Screenshot capture (testing)
 ;;; --------------------------------------------------------------------------
 
+(defun compositor-compose (comp)
+  "Compose COMP's active workspace into its display grid, every pane and
+   decoration flushed whatever was flushed before, and return the grid. Needs
+   no GL, so it serves a compositor without a window as well as capture."
+  (let ((ws (active-workspace comp))
+        (*cursor-blink-on* (compositor-cursor-blink-on comp)))
+    (when ws
+      (dolist (pane (workspace-panes ws))
+        (pane-mark-dirty pane))
+      (mark-decorations-dirty ws)
+      (flush-workspace ws (compositor-display comp)))
+    (compositor-display comp)))
+
+(defun compositor-palettes (comp)
+  "The palettes COMP's active workspace draws in, as an alist of palette slots
+   and palettes: slot 0, the default palette, and the slot of each pane that
+   has a palette (LEXTER-D92)."
+  (let ((palettes (list (cons 0 (lexter/swatches:make-default-palette))))
+        (ws (active-workspace comp)))
+    (when ws
+      (dolist (pane (workspace-panes ws))
+        (multiple-value-bind (palette generation slot) (pane-palette pane)
+          (declare (ignore generation))
+          (when (and palette slot (plusp slot) (not (assoc slot palettes)))
+            (push (cons slot palette) palettes)))))
+    (sort palettes #'< :key #'car)))
+
 (defun compositor-capture (comp)
   "Render COMP's active workspace into the offscreen buffer and return it as an
    (H W 3) (unsigned-byte 8) array, row 0 = top of the image.
@@ -630,16 +698,11 @@ new context current, so the atlas/renderer GL objects belong to it."
    its GL context is made current here."
   (let ((window   (compositor-window comp))
         (renderer (compositor-renderer comp))
-        (ws       (active-workspace comp))
-        (*cursor-blink-on* (compositor-cursor-blink-on comp)))
+        (ws       (active-workspace comp)))
     (when window (glfw:make-context-current window))
     (lexter/renderer:enable-offscreen renderer)
+    (compositor-compose comp)
     (when ws
-      ;; Force a full repaint, whatever was flushed before.
-      (dolist (pane (workspace-panes ws))
-        (pane-mark-dirty pane))
-      (mark-decorations-dirty ws)
-      (flush-workspace ws (compositor-display comp))
       (%upload-pane-palettes renderer ws))
     (lexter/renderer:render-frame renderer (compositor-display comp)
                                   (compositor-swatch-store comp))

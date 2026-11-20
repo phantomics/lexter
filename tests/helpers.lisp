@@ -79,6 +79,10 @@
   :description "The API: records and text written by Lexter's own writers, and surfaces composed into the grid"
   :in lexter)
 
+(def-suite checksums
+  :description "The cell checksum of a composed grid, and terminals composed without a window, as the fixtures use them"
+  :in lexter)
+
 (def-suite pty-slow
   :description "The PTY's descriptor and child after the child exits; spawns a process (excluded by :skip-slow)"
   :in lexter)
@@ -89,7 +93,7 @@
 
 (defparameter *fast-suites*
   '(atlas handler model grid swatches structure tn3270 telnet pty
-    width profiles scrollback workspaces manifests surfaces)
+    width profiles scrollback workspaces manifests surfaces checksums)
   "The child suites run when slow tests are skipped.")
 
 (defun run-all-tests (&key skip-slow)
@@ -263,6 +267,22 @@ the store."
           (*handler* (lexter/vt-handler:make-vt-handler *screen* *atlas*))
           (*grid*    (make-test-grid :cols ,cols :rows ,rows)))
      ,@body))
+
+(defvar *terminal* nil "The terminal WITH-CLEAN-WINDOWLESS-TERMINAL makes.")
+
+(defmacro with-clean-windowless-terminal ((&key (cols 10) (rows 3)) &body body)
+  "Run BODY with *TERMINAL* bound to a fresh standalone terminal of COLS by
+ROWS with no PTY and no window, in the in-memory font, its atlas packed in 16
+columns, and release it afterwards (LEXTER-D108)."
+  `(let ((*terminal* (lexter/unix-term:make-terminal nil :no-pty t :visible nil
+                                                         :fonts (list (make-test-font))
+                                                         :cols ,cols :rows ,rows
+                                                         :atlas-cols 16)))
+     (unwind-protect
+          (progn
+            (lexter/unix-term:terminal-initialize-windowless *terminal*)
+            ,@body)
+       (lexter/unix-term:gui-destroy *terminal*))))
 
 (defun feed (&rest parts)
   "Process PARTS, bytes or strings, through *HANDLER* as output from a host."

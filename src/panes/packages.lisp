@@ -132,6 +132,10 @@
    #:run-paned-terminal
    #:make-paned-compositor
    #:compositor-capture
+   #:compositor-compose
+   #:compositor-palettes
+   #:compositor-initialize-windowless
+   #:compositor-atlas-cols
    #:compositor
    #:compositor-window
    #:compositor-renderer

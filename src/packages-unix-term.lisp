@@ -8,6 +8,8 @@
   (:export #:run-terminal
            #:make-terminal
            #:terminal-capture
+           #:terminal-compose
+           #:terminal-initialize-windowless
            #:terminal-start-recording
            #:terminal-stop-recording
            #:terminal-reset

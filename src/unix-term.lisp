@@ -42,7 +42,8 @@
                                 (title "lexter terminal")
                                 (visible t)
                                 (no-pty nil)
-                                (width-policy lexter/width:*default-width-policy*))
+                                (width-policy lexter/width:*default-width-policy*)
+                                (atlas-cols nil))
   "Create an uninitialized UNIX-TERMINAL with the given configuration.
 
 The window, OpenGL context, renderer, and PTY are NOT created yet -- call
@@ -62,7 +63,11 @@ window).
 
 WIDTH-POLICY decides character widths (LEXTER/WIDTH:MAKE-WIDTH-POLICY); by
 default Unicode's tables, with characters of ambiguous width narrow. A user who
-changes it makes the same setting in the programs the terminal runs."
+changes it makes the same setting in the programs the terminal runs.
+
+ATLAS-COLS fixes the atlas's column count, as a fixture does (LEXTER-D108); by
+default it is chosen from the GPU's maximum texture size. A terminal without a
+window (TERMINAL-INITIALIZE-WINDOWLESS) needs it."
   (let* ((pane (make-instance 'lexter/panes:uterm-pane
                               :command (unless no-pty command)
                               :args args
@@ -81,6 +86,7 @@ changes it makes the same setting in the programs the terminal runs."
                       :visible visible
                       :headless no-pty
                       :width-policy width-policy
+                      :atlas-cols atlas-cols
                       :layout-fn (lambda (comp new-cols new-rows)
                                    (declare (ignore comp))
                                    (lexter/panes:pane-resize pane new-cols new-rows)))))
@@ -95,6 +101,14 @@ changes it makes the same setting in the programs the terminal runs."
 its pane, spawning the child unless TERM is headless. Must run on the main
 thread, after GLFW:INITIALIZE."
   (gui-initialize (unix-terminal-compositor term))
+  term)
+
+(defun terminal-initialize-windowless (term)
+  "Make TERM's atlas, display grid, and pane without a window or GL context, so
+   that a headless terminal can be fed through PROCESS-OUTPUT and composed with
+   TERMINAL-COMPOSE on a machine with no display (LEXTER-D108). TERM needs a
+   fixed atlas column count. Release it with GUI-DESTROY. Returns TERM."
+  (lexter/panes:compositor-initialize-windowless (unix-terminal-compositor term))
   term)
 
 (defmethod gui-tick ((term unix-terminal))
@@ -225,6 +239,11 @@ ask for it here rather than keeping a screen of their own (LEXTER-D70)."
 ;;; Screenshot capture (testing)
 ;;; --------------------------------------------------------------------------
 
+(defun terminal-compose (term)
+  "Compose TERM's screen into its display grid, whatever was flushed before, and
+   return the grid. Needs no GL."
+  (lexter/panes:compositor-compose (unix-terminal-compositor term)))
+
 (defun terminal-capture (term)
   "Render TERM's current screen into the offscreen buffer and return it as an
    (H W 3) (unsigned-byte 8) array, row 0 = top of the image.
@@ -249,20 +268,22 @@ ask for it here rather than keeping a screen of their own (LEXTER-D70)."
           :rows        (lexter/panes:compositor-rows comp)
           :cell-width  (lexter/panes:compositor-cell-w comp)
           :cell-height (lexter/panes:compositor-cell-h comp)
-          :pixel-scale (lexter/panes:compositor-pixel-scale comp))))
+          :pixel-scale (lexter/panes:compositor-pixel-scale comp)
+          :atlas-cols  (lexter/atlas:atlas-cols (lexter/panes:compositor-atlas comp)))))
 
 (defun terminal-reset (term)
   "Reset TERM to a blank initial screen, reusing its window, atlas, and
    renderer: the pane gets a new screen and VT handler, and the compositor a
    new display grid. Intended for headless replay so successive fixtures each
-   start from a clean slate without rebuilding the (expensive) GL atlas.
+   start from a clean slate without rebuilding the (expensive) GL atlas. A
+   terminal without a window has no renderer to upload its palette to.
    Returns TERM."
   (let* ((comp (unix-terminal-compositor term))
          (screen (lexter/panes:vt-pane-init-screen (unix-terminal-pane term)
                                                    (lexter/panes:compositor-atlas comp))))
     (lexter/panes:compositor-reset-display comp)
     (let ((slot (lexter/panes:vt-pane-drawn-palette-slot (unix-terminal-pane term))))
-      (when (plusp slot)
+      (when (and (plusp slot) (lexter/panes:compositor-renderer comp))
         (lexter/renderer:upload-palette (lexter/panes:compositor-renderer comp)
                                         (lexter/model:screen-palette screen)
                                         (lexter/model:screen-palette-generation screen)

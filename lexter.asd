@@ -71,7 +71,8 @@
   :license "BSD"
   :version "0.1.0"
   :depends-on (#:lexter #:lexter/unix #:lexter/panes #:lexter/tn3270
-               #:lexter/tn3270-pane #:lexter/telnet-pane #:babel #:usocket #:sb-introspect #:sb-posix
+               #:lexter/tn3270-pane #:lexter/telnet-pane #:lexter/test
+               #:babel #:usocket #:sb-introspect #:sb-posix
                #:fiveam #:hamcrest/fiveam)
   :serial t
   :components ((:module "tests"
@@ -92,7 +93,8 @@
                              (:file "test-scrollback")
                              (:file "test-workspaces")
                              (:file "test-manifests")
-                             (:file "test-surfaces"))))
+                             (:file "test-surfaces")
+                             (:file "test-checksums"))))
   :perform (asdf:test-op (o s)
              (uiop:symbol-call '#:lexter-tests '#:run-all-tests)))
 

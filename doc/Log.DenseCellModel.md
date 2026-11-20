@@ -8,7 +8,7 @@ language:      en
 status:        Draft
 provenance:
   assistant:   opencode
-  session:     "Phase 3, step 1: the manifests and their accessors (2026-11-20); step 2: the screen as text and styles (2026-11-20); step 3: records in the composed grid (2026-11-20); step 4: the API and surfaces (2026-11-20); step 5: the 3270 pane on a Lexter screen (2026-11-20); step 6: the renderer of records (2026-11-20)"
+  session:     "Phase 3, step 1: the manifests and their accessors (2026-11-20); step 2: the screen as text and styles (2026-11-20); step 3: records in the composed grid (2026-11-20); step 4: the API and surfaces (2026-11-20); step 5: the 3270 pane on a Lexter screen (2026-11-20); step 6: the renderer of records (2026-11-20); step 7: the cell checksum and the fixtures on llvmpipe (2026-11-20)"
 relates-to:
   - LEXTER-0017
   - LEXTER-0016
@@ -1121,11 +1121,11 @@ Choices made while building:
 
 ### The shader, checked
 
-`check-record-drawing`, in the test rig, draws a grid of 16 by 3 records in
-a hidden window and compares every pixel, in both blink phases, with
-`reference-pixel-slot` through the swatch and palette stores. The reference
-reads each record through its manifests, not by the shader's arithmetic on
-its words. The grid holds:
+`src/test-rig.lisp:check-record-drawing@52c73d6` draws a grid of 16 by 3
+records in a hidden window and compares every pixel, in both blink phases,
+with `src/test-rig.lisp:reference-pixel-slot@52c73d6` through the swatch and
+palette stores. The reference reads each record through its manifests, not
+by the shader's arithmetic on its words. The grid holds:
 - the worked records of the architecture's Appendices in the plain format;
 - each of the four mask operations, a reach of two layers, and both
   selectors;
@@ -1145,27 +1145,32 @@ reference is the seed of the CPU renderer of Phase 5 (LEXTER-D111).
 
 ### Implementation
 
-- **`src/shaders.lisp`**, rewritten: `+cell-vert+` and `+cell-frag+` replace
-  the simple and layered shaders.
+- **`src/shaders.lisp`**, rewritten: `+cell-vert+` and
+  `src/shaders.lisp:+cell-frag+@52c73d6` replace the simple and layered
+  shaders.
 - **`src/renderer.lisp`:**
   - one program, and a vertex array of the record's two halves;
-  - `render-frame` takes the blink phase, uploads the records by plan, and
+  - `src/renderer.lisp:render-frame@52c73d6` takes the blink phase, uploads
+    the records by plan (`src/renderer.lisp:%upload-records@52c73d6`), and
     draws once;
   - `upload-palette` takes the slot it uploads to;
   - `set-active-palette-slot` and the default pane slot are removed.
 - **`src/grid.lisp`:**
-  - `record-upload-state` and `plan-record-uploads`;
+  - `record-upload-state` and `src/grid.lisp:plan-record-uploads@52c73d6`;
   - the grid's `clock-masks`, and `+clock-blink+`;
   - the adapter, the instance buffers, and their constants removed.
-- **`src/swatches.lisp`:** `make-palette-slots`, `allocate-palette-slot`,
+- **`src/swatches.lisp`:** `make-palette-slots`,
+  `src/swatches.lisp:allocate-palette-slot@52c73d6`,
   `release-palette-slot`, and `palette-slot-owner`, with
   `+default-palette-slots+`.
 - **`src/panes/vt-pane.lisp`:** the allocated slot, taken with the screen
-  and given back with the swatch table; `vt-pane-drawn-palette-slot`, which
-  the flush and `pane-palette` report.
+  and given back with the swatch table;
+  `src/panes/vt-pane.lisp:vt-pane-drawn-palette-slot@52c73d6`, which the
+  flush and `pane-palette` report.
 - **`src/panes/compositor.lisp`:** the compositor's `palette-slots` and
-  `palette-slots-of`; `%upload-pane-palettes` for every pane drawn; and the
-  blink phase given to each frame.
+  `palette-slots-of`;
+  `src/panes/compositor.lisp:%upload-pane-palettes@52c73d6` for every pane
+  drawn; and the blink phase given to each frame.
 - **`src/tn3270-pane/tn3270-pane.lisp`:** the pane draws in slot 0.
 - **`src/unix-term.lisp`** and **`src/test-rig.lisp`:** the terminal's drawn
   slot, for the reset's upload and the check of the GPU's stores; the
@@ -1240,8 +1245,197 @@ Table: Files changed by step 6.
   rule.
 - **Damage.** Clock masks are derived, but every frame still draws every
   row; drawing by damage is partial redraw, Phase 6 of the plan.
-- **The cell checksum and the fixtures re-authored** on llvmpipe, step 7.
-  The check of the shader already runs there.
+- **The cell checksum and the fixtures re-authored** on llvmpipe. Done in
+  step 7 (the update below).
 - **Formats beyond the plain format** in the shader, with Later Formats.
+- **Code references.** Done: the update's references are pinned to
+  `52c73d6`, the commit that holds it.
+
+## Update 2026-11-20 — Step 7: the cell checksum and the fixtures on llvmpipe
+
+Step 7 gives each fixture two checksums:
+- **A cell checksum** of the composed grid's records, normalised, and the
+  palettes they draw in. It is computed in a terminal with no window, on any
+  machine (LEXTER-D108).
+- **A pixel checksum** authored on a pinned llvmpipe under Xvfb, which any
+  other driver is compared against (LEXTER-D112).
+
+The fixtures' tool, renamed `tools/check-fixtures.lisp`, checks both, and the
+test rig masks floating-point traps for llvmpipe.
+
+### Problem
+
+The fixtures had pixel checksums alone, taken on the developer's NVIDIA
+driver, and the replay that took them needed a window and a GL context.
+- A failure could not say whether the model or the renderer had changed.
+- No fixture could be checked on a machine without a display.
+- The atlas's column count came from the GPU's maximum texture size, so
+  glyph positions could differ between machines.
+- The test rig did not mask floating-point traps, which llvmpipe raises
+  inside GL calls, so the fixture replay could not run there.
+
+### Design Decisions
+
+The decisions are the plan's: LEXTER-D108 and LEXTER-D112. The steward
+settled three more before this step was built:
+
+- **The cell checksums are checked in the fixtures' tool.** The fixtures
+  need font files outside the repository, which the suite does not load, so
+  the tool keeps one table of both literals for each fixture. It checks every
+  cell checksum with no display, then, where there is a display, every pixel
+  checksum. The suite tests the checksum itself, in the in-memory font.
+- **Every driver is checked against the pinned one.** The tool names the
+  driver it runs on. On a driver other than the pinned llvmpipe, a pixel
+  checksum that differs is reported as that driver disagreeing with the
+  pinned one. No fixture is authored on another driver.
+- **The fixtures fix the atlas's columns.** The terminal and the compositor
+  take `:atlas-cols`, and the fixtures' configuration sets 256 for both
+  fonts. Unifont then fits in a texture of about 2048 by 4200 pixels, within
+  llvmpipe's limit and any current GPU's. Production still chooses its own.
+
+Choices made while building:
+
+- **What the checksum hashes.** For each record, row by row, it hashes the
+  fields its format defines, read through the manifests without their
+  checks:
+  - the format byte, the drawing flags, and the palette and background
+    slots;
+  - the four palette indices that the swatch resolves to, in place of the
+    swatch;
+  - for the plain format, the glyph count, the type bits of the glyphs in
+    use, and each such glyph's atlas position, selector, and ink slot or
+    operation and reach.
+
+  Reserved bits, unused glyph words, and type bits beyond the glyph count
+  are left out, so they count as zero, as LEXTER-D108 has it. Then, for each
+  palette slot a record draws in, it hashes the slot's number and the
+  palette's 1,024 bytes. A slot beyond the store counts as slot 0, as the
+  shader draws it. The grid's size comes first, and every integer is hashed
+  as four little-endian bytes into a 64-bit FNV-1a, as the pixel checksum
+  is.
+- **No overlay instances yet.** LEXTER-D108 hashes the overlay instances
+  with the records, but there are none until Phase 4. The interim cursor's
+  exchanged slots are in the records, so they are in the checksum. Phase 4
+  will change the cell checksum of every fixture whose cursor is shown.
+- **A terminal without a window.**
+  - `compositor-initialize-windowless` packs the atlas with the fixed
+    column count, then makes the display grid and initializes the panes,
+    with no window or GL context;
+  - `gui-initialize` shares that assembly, after it has made its window and
+    renderer;
+  - `compositor-compose`, the part of capture that composes, serves both.
+- **Palettes in the checksum.** `compositor-palettes` lists the palettes
+  the active workspace draws in: slot 0's default palette, and the slot of
+  each pane with a palette. It holds the palettes themselves, not what the
+  GPU holds, which `check-gpu-stores` compares.
+- **The windowed replay checks both.** After capturing, `test-pixels` takes
+  the cell checksum of the grid it drew as well. So every windowed replay
+  also confirms that a grid composed with a window is the grid composed
+  without one.
+- **Floating-point traps** are masked for the whole of
+  `call-with-terminal-test-config`, with or without a window.
+
+### The fixtures, re-authored
+
+The cell checksums were taken with no display. The pixel checksums were
+taken on llvmpipe, Mesa 20.3.5 with LLVM 11.0.1, under Xvfb. Every pixel
+checksum, in both fonts and in both orders, equals the one taken on the
+NVIDIA driver through step 6. So re-authoring the fixtures on llvmpipe
+confirms the literals rather than changing them, as an exact shader should
+(LEXTER-D110). The tool's header records the pinned driver and this history.
+
+### Implementation
+
+- **`src/panes/compositor.lisp`:**
+  - the compositor's `atlas-cols` and `assembled`;
+  - `%compositor-font-list` and `%compositor-assemble`, which
+    `gui-initialize` and `compositor-initialize-windowless` share;
+  - `compositor-compose`, which `compositor-capture` now calls;
+  - `compositor-palettes`;
+  - `gui-destroy` releases the panes of a compositor without a window.
+- **`src/unix-term.lisp`:**
+  - `make-terminal` takes `:atlas-cols`;
+  - `terminal-initialize-windowless` and `terminal-compose`;
+  - `terminal-config-plist` reports the atlas's columns;
+  - `terminal-reset` uploads no palette when there is no renderer.
+- **`src/test-rig.lisp`:**
+  - `cell-checksum`, `%record-fields`, and `terminal-cell-checksum`;
+  - `replay-cells` and `test-cells`;
+  - `test-pixels` takes `:cells`;
+  - `call-with-terminal-test-config` takes `:atlas-cols` and `:window`, and
+    masks floating-point traps;
+  - `renderer-description`.
+- **`tools/check-fixtures.lisp`**, renamed from
+  `tools/check-pixel-fixtures.lisp`: both literals for each fixture, the
+  fixtures' configuration, the pinned driver, the check of cells with no
+  display, and the check of pixels on any driver.
+- **`lexter.asd`:** `lexter/tests` depends on `lexter/test`, for the
+  checksum, and loads `tests/test-checksums.lisp`.
+
+### Tests
+
+New suite `checksums`, 7 tests, with the fixture
+`with-clean-windowless-terminal`:
+- the checksum ignores the order of interning;
+- it ignores a reserved bit and a glyph word beyond the glyph count;
+- it sees each field drawn: a glyph, an ink slot, the palette slot, the
+  background slot, blink, and a swatch's palette index;
+- it sees a changed palette that a cell draws in, and not a palette no cell
+  draws in;
+- a terminal without a window is fed and composes its screen, and a palette
+  the host changes with OSC 4 changes its checksum;
+- such a terminal keeps its fixed atlas columns, and cannot be made without
+  them;
+- such a terminal gives back its palette slot when it is destroyed.
+
+A checksum made to hash the raw bytes of each record fails the first two,
+so they are not vacuous.
+
+### Verification
+
+- **The suite.** `(asdf:test-system :lexter)` runs 220 tests and 664 checks:
+  656 pass and 8 fail. The failures are the same as before, those of
+  LEXTER-D72's negotiation and framing, LEXTER-D73, and LEXTER-D74.
+- **The fixtures.** `tools/check-fixtures.lisp` passes in three settings:
+  - under Xvfb on the pinned llvmpipe, with every checksum and the GPU's
+    stores matching;
+  - on the NVIDIA driver, with the same result, named as not the pinned
+    driver;
+  - with no display, where it checks the cell checksums and says that the
+    pixel checksums were not checked.
+- **The shader's check** of step 6 still compares its 12,288 pixels without
+  a difference.
+- **The demo and the live terminal** run on the display without error, as
+  `gui-initialize` now shares its assembly with the terminal without a
+  window.
+- **The other test systems.** `lexter/mouse-tests` passes, 32 checks;
+  `lexter/origin-tests` gives its same 23 passes and 28 failures.
+- **Loading.** Every system loads with the same style warnings as before.
+
+### Files
+
+Table: Files changed by step 7.
+
+| File | Action | Description |
+|---|---|---|
+| `src/panes/compositor.lisp` | Modified | The atlas's columns; the windowless initialization; compose apart from capture; the palettes drawn in |
+| `src/panes/packages.lisp` | Modified | The compositor's new exports |
+| `src/unix-term.lisp` | Modified | The atlas's columns; the windowless terminal and its compose |
+| `src/packages-unix-term.lisp` | Modified | The terminal's new exports |
+| `src/test-rig.lisp` | Modified | The cell checksum; the windowless replay; float traps masked; the renderer's name |
+| `tools/check-fixtures.lisp` | Renamed | From `tools/check-pixel-fixtures.lisp`: both checksums of every fixture, on the pinned driver |
+| `lexter.asd` | Modified | The suite depends on the test rig and loads the checksum tests |
+| `tests/helpers.lisp` | Modified | The `checksums` suite and the windowless terminal's fixture |
+| `tests/test-checksums.lisp` | New | The cell checksum and the terminal without a window |
+
+### Outstanding Work
+
+- **The overlay instances** in the cell checksum, with Phase 4, which will
+  re-author the cell checksums of fixtures whose cursor is shown.
+- **The CPU renderer's pixel checksums** beside the GPU's, with Phase 5
+  (LEXTER-D112).
+- **Authoring.** `dump-terminal` prints a pixel checksum from the live
+  terminal it recorded. The literals are taken by replaying the blob in the
+  fixtures' configuration, which the tool's mismatch report gives.
 - **Code references.** The update's references name files and functions
   without a revision; they are pinned once it is committed.

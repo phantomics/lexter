@@ -15,6 +15,7 @@ relates-to:
   - LEXTER-0014
   - LEXTER-0020
   - LEXTER-0016
+  - CLVT-DRAFT-osc-strings
 cites:
   - title:    "XTerm Control Sequences"
     locator:  "Moy, Gildea, Dickey; https://invisible-island.net/xterm/ctlseqs/ctlseqs.txt, updated for patch #411 (2026-08-23): SGR's indexed and direct colour, ED, EL, TBC, DECSTBM, and Operating System Commands"
@@ -102,7 +103,9 @@ is ignored, which is LEXTER-D68's rule. Choices made while building:
   of an operating-system command and drops the rest. Its accumulator is an
   adjustable string, so that collecting is no longer quadratic. cl-vt keeps
   a bounded copy of its own, of 512 bytes, but doesn't export the function
-  that reads it, and LEXTER-D76 rules out `::`.
+  that reads it, and LEXTER-D76 rules out `::`. The update of 2026-11-20
+  below replaces this accumulator with cl-vt's buffer, which cl-vt now
+  exports.
 - **One home for the region's rule, in the model.** LEXTER-D69's one
   function is the model's `line-feed`. `put-char`, the model's own
   cursor-relative writer, kept a third copy of the rule, and it had the same
@@ -120,30 +123,38 @@ is ignored, which is LEXTER-D68's rule. Choices made while building:
 
 ### The handler, `src/vt-handler.lisp`
 
-- **Extended colours.** `%sgr-extended-colour` reads `38` and `48`, for SGR's
-  foreground and background, as an index or a 24-bit colour. It returns NIL
-  for one that is incomplete or out of range, and the parameters it took.
-- **The greyscale ramp.** `rgb-to-256` stays within 16–255: the ramp is
-  capped at its last entry.
+- **Extended colours.**
+  `src/vt-handler.lisp:%sgr-extended-colour@3ff5a2c` reads `38` and `48`,
+  for SGR's foreground and background, as an index or a 24-bit colour. It
+  returns NIL for one that is incomplete or out of range, and the
+  parameters it took.
+- **The greyscale ramp.** `src/vt-handler.lisp:rgb-to-256@3ff5a2c` stays
+  within 16–255: the ramp is capped at its last entry.
 - **Erase modes.** ED and EL ignore a mode outside 0–3 and 0–2.
 - **DECSTBM** gives a margin of 0 its default, and ignores a region whose
   top is not above its bottom.
-- **Tab stops.** `%default-tab-stops` makes the tab stops, at construction,
-  at reset, and in `vt-handler-resize-all`, which now rebuilds them for the
-  new width. A horizontal tab reads no further than the tab-stop vector.
+- **Tab stops.** `src/vt-handler.lisp:%default-tab-stops@3ff5a2c` makes
+  the tab stops, at construction, at reset, and in
+  `src/vt-handler.lisp:vt-handler-resize-all@3ff5a2c`, which now rebuilds
+  them for the new width. A horizontal tab reads no further than the
+  tab-stop vector.
 - **UTF-8.** A decoded value above U+10FFFF, or a surrogate, becomes U+FFFD.
 - **The OSC string** is an adjustable string, filled to
   `+max-osc-length+`, 4096.
 - **Line movement.** Line feed, index, and next line call the model's
-  `line-feed`, autowrap through `%wrap-to-next-line`. Reverse index calls
+  `line-feed`, autowrap through
+  `src/vt-handler.lisp:%wrap-to-next-line@3ff5a2c`. Reverse index calls
   `reverse-line-feed`. The handler no longer reads the region's margins
   with `::`.
 
 ### The model, `src/model.lisp`, and `src/packages.lisp`
 
-- `line-feed` and `reverse-line-feed` are new and exported.
-- `put-char` wraps through `line-feed`.
-- `scroll-up` and `scroll-down` clamp their count to the region's height.
+- `src/model.lisp:line-feed@3ff5a2c` and
+  `src/model.lisp:reverse-line-feed@3ff5a2c` are new and exported.
+- `src/model.lisp:put-char@3ff5a2c` wraps through `line-feed`.
+- `src/model.lisp:scroll-up@3ff5a2c` and
+  `src/model.lisp:scroll-down@3ff5a2c` clamp their count to the region's
+  height.
 - The `mode-flags` slot, `set-mode`, `get-mode`, and their exports are
   removed.
 
@@ -160,7 +171,8 @@ is ignored, which is LEXTER-D68's rule. Choices made while building:
   - the bounded OSC string;
   - a line feed below the region;
   - a reverse index above it.
-- **`structure` gains 1,** that terminal modes have one home.
+- **`structure` gains 1,** that terminal modes have one home
+  (`tests/test-structure.lisp:terminal-modes-have-one-home@3ff5a2c`).
 - **Checked before the repair.** Each new test failed on the code before the
   repair. The line-feed and reverse-index tests were also run against that
   code alone, with the repair removed.
@@ -198,17 +210,8 @@ Table: Files changed by the three fixes.
 
 ## Outstanding Work
 
-- **cl-vt doesn't end an OSC on BEL.**
-  - The audit found that cl-vt's parser ends an OSC string only on ST.
-    xterm documents BEL as well, and shells set the title with it.
-  - After `ESC ] 0 ; title BEL`, Lexter sets no title and swallows the
-    output that follows until the next ESC. Phase 2's "palette" fixture,
-    whose OSC 4 is ended by BEL, records the fault in its checksum.
-  - Lexter can't work around it, since cl-vt emits no action for that BEL.
-    The steward is fixing cl-vt, from a report that names the change and its
-    tests.
-  - A reproduction test in this suite, and the fixture's new checksum,
-    follow that change.
+- **cl-vt doesn't end an OSC on BEL.** Done: cl-vt fixed it, and the
+  update of 2026-11-20 below records Lexter's side.
 - **Counts of 0.** An explicit count of 0, as in `CSI 0 A`, moves the cursor
   by 0 rather than 1. xterm treats it as 1, but its documentation states only
   each control's default, so this was left alone under LEXTER-D68's
@@ -222,6 +225,119 @@ Table: Files changed by the three fixes.
   an error on llvmpipe. The test rig must mask the traps around its GL calls
   when it draws on llvmpipe (Phase 3, LEXTER-D112). With them masked, the
   integer texture-buffer check passes under Xvfb on Mesa 20.3.5.
-- **Code references.** The references above name files and functions without
-  a revision; they are pinned to the commit that holds the fixes once it is
+- **Code references.** Done: the references above are pinned to `3ff5a2c`,
+  the commit that holds the fixes. The update's are pinned once it is
+  committed.
+
+## Update 2026-11-20 — OSC strings from cl-vt
+
+The steward fixed the cl-vt fault that the first Outstanding Work item
+recorded, and cl-vt now exports its OSC accessors
+([CLVT-DRAFT-osc-strings](../../../lisp/cl-vt/doc/Log.OscStrings.md)). This
+update records Lexter's side: a test of the BEL form, and the handler reading
+the OSC string from cl-vt rather than collecting a copy of its own. It
+answers LEXTER-O44 of the terminal-fixes plan: the fault is fixed in cl-vt,
+and Lexter has no workaround.
+
+### Problem
+
+Two things in Lexter followed from cl-vt's faults:
+
+- **BEL.** An OSC string ended by BEL was never dispatched, and the output
+  after it was taken into the OSC string until the next ESC. cl-vt now ends
+  the string on BEL as on ST (CLVT-DRAFT-osc-strings-D1).
+- **Bytes above 0x7F.** cl-vt dropped them from OSC strings, so a title
+  holding a character beyond ASCII lost it. cl-vt now collects them
+  (CLVT-DRAFT-osc-strings-D2), and leaves their decoding to the consumer
+  (CLVT-DRAFT-osc-strings-D3).
+
+Lexter's own copy of the OSC string, built from `:osc-put` bytes as Latin-1
+characters, would have shown a UTF-8 character as its bytes, one character
+for each.
+
+### Design Decisions
+
+- **cl-vt's buffer, not a copy.** The handler reads the OSC string when it
+  ends, with `cl-vt:vt-parser-osc-bytes` (CLVT-DRAFT-osc-strings-D4), and no
+  longer collects `:osc-put` bytes. The parser already bounds its buffer, so
+  a second bound in Lexter is redundant, and LEXTER-D76's rule against `::`
+  is kept.
+- **The limit is cl-vt's 512 bytes.** The handler kept 4096 characters
+  before. The commands Lexter acts on are short: a window title, and OSC 4,
+  10, 11, and 104 palette changes. A title is rarely near 512 bytes, and
+  LEXTER-D68 asks only that the bound exist. A larger limit would be a
+  change to cl-vt's `+max-osc-length+`.
+- **Decoded as printed text is.** The bytes are decoded by the encoding the
+  handler prints with: UTF-8, or the CP437 table in CP437 mode. One decoder
+  step, `%utf8-step`, serves both printed text and OSC strings, so that they
+  treat malformed input alike, U+FFFD for values beyond Unicode included
+  (LEXTER-D68).
+- **A character cut at the limit is dropped.** A UTF-8 character that the
+  512-byte limit cuts short is dropped rather than shown as U+FFFD, since
+  its bytes are missing because of the limit and not because the host sent
+  them wrongly.
+
+### Implementation
+
+In `src/vt-handler.lisp`:
+
+- **The accumulator is removed:** the handler's `osc-string` slot and
+  `+max-osc-length+`. `dispatch-action` passes `:osc-start` and `:osc-put`
+  by, and on `:osc-end` calls `handle-osc` with the decoded string.
+- **`%utf8-step`** takes one byte into a UTF-8 decoder whose state it is
+  given, and returns the codepoint the byte completes, if any, with the new
+  state. `handle-print` keeps its state in the handler as before.
+- **`%osc-text`** decodes an OSC string's bytes, through the CP437 table or
+  with `%utf8-step` and a state of its own.
+- **`handle-osc`** takes the decoded string as an argument.
+
+In `tests/test-handler.lisp`, three tests are new and one is changed:
+
+- **`osc-ended-by-bel-is-applied`** (LEXTER-O44): after `ESC ] 0 ; two BEL
+  AB`, the title is `two`, and `A` and `B` are drawn.
+- **`osc-string-is-decoded-as-printed-text-is`:** a title holding U+00E9
+  reads as the host sent it.
+- **`osc-string-cut-within-a-character-drops-it`:** a title of one `x` and
+  600 copies of U+00E9 keeps the 254 that fit in 512 bytes after `0;x`, and
+  drops the one whose second byte is cut.
+- **`long-osc-string-is-bounded`** now asserts the 512-byte limit.
+
+The two decoding tests failed on the handler before the change, with cl-vt's
+fix in place; the BEL test passes on either, since the fix is cl-vt's.
+
+### Verification
+
+- **The suite.** `(asdf:test-system :lexter)` runs 123 tests and 289 checks:
+  276 pass, and the same 13 fail, which belong to LEXTER-D72, LEXTER-D73, and
+  LEXTER-D74.
+- **cl-vt.** Its suite passes, 5610 checks.
+- **Pixels.** Every checksum of the Phase 2 fixtures is unchanged, the
+  "palette" fixture's included. Its OSC 4 commands are ended by BEL, but
+  each BEL is followed at once by an ESC, which ended the OSC string before
+  the fix as well. The fixture never showed the fault, and the first
+  Outstanding Work item was wrong to say its checksum recorded it.
+- **The other test systems** give the same results: `lexter/mouse-tests`
+  passes 32 checks, and `lexter/origin-tests` gives 23 passes and 28
+  failures. The systems load with no new warnings.
+
+### Files
+
+Table: Files changed by the OSC update.
+
+| File | Action | Description |
+|---|---|---|
+| `src/vt-handler.lisp` | Modified | The OSC accumulator removed; the string read from cl-vt and decoded; `%utf8-step` shared with printed text |
+| `tests/test-handler.lisp` | Modified | The BEL form, decoding, and the cut character; the bound at 512 bytes |
+| `compass.sexp` | Modified | CLVT federated |
+| `AGENTS.md` | Modified | CLVT in the list of federated repositories |
+
+### Outstanding Work
+
+- **A stale build of cl-vt.** ASDF compares file dates to the second. cl-vt's
+  last change to `tables.lisp` was saved in the same second as the cached
+  build of it, so Lexter loaded the old tables, without the high bytes,
+  until cl-vt was rebuilt with `(asdf:load-system :cl-vt :force t)`. A
+  machine that built cl-vt during the change may need the same.
+- **Code references.** The update's references name files and functions
+  without a revision; they are pinned to the commit that holds it once it is
   made.

@@ -561,8 +561,9 @@ names it uses, and reads screens through the handler
 - **Three plans in one area.** This plan, the cell plan, and the
   pane-profiles plan all change the flush and the panes; each phase states
   what it waits for.
-- **Fixes outside Lexter.** An OSC sequence ended by BEL is not dispatched,
-  which the critique traced to cl-vt (LEXTER-O44).
+- **Fixes outside Lexter.** An OSC sequence ended by BEL was not dispatched,
+  which the critique traced to cl-vt (LEXTER-O44); cl-vt has since fixed
+  it.
 
 ## Open Questions
 
@@ -597,6 +598,13 @@ The critique observed that an OSC sequence ended by BEL is accumulated but
 never dispatched, so palette changes and window titles in that common form
 are ignored, and traced it to cl-vt. The steward maintains cl-vt, so the fix
 can be made there; a workaround in Lexter would duplicate the parser's work.
+
+**Resolution:** 2026-11-20 — accepted, recorded at the steward's direction:
+fixed in cl-vt, which ends an OSC string on BEL as on ST and now exports its
+OSC accessors
+([CLVT-DRAFT-osc-strings](../../../lisp/cl-vt/doc/Log.OscStrings.md)).
+Lexter has no workaround; its handler reads the OSC string from cl-vt
+([LEXTER-DRAFT-handler-fixes](Log.HandlerFixes.md)).
 
 ## Prior Art
 

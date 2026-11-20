@@ -8,12 +8,37 @@ language:      en
 status:        Draft
 provenance:
   assistant:   opencode
-  session:     "Phase 3, step 1: the manifests and their accessors (2026-11-20); step 2: the screen as text and styles (2026-11-20); step 3: records in the composed grid (2026-11-20); step 4: the API and surfaces (2026-11-20); step 5: the 3270 pane on a Lexter screen (2026-11-20); step 6: the renderer of records (2026-11-20); step 7: the cell checksum and the fixtures on llvmpipe (2026-11-20)"
+  session:     "Phase 3, step 1: the manifests and their accessors (2026-11-20); step 2: the screen as text and styles (2026-11-20); step 3: records in the composed grid (2026-11-20); step 4: the API and surfaces (2026-11-20); step 5: the 3270 pane on a Lexter screen (2026-11-20); step 6: the renderer of records (2026-11-20); step 7: the cell checksum and the fixtures on llvmpipe (2026-11-20); step 8: the Log completed (2026-11-20)"
 relates-to:
   - LEXTER-0017
   - LEXTER-0016
   - LEXTER-0025
   - LEXTER-DRAFT-handler-fixes
+  - LEXTER-0015
+  - LEXTER-0014
+  - LEXTER-0010
+decisions:
+  - LEXTER-DRAFT-dense-cell-model-D1
+  - LEXTER-DRAFT-dense-cell-model-D2
+  - LEXTER-DRAFT-dense-cell-model-D3
+  - LEXTER-DRAFT-dense-cell-model-D4
+  - LEXTER-DRAFT-dense-cell-model-D5
+  - LEXTER-DRAFT-dense-cell-model-D6
+  - LEXTER-DRAFT-dense-cell-model-D7
+  - LEXTER-DRAFT-dense-cell-model-D8
+  - LEXTER-DRAFT-dense-cell-model-D9
+  - LEXTER-DRAFT-dense-cell-model-D10
+  - LEXTER-DRAFT-dense-cell-model-D11
+  - LEXTER-DRAFT-dense-cell-model-D12
+  - LEXTER-DRAFT-dense-cell-model-D13
+  - LEXTER-DRAFT-dense-cell-model-D14
+  - LEXTER-DRAFT-dense-cell-model-D15
+  - LEXTER-DRAFT-dense-cell-model-D16
+  - LEXTER-DRAFT-dense-cell-model-D17
+  - LEXTER-DRAFT-dense-cell-model-D18
+  - LEXTER-DRAFT-dense-cell-model-D19
+  - LEXTER-DRAFT-dense-cell-model-D20
+  - LEXTER-DRAFT-dense-cell-model-D21
 cites:
   - title:    "SpecOps Manifest Reference"
     locator:  "SpecOps repository (~/src/lisp/specops), doc/Ref.Manifest.md, SPECOPS-0007, release 0.2.3: defmanifest, defenum, masques, :case, marshal, unmarshal, patches, records at an index, selective reads, checks"
@@ -25,11 +50,11 @@ cites:
 
 # The Dense Cell Model (Phase 3): Development Log
 
-This document records Phase 3 of the cell-model revision
+This document chronicles Phase 3 of the cell-model revision
 ([LEXTER-0017](Plan.CellModelRevision.md)), which replaces the first
 edition's cells with the record of the cell-model architecture
-([LEXTER-0016](Arch.CellModel.md)), as LEXTER-D102 decides. The phase is built
-in eight steps, and this document gains a dated update as each lands:
+([LEXTER-0016](Arch.CellModel.md)), as LEXTER-D102 decides. The phase was
+built in eight steps, each recorded as it landed:
 
 1. **Groundwork:** the record, the text cell, and the swatch and palette
    texels declared as SpecOps manifests, with the accessors over them
@@ -47,7 +72,18 @@ in eight steps, and this document gains a dated update as each lands:
    Xvfb (LEXTER-D108, LEXTER-D112).
 8. **This Log** completed.
 
-This first part records step 1.
+How to read it:
+- The first part, from Problem to Outstanding Work, records step 1.
+- Steps 2 to 7 each have a dated update of the same shape, with its code
+  references pinned to the commit that holds it.
+- The last update, step 8, sums up the phase. It covers what the phase
+  built against the plan, where it departs from or defers the plan's
+  decisions, and the findings it addresses. It also holds the steward's
+  decisions as records, the final verification, and all the work left.
+
+The earlier updates are left as they were written, except that each
+outstanding item later done is marked done, and each decision of the
+steward's names its record.
 
 ## Problem
 
@@ -260,7 +296,9 @@ Table: Files changed by step 1.
 - **SpecOps's warnings.** Done: SpecOps 0.2.4 declares the bindings
   ignorable, and Lexter requires it and no longer muffles warnings (the
   update of 2026-11-20 below).
-- **Unchecked reads** for the paths that draw, with the first such path.
+- **Unchecked reads** for the paths that draw. Still to come: the only path
+  in Lisp that draws from records is the shader's reference of step 6,
+  which reads checked, so they arrive with the CPU renderer of Phase 5.
 - **Assertions in debugging builds** of the invariants, with the writers of
   steps 3 and 4.
 - **The terminal row.** Done in step 2 (the update below).
@@ -305,13 +343,16 @@ step was built:
   and four tests of LEXTER-O27 did. Layers belong to the API's surfaces,
   which arrive in step 4 (LEXTER-D124). The tests are retired, and their
   invariants return as tests of surfaces.
+  Recorded as LEXTER-DRAFT-dense-cell-model-D1.
 - **A full style table gives the default style.** Style ids are 16 bits, so
   a terminal holds at most 65,536 styles. Styles are never freed in Phase 3,
   since LEXTER-D118 leaves freeing to the packing of history. Once the table
   is full it interns nothing, and new text takes style 0.
+  Recorded as LEXTER-DRAFT-dense-cell-model-D2.
 - **OSC 133 is not parsed yet.** The terminal row's prompt kind is kept
   through scrolling and history, and is always 0 for now. The line size
   stays 0 until DEC double-size lines are built (LEXTER-D114).
+  Recorded as LEXTER-DRAFT-dense-cell-model-D3.
 - **The soft wrap follows xterm.** Autowrap sets it, and so does a wide
   character that wraps early because it cannot begin in the last column.
   Several things clear it:
@@ -322,6 +363,7 @@ step was built:
   - a row cleared whole, by scrolling or by inserting or deleting lines.
 
   Cursor movement leaves it alone, as in xterm.
+  Recorded as LEXTER-DRAFT-dense-cell-model-D4.
 
 Choices made while building:
 
@@ -477,8 +519,8 @@ Table: Files changed by step 2.
 
 ### Outstanding Work
 
-- **Drawing what styles hold.** Reverse video, underline, invisible text,
-  and blink are drawn from styles once the record is built, in step 3.
+- **Drawing what styles hold.** Done: reverse video, the underline, and
+  invisible text in step 3, and blink in step 6 (the updates below).
 - **Freeing styles,** with the packing of history (LEXTER-D118).
 - **Erasing in the current background,** as xterm does, if the steward
   wants that change.
@@ -531,19 +573,24 @@ and LEXTER-D126. The steward settled four more before this step was built:
   - a union mask that cuts one layer is drawn as a layer in that layer's
     ink, which colours the same pixels;
   - other masks and blink are not drawn until step 6.
+
+  Recorded as LEXTER-DRAFT-dense-cell-model-D5.
 - **The first edition's writers, over records.** The function pane, the
   workspace's decorations, the 3270 pane, and the demo keep writing
   through `set-simple-cell`, `set-cell-layer`, and their companions, which
   now write records. A transparent side maps as LEXTER-D86 has it: `:bg` is
   a selector of 0, `:fg` a selector of 1, and `:none` on layer 0 gives the
   cell its background slot. Steps 4 and 5 move these writers to records.
+  Recorded as LEXTER-DRAFT-dense-cell-model-D6.
 - **Stamps on the grid now, on screens later.** The grid's rows carry
   change stamps. A screen keeps its dirty bits while the flush is their
   only reader.
+  Recorded as LEXTER-DRAFT-dense-cell-model-D7.
 - **The underline from the font's ascent.** The single underline, atlas
   position 9, is drawn from the font's ascent: one row below the baseline,
   max(1, cell height ÷ 16) thick, kept inside the cell. The PCF loader does
   not read the XLFD properties that LEXTER-D89 would place it by.
+  Recorded as LEXTER-DRAFT-dense-cell-model-D8.
 
 Choices made while building:
 
@@ -731,18 +778,23 @@ step was built:
   with text cells beside them and a change stamp for each row, written only
   through the API. A function pane owns one, which its render function
   writes and its flush copies into the composed grid.
+  Recorded as LEXTER-DRAFT-dense-cell-model-D9.
 - **Decorators write the composed grid through the API.** The grid keeps
   no text, so chrome is not copyable text. A surface for chrome can follow
   if chrome needs text.
+  Recorded as LEXTER-DRAFT-dense-cell-model-D10.
 - **A surface's text cells carry style 0.** The record alone says how a cell
   looks, and the text serves selection, copying, search, and screen
   readers.
+  Recorded as LEXTER-DRAFT-dense-cell-model-D11.
 - **Debugging builds check records through a variable.** `*check-records*`
   is true when Lexter is compiled with the `:lexter-debug` feature, and the
   API checks every record it writes while it is true. Tests bind it.
+  Recorded as LEXTER-DRAFT-dense-cell-model-D12.
 - **The layered API is removed now.** `set-cell-layer`, `set-cell-swatch`,
   `clear-cell-layers`, and `cell-layered-p` go. `set-simple-cell` and the
   cursor exchange stay for the 3270 pane until step 5.
+  Recorded as LEXTER-DRAFT-dense-cell-model-D13.
 
 Choices made while building:
 
@@ -911,8 +963,10 @@ was built:
 - **Intensity styles a field's cells.** A non-display field's cells are
   written invisible, with their text kept, and an intensified field's are
   written bold.
+  Recorded as LEXTER-DRAFT-dense-cell-model-D14.
 - **Background colours wait.** The extended attribute for background colour
   stays ignored.
+  Recorded as LEXTER-DRAFT-dense-cell-model-D15.
 
 Choices made while building:
 
@@ -1076,12 +1130,15 @@ LEXTER-D130. The steward settled three more before this step was built:
   terminal draws in slot 0, the default palette, and its palette changes are
   not shown until a slot frees. This is an interim rule; what a full store
   does is the open LEXTER-O50.
+  Recorded as LEXTER-DRAFT-dense-cell-model-D16.
 - **Panes with no palette draw in slot 0.** Function panes, chrome, and the
   3270 pane never change their palette, so they draw in slot 0 and take no
   slot.
+  Recorded as LEXTER-DRAFT-dense-cell-model-D17.
 - **The shader is checked against a reference, pixel by pixel.** A Lisp
   reference of Drawing a Pixel decides every pixel of a grid of records, and
   the test rig compares it with the GPU's frame exactly.
+  Recorded as LEXTER-DRAFT-dense-cell-model-D18.
 
 Choices made while building:
 
@@ -1284,14 +1341,17 @@ settled three more before this step was built:
   the tool keeps one table of both literals for each fixture. It checks every
   cell checksum with no display, then, where there is a display, every pixel
   checksum. The suite tests the checksum itself, in the in-memory font.
+  Recorded as LEXTER-DRAFT-dense-cell-model-D19.
 - **Every driver is checked against the pinned one.** The tool names the
   driver it runs on. On a driver other than the pinned llvmpipe, a pixel
   checksum that differs is reported as that driver disagreeing with the
   pinned one. No fixture is authored on another driver.
+  Recorded as LEXTER-DRAFT-dense-cell-model-D20.
 - **The fixtures fix the atlas's columns.** The terminal and the compositor
   take `:atlas-cols`, and the fixtures' configuration sets 256 for both
   fonts. Unifont then fits in a texture of about 2048 by 4200 pixels, within
   llvmpipe's limit and any current GPU's. Production still chooses its own.
+  Recorded as LEXTER-DRAFT-dense-cell-model-D21.
 
 Choices made while building:
 
@@ -1348,22 +1408,28 @@ confirms the literals rather than changing them, as an exact shader should
 
 - **`src/panes/compositor.lisp`:**
   - the compositor's `atlas-cols` and `assembled`;
-  - `%compositor-font-list` and `%compositor-assemble`, which
-    `gui-initialize` and `compositor-initialize-windowless` share;
-  - `compositor-compose`, which `compositor-capture` now calls;
-  - `compositor-palettes`;
+  - `%compositor-font-list` and
+    `src/panes/compositor.lisp:%compositor-assemble@b69c51f`, which
+    `gui-initialize` and
+    `src/panes/compositor.lisp:compositor-initialize-windowless@b69c51f`
+    share;
+  - `src/panes/compositor.lisp:compositor-compose@b69c51f`, which
+    `compositor-capture` now calls;
+  - `src/panes/compositor.lisp:compositor-palettes@b69c51f`;
   - `gui-destroy` releases the panes of a compositor without a window.
 - **`src/unix-term.lisp`:**
   - `make-terminal` takes `:atlas-cols`;
-  - `terminal-initialize-windowless` and `terminal-compose`;
+  - `src/unix-term.lisp:terminal-initialize-windowless@b69c51f` and
+    `src/unix-term.lisp:terminal-compose@b69c51f`;
   - `terminal-config-plist` reports the atlas's columns;
   - `terminal-reset` uploads no palette when there is no renderer.
 - **`src/test-rig.lisp`:**
-  - `cell-checksum`, `%record-fields`, and `terminal-cell-checksum`;
-  - `replay-cells` and `test-cells`;
+  - `src/test-rig.lisp:cell-checksum@b69c51f`,
+    `src/test-rig.lisp:%record-fields@b69c51f`, and `terminal-cell-checksum`;
+  - `src/test-rig.lisp:replay-cells@b69c51f` and `test-cells`;
   - `test-pixels` takes `:cells`;
-  - `call-with-terminal-test-config` takes `:atlas-cols` and `:window`, and
-    masks floating-point traps;
+  - `src/test-rig.lisp:call-with-terminal-test-config@b69c51f` takes
+    `:atlas-cols` and `:window`, and masks floating-point traps;
   - `renderer-description`.
 - **`tools/check-fixtures.lisp`**, renamed from
   `tools/check-pixel-fixtures.lisp`: both literals for each fixture, the
@@ -1437,5 +1503,626 @@ Table: Files changed by step 7.
 - **Authoring.** `dump-terminal` prints a pixel checksum from the live
   terminal it recorded. The literals are taken by replaying the blob in the
   fixtures' configuration, which the tool's mismatch report gives.
-- **Code references.** The update's references name files and functions
-  without a revision; they are pinned once it is committed.
+- **Code references.** Done: the update's references are pinned to
+  `b69c51f`, the commit that holds it.
+
+## Update 2026-11-20 — Step 8: the phase complete
+
+Phase 3 is built. Every cell Lexter draws is now a record of the plain
+format:
+- a terminal's built from its text and styles;
+- an application's or chrome's written through the API;
+- the 3270 pane's built from a Lexter screen.
+
+The records are composed into one grid, drawn in one call by the shader of
+Drawing a Pixel, and uploaded by change stamp. Each fixture has a cell
+checksum, computed with no display, and a pixel checksum, taken on a pinned
+llvmpipe. This update sums up the phase for review. It changes no code; the
+final verification below is on `b69c51f`, the commit of step 7.
+
+### What the phase built
+
+Table: Phase 3's parts, as the plan and the architecture give them, and the
+steps that built them.
+
+| Part | Decisions | Step |
+|---|---|---|
+| The record, the text cell, and the swatch and palette texels, declared as SpecOps manifests with their accessors | LEXTER-D127, LEXTER-D130 | 1 |
+| The screen as text, styles, and terminal rows, with a history of text and styles, built into rows by one function | LEXTER-D118, LEXTER-D119, LEXTER-D124 | 2 |
+| Records in the composed grid, a Lisp array, with a change stamp for each row | LEXTER-D113, LEXTER-D129 | 3 |
+| The presentation rules as rows are built: reverse video through the background slot, invisible text as no glyphs, the single underline as a mask, and the blink flag | LEXTER-D86, LEXTER-D88, LEXTER-D94, LEXTER-D125 | 3 |
+| Halves of double-width glyphs, written and erased together | LEXTER-D103, LEXTER-D126 | 3, 4 |
+| The interim cursor, by exchanging its cell's slots | LEXTER-D101 | 3 |
+| The API and surfaces, for chrome, decorators, function panes, and applications | LEXTER-D107, LEXTER-D124 | 4 |
+| The 3270 pane on a Lexter screen | LEXTER-D128 | 5 |
+| One draw of the composed grid, by a shader that selects without blending | LEXTER-D107, LEXTER-D110, LEXTER-D130 | 6 |
+| Uploads by change stamp, and clock masks derived by the renderer | LEXTER-D113 | 6 |
+| Blinking text on the cursor's clock | LEXTER-D94 | 6 |
+| The palette slot allocator | LEXTER-D92 | 6 |
+| The cell checksum, and the fixtures on a pinned llvmpipe | LEXTER-D108, LEXTER-D112 | 7 |
+
+Each part of the plan's roadmap item for Phase 3 is built. The suite passes
+on the new model, apart from the reproduction tests of the terminal-fixes
+plan ([LEXTER-0015](Plan.TerminalFixes1e.md)). Those stay red until their
+repairs land (LEXTER-D120), and they were red before the phase began.
+
+### Departures from the plan
+
+Where the phase defers part of a decision, builds it in a way the plan does
+not say, or finds the plan's expectation wrong:
+
+- **Overlay instances** (LEXTER-D108). The cell checksum hashes records
+  only, as no overlays exist until Phase 4. The interim cursor's exchanged
+  slots are in the records, so Phase 4 will change the cell checksum of
+  every fixture whose cursor is shown.
+- **Stamps on screens** (LEXTER-D113). The grid's rows carry change stamps,
+  but a screen keeps its dirty bits, as its flush is their only reader
+  (LEXTER-DRAFT-dense-cell-model-D7).
+- **A full palette store** (LEXTER-D92). A terminal given no slot draws in
+  slot 0, an interim rule while LEXTER-O50 is open
+  (LEXTER-DRAFT-dense-cell-model-D16).
+- **The underline's place** (LEXTER-D89). It is placed from the font's
+  ascent, as the PCF loader reads no XLFD properties
+  (LEXTER-DRAFT-dense-cell-model-D8).
+- **The blink phase** (LEXTER-D94). It is the compositor's cursor clock, as
+  the plan has it. Its interval, 0.5 seconds, is a slot of the compositor
+  that no configuration sets yet.
+- **Line sizes** (LEXTER-D114). The manifests, the shader, and the shader's
+  reference handle them, but no writer sets them. DEC double-size lines,
+  and OSC 133's prompt kind, are not built
+  (LEXTER-DRAFT-dense-cell-model-D3).
+- **Unchecked reads** (LEXTER-D130). The only path in Lisp that draws from
+  records is the shader's reference, which reads checked. The paths that
+  draw read unchecked from the CPU renderer of Phase 5.
+- **Freeing styles** (LEXTER-D118). Styles are never freed, and a full
+  style table gives style 0 (LEXTER-DRAFT-dense-cell-model-D2).
+- **The 3270 pane** (LEXTER-D128). The pane ignores the background colour
+  attribute (LEXTER-DRAFT-dense-cell-model-D15). Erase/Write Alternate still
+  keeps the default geometry, and double-byte characters are not yet two
+  cells (LEXTER-D117).
+- **Changed pixels.** The plan's Tensions and Risks expected every
+  fixture's pixel checksum to change. Three changed, each for a reason
+  recorded where it changed: "colours" and "palette" in step 3, whose
+  reverse video is now drawn, and "cjk" in Terminus in step 6, whose "no
+  glyph" glyph is drawn in both halves (LEXTER-D122, LEXTER-D126). The rest
+  are the pixels of Phase 2, and llvmpipe reproduces every checksum taken
+  on the NVIDIA driver (LEXTER-D110).
+
+### Findings addressed
+
+The phase addresses these findings of the critique of the first edition's
+data structures ([LEXTER-0014](Eval.Critique.DataStructures1e.md)).
+Disposing of them is the steward's:
+
+- **LEXTER-O27,** layered cells that diverge between the model and the
+  grid. The screen's layered cells are removed in step 2, and the
+  invariants of its tests return as tests of surfaces in step 4.
+- **LEXTER-O40,** dirty bits maintained but never consulted. The grid's
+  rows carry change stamps that each renderer reads for itself, and step
+  6's tests show that only the rows written are uploaded again.
+- **LEXTER-O31,** the 3270 screen made 80 by 24 whatever its geometry. Its
+  geometry is repaired in step 5. Its record framing belongs to the
+  terminal-fixes plan's LEXTER-D72, and still fails.
+
+### Design Decisions
+
+The decisions the phase builds are the plan's and the architecture's, named
+in each step's update. Before each of steps 2 to 7 was built, the steward
+settled the choices the plan left open, 21 in all. They are recorded below
+in the order of the steps, each with status Proposed for the steward to
+accept in review, and each step's update names the records of its own. The
+alternatives of LEXTER-DRAFT-dense-cell-model-D16 to
+LEXTER-DRAFT-dense-cell-model-D21 are the options the steward was offered.
+Those of the earlier records are written from this Log's account of their
+steps.
+
+### LEXTER-DRAFT-dense-cell-model-D1 — The screen's layered cells are removed, and layers belong to surfaces
+
+**Status:** Proposed
+
+**Context:** The first edition's screen kept a hash table of layered cells
+beside its cells. No source file wrote them. Four tests did, written for
+LEXTER-O27, the finding that they diverge between the model and the grid.
+LEXTER-D124 has a terminal's screen keep text and styles, and gives layers
+to the API's surfaces, which step 4 builds.
+
+**Decision:** Step 2 removes the screen's layered cells and retires their
+four tests. The invariants those tests held, a cleared layer and a new
+swatch, return as tests of surfaces in step 4.
+
+**Alternatives:**
+- Keep the layered cells until step 4. Not chosen: no writer used them, and
+  the screen would keep a second kind of cell that LEXTER-D124 removes.
+- Rewrite the four tests against the new screen. Not chosen: what they
+  tested no longer exists in the screen.
+
+### LEXTER-DRAFT-dense-cell-model-D2 — A full style table gives the default style
+
+**Status:** Proposed
+
+**Context:** Style ids are 16 bits, so a terminal holds at most 65,536
+styles. LEXTER-D118 leaves freeing styles to the packing of history, which
+Phase 3 does not build. A host that writes many distinct styles, as
+truecolour output can, may fill the table.
+
+**Decision:** Once a terminal's style table is full it interns nothing, and
+text written in a new style takes style 0, the default. Styles are never
+freed in Phase 3.
+
+**Alternatives:**
+- Return the nearest existing style, as a full swatch table returns its
+  nearest swatch (LEXTER-D123). Not chosen: a style has more to be near in
+  than its colours, and freeing styles, which would make a full table rare,
+  comes with the packing of history.
+- Free the styles no cell uses. Not chosen: LEXTER-D118 places freeing with
+  the packing of history.
+- Signal an error. Rejected: a host's output must not stop the terminal.
+
+### LEXTER-DRAFT-dense-cell-model-D3 — OSC 133 and DEC double-size lines wait, and their fields stay 0
+
+**Status:** Proposed
+
+**Context:** The terminal row (LEXTER-D119) holds, beside the soft wrap, a
+prompt kind and a line size:
+- the prompt kind is the OSC 133 zone at the row's start;
+- the line size is the DEC line attribute.
+
+Step 2 builds the terminal row. The handler parses neither OSC 133 nor the
+DEC double-size controls, and LEXTER-D114's writer of line sizes is not
+built.
+
+**Decision:** The prompt kind is kept through scrolling and history, and
+is always 0. The line size stays 0 until DEC double-size lines are built.
+
+**Alternatives:**
+- Parse OSC 133 in step 2. Not chosen: nothing in Phase 3 reads the zones,
+  and LEXTER-D119 leaves OSC 133's exit codes and commands for later.
+- Leave the fields out of the terminal row until they are written. Not
+  chosen: the row's layout is its manifest's, and history must carry the
+  fields from the start.
+
+### LEXTER-DRAFT-dense-cell-model-D4 — The soft wrap is set and cleared as xterm does it
+
+**Status:** Proposed
+
+**Context:** The soft wrap says that a row's text runs on to the next row
+because autowrap carried it there. Reflow, copying, selection, and search
+read it. LEXTER-D119 leaves which operations clear it to xterm's behaviour,
+to be settled in Phase 3.
+
+**Decision:** Autowrap sets the soft wrap, and so does a wide character that
+wraps early because it cannot begin in the last column. Four things clear
+it:
+- an erase that reaches the row's last column;
+- a delete of characters;
+- a character written in the last column with autowrap off;
+- a row cleared whole.
+
+Cursor movement leaves it alone.
+
+**Alternatives:**
+- Clear it only when a row is cleared whole. Not chosen: a row whose last
+  column is erased no longer runs on, and copying would join it to the
+  next.
+- Clear it when the cursor moves into the row. Not chosen: xterm leaves it,
+  and following xterm is what LEXTER-D119 asks.
+
+### LEXTER-DRAFT-dense-cell-model-D5 — Records are drawn through the first edition's renderer until step 6
+
+**Status:** Proposed
+
+**Context:** Step 3 makes the grid hold records, and step 6 builds the
+renderer that draws them. Between them, three steps must still show the
+terminal on screen, and keep the pixel fixtures as a check.
+
+**Decision:** An adapter turns the records into the first edition's
+instances each frame:
+- a cell of one layer in ink slot 1 over background slot 0 is a simple
+  instance;
+- any other plain cell is layered instances, its first layer opaque over
+  its background slot;
+- a union mask that cuts one layer is drawn as a layer in that layer's
+  ink;
+- other masks, and blink, are not drawn.
+
+Step 6 removes the adapter.
+
+**Alternatives:**
+- Build the renderer of records in step 3. Not chosen: the grid, the build,
+  the writers, and the shader would change at once, with no fixture to
+  tell which had broken.
+- Keep the first edition's grid until step 6, building records beside it.
+  Not chosen: two grids would be kept in step, and the writers of steps 4
+  and 5 would have no records to write.
+
+### LEXTER-DRAFT-dense-cell-model-D6 — The first edition's writers write records until steps 4 and 5 replace them
+
+**Status:** Proposed
+
+**Context:** The function pane, the workspace's decorations, the 3270 pane,
+and the demo wrote the grid through `set-simple-cell`, `set-cell-layer`, and
+their companions. Step 4 builds the API that replaces them, and step 5
+rewrites the 3270 pane.
+
+**Decision:** In step 3 those calls write records. A transparent side maps
+as LEXTER-D86 has it:
+- `:bg` is a selector of 0;
+- `:fg` is a selector of 1;
+- `:none` on layer 0 gives the cell its background slot.
+
+Steps 4 and 5 move the writers to the API and the model.
+
+**Alternatives:**
+- Move every writer to a new API in step 3. Not chosen: the API, with its
+  surfaces and halves, is a step of its own.
+- Leave those writers a grid of their own until they move. Rejected: there
+  is one composed grid (LEXTER-D107).
+
+### LEXTER-DRAFT-dense-cell-model-D7 — Change stamps go on the grid's rows now, and on screens later
+
+**Status:** Proposed
+
+**Context:** LEXTER-D113 replaces dirty bits with change stamps, so that
+each reader keeps what it took and no reader clears another's work. From
+step 6 the grid has a reader, the renderer. A screen's only reader is its
+flush into the grid.
+
+**Decision:** The grid's rows carry change stamps from step 3. A screen
+keeps its dirty bits while the flush is their only reader. Stamps on
+screens come when partial redraw, or a second reader, needs them.
+
+**Alternatives:**
+- Stamps on screens now, as LEXTER-D113 has them. Not chosen: with one
+  reader, a dirty bit and a stamp say the same thing, and the flush's paths
+  would change for no gain yet.
+
+### LEXTER-DRAFT-dense-cell-model-D8 — The single underline is placed from the font's ascent
+
+**Status:** Proposed
+
+**Context:** LEXTER-D89 generates the single underline at atlas position 9.
+It would place the line by the font's XLFD underline position and
+thickness, but the PCF loader reads no XLFD properties.
+
+**Decision:** The underline is drawn one row below the baseline, max(1,
+cell height ÷ 16) rows thick, and kept inside the cell. Placing it from the
+XLFD properties waits for the loader to read them.
+
+**Alternatives:**
+- Make the PCF loader read the properties in step 3. Not chosen: it is a
+  change to the font loader, beside a step that changes the grid.
+- The cell's bottom row. Not chosen: it places the line by the cell rather
+  than by the text's baseline.
+
+### LEXTER-DRAFT-dense-cell-model-D9 — A surface is records, text cells, and change stamps
+
+**Status:** Proposed
+
+**Context:** LEXTER-D124 has Lexter's own writers keep their records and
+the text beside them, and LEXTER-D107 composes everything into one grid. A
+function pane drew straight into the grid, and kept nothing of what it
+drew.
+
+**Decision:** A surface is a rectangle of records, with a text cell beside
+each and a change stamp for each row, written only through the API. A
+function pane owns one, which its render function writes and its flush
+copies into the composed grid.
+
+**Alternatives:**
+- Records alone. Not chosen: a function pane's text could not be selected,
+  copied, searched, or read by a screen reader.
+- A terminal's screen of text and styles, built into records. Not chosen:
+  an application says how a cell looks, which a style cannot always say,
+  as masks and selectors show.
+
+### LEXTER-DRAFT-dense-cell-model-D10 — Decorators write the composed grid through the API
+
+**Status:** Proposed
+
+**Context:** The workspace's decorations, the panes' borders and titles,
+are drawn into the composed grid around the panes. The grid keeps records,
+but no text.
+
+**Decision:** Decorators write the grid through the API, so chrome is not
+text that can be copied. A surface for chrome may follow, if selection or
+screen readers come to need its text.
+
+**Alternatives:**
+- A surface for each pane's chrome, copied into the grid. Not chosen:
+  nothing yet reads chrome's text, and it would add a surface for every
+  pane.
+
+### LEXTER-DRAFT-dense-cell-model-D11 — A surface's text cells carry style 0
+
+**Status:** Proposed
+
+**Context:** A text cell holds a style id beside its character
+(LEXTER-D127). On a terminal's screen, the record is built from the style.
+On a surface, the API writes the record itself.
+
+**Decision:** The API writes a surface's text cells in style 0. The record
+alone says how the cell looks. The text serves selection, copying, search,
+and screen readers.
+
+**Alternatives:**
+- Intern a style from each record written. Not chosen: a record says more
+  than a style can, so the style would be partial, and each surface would
+  need a style table of its own.
+
+### LEXTER-DRAFT-dense-cell-model-D12 — Debugging builds check every record the API writes, through a variable
+
+**Status:** Proposed
+
+**Context:** LEXTER-D130 has debugging builds assert a record's invariants
+(LEXTER-0016) on the records they write. A check costs a full read of each
+record.
+
+**Decision:** `*check-records*` is true when Lexter is compiled with the
+`:lexter-debug` feature, and while it is true the API checks every record
+it writes. Tests bind it, so the suite checks records in any build.
+
+**Alternatives:**
+- Always check. Not chosen: it would cost every write in production.
+- A feature alone, read when the code is compiled. Not chosen: the suite
+  could not turn the checks on without recompiling Lexter.
+
+### LEXTER-DRAFT-dense-cell-model-D13 — The first edition's layered API is removed in step 4
+
+**Status:** Proposed
+
+**Context:** `set-cell-layer`, `set-cell-swatch`, `clear-cell-layers`, and
+`cell-layered-p` wrote layered cells into the grid. Step 4's API replaces
+them, and the demo was the last to call them.
+
+**Decision:** Step 4 removes them, and moves the demo to the API.
+`set-simple-cell` and the cursor's exchange stay for the 3270 pane, until
+step 5.
+
+**Alternatives:**
+- Keep them, written over records, until the end of the phase. Not chosen:
+  they would be a second way to write layers, without halves, that nothing
+  needs.
+
+### LEXTER-DRAFT-dense-cell-model-D14 — A 3270 field's intensity styles its cells
+
+**Status:** Proposed
+
+**Context:** A 3270 field attribute's display bits make the field normal,
+intensified, or non-display. The 3270 pane ignored them, so a password
+typed into a non-display field was shown.
+
+**Decision:** A non-display field's cells are written invisible, with their
+text kept, and an intensified field's are written bold.
+
+**Alternatives:**
+- Keep ignoring intensity until the pane's other attributes are built.
+  Rejected: a password would still be shown.
+- Draw intensified fields in a brighter colour. Not chosen: bold says what
+  the field asks for, and how bold is drawn belongs to the presentation
+  rules (LEXTER-D125).
+
+### LEXTER-DRAFT-dense-cell-model-D15 — The 3270 background colour attribute stays ignored
+
+**Status:** Proposed
+
+**Context:** The extended attribute X'45' gives a cell's background colour.
+The pane ignored it before step 5. LEXTER-D128 moves the pane to a Lexter
+screen, and asks for no new attributes.
+
+**Decision:** Step 5 keeps ignoring it, and cells draw in the default
+background.
+
+**Alternatives:**
+- Map it to the style's background now. Not chosen: it would add behaviour
+  to a step whose aim is to change the pane's model, not what the pane
+  shows.
+
+### LEXTER-DRAFT-dense-cell-model-D16 — A terminal given no palette slot draws in slot 0, while LEXTER-O50 is open
+
+**Status:** Proposed
+
+**Context:** LEXTER-D92 has one allocator hand out palette slots 1–255, in a
+store whose size the configuration sets, 128 by default. What happens when
+the slots run out is LEXTER-O50, which is open. The allocator of step 6
+needs some behaviour.
+
+**Decision:** When every slot is taken, a terminal is given slot 0 and
+draws in the default palette, and its palette changes are not shown until a
+slot frees. This is an interim rule, until LEXTER-O50 is settled.
+
+**Alternatives:**
+- Terminals beyond the store share the last slot. Not chosen: their palette
+  changes would be shown, but each sharer's would override the others'.
+- Settle LEXTER-O50 first, for example by growing the store toward 256
+  slots before falling back. Not chosen for this step: it is a decision of
+  the architecture, to be made apart from building the allocator.
+
+### LEXTER-DRAFT-dense-cell-model-D17 — Panes that never change their palette draw in slot 0
+
+**Status:** Proposed
+
+**Context:** Function panes, chrome, and the 3270 pane draw in xterm's
+default colours. The 3270 pane drew in the default pane slot, slot 1, which
+another terminal's palette could occupy once slots were allocated.
+
+**Decision:** These panes draw in slot 0, which holds the default palette
+and is never allocated, and take no slot. A 3270 pane would take one if it
+gained control of its palette.
+
+**Alternatives:**
+- Every pane takes a slot from the allocator. Not chosen: all panes would
+  be treated alike, at the cost of slots that hold the default palette.
+
+### LEXTER-DRAFT-dense-cell-model-D18 — The shader is checked against a Lisp reference, pixel by pixel
+
+**Status:** Proposed
+
+**Context:** LEXTER-D130 has the hand-written shader checked against the
+manifests, in the test rig's hidden window, by records the manifests wrote.
+The CPU renderer, which could compare every pixel, comes in Phase 5.
+
+**Decision:** A Lisp reference of Drawing a Pixel, for the plain format,
+reads each record through its manifests and decides every pixel of a grid
+of worked records. The test rig compares its result with the GPU's frame
+exactly, on the NVIDIA driver and on llvmpipe. The reference is the seed of
+the CPU renderer (LEXTER-D111).
+
+**Alternatives:**
+- Check a few chosen pixels of each record, with no reference, and leave
+  the full comparison to Phase 5. Not chosen: a fault at a pixel not
+  chosen, such as one in a mask's reach or a magnified half, would pass.
+
+### LEXTER-DRAFT-dense-cell-model-D19 — The fixtures' cell checksums are checked in the fixtures' tool
+
+**Status:** Proposed
+
+**Context:** LEXTER-D108 has each fixture's cell checksum computed in a
+terminal without a window, on any machine, and kept with the test beside
+its pixel checksum. The fixtures' fonts are files outside the repository,
+while the suite builds its fonts in memory.
+
+**Decision:** `tools/check-fixtures.lisp@b69c51f` keeps both literals of
+each fixture in one table. It checks every cell checksum with no display,
+then, where there is a display, every pixel checksum. Each windowed replay
+also checks that the grid it drew has the fixture's cell checksum. The
+suite tests the checksum itself, in the in-memory font.
+
+**Alternatives:**
+- A suite of slow tests in `lexter/tests` that replays the blobs from the
+  font files, skipped with `:skip-slow`. Not chosen: the suite would load
+  files from outside the repository, and a fixture's two literals would
+  live in two files.
+
+### LEXTER-DRAFT-dense-cell-model-D20 — Pixel checksums are compared on any driver, against the pinned llvmpipe's
+
+**Status:** Proposed
+
+**Context:** LEXTER-D112 takes pixel checksums on a pinned version of
+llvmpipe, and lets a real GPU run the same comparison as a check of its
+driver.
+
+**Decision:** The tool compares the same literals on any driver, and names
+the driver it runs on. The pinned driver is llvmpipe in Mesa 20.3.5, with
+LLVM 11.0.1. On any other driver, a pixel checksum that differs is reported
+as that driver disagreeing with the pinned one. No fixture is authored on
+another driver.
+
+**Alternatives:**
+- Check pixels only on the pinned llvmpipe, and tell the user to run the
+  tool under `xvfb-run`. Not chosen: the developer's GPU would go
+  unchecked, though today it agrees.
+
+### LEXTER-DRAFT-dense-cell-model-D21 — The fixtures fix the atlas's column count at 256
+
+**Status:** Proposed
+
+**Context:** LEXTER-D108 has the fixture's configuration fix the atlas's
+column count, so that glyph positions, and so the cell checksum, do not
+depend on the machine. The column count was derived from the GPU's maximum
+texture size.
+
+**Decision:** The terminal and the compositor take `:atlas-cols`, and the
+fixtures' configuration sets 256 columns for both fonts. Unifont then fits
+in a texture of about 2048 by 4200 pixels. Production still chooses its
+own column count.
+
+**Alternatives:**
+- A nominal maximum texture size in the configuration, 16,384, from which
+  the columns are derived as production derives them. Not chosen: the
+  column count would still follow the rule that derives it, so a change to
+  that rule would change every cell checksum.
+
+### Verification
+
+The final verification is on `b69c51f`, the code of step 7, which step 8
+leaves unchanged:
+
+- **The suite.** `(asdf:test-system :lexter)` runs 220 tests and 664 checks:
+  656 pass and 8 fail. The failures are the reproduction tests of
+  LEXTER-D72's negotiation and framing, LEXTER-D73, and LEXTER-D74, in the
+  terminal-fixes plan.
+- **The fixtures.** `tools/check-fixtures.lisp@b69c51f` matches every cell
+  checksum, pixel checksum, and GPU store:
+  - under Xvfb on the pinned llvmpipe;
+  - on the NVIDIA driver, which it names as not the pinned driver;
+  - with no display, where it checks the cell checksums alone.
+- **The shader.** `src/test-rig.lisp:check-record-drawing@b69c51f` compares
+  12,288 pixels at pixel scale 1, and 49,152 at scale 2, without a
+  difference, on the NVIDIA driver and on llvmpipe.
+- **The other test systems.** `lexter/mouse-tests` passes, 32 checks;
+  `lexter/origin-tests` gives its same 23 passes and 28 failures.
+
+Table: The suite's growth through Phase 3.
+
+| After step | Tests | Checks | Passing |
+|---|---|---|---|
+| 1 | 148 | 359 | 346 |
+| 6 | 213 | 645 | 637 |
+| 7 | 220 | 664 | 656 |
+
+### Files
+
+Table: Files changed by step 8.
+
+| File | Action | Description |
+|---|---|---|
+| `doc/Log.DenseCellModel.md` | Modified | The abstract; the steward's decisions as records; this summary; earlier outstanding items brought up to date |
+| `doc/INDEX.md` | Modified | Regenerated |
+
+### Outstanding Work
+
+All that the phase leaves, by where it goes.
+
+**Phase 4, the overlay list:**
+- the cursors as overlays, and the removal of the interim cursor's
+  exchanged slots (LEXTER-D93, LEXTER-D101);
+- the overlay instance's manifest;
+- overlay instances in the cell checksum, and the cell checksums
+  re-authored for fixtures whose cursor is shown (LEXTER-D108).
+
+**Phase 5, the CPU renderer:**
+- the renderer itself, seeded by the shader's reference
+  (LEXTER-D111);
+- both renderers' pixel checksums compared for each fixture
+  (LEXTER-D112);
+- unchecked reads in the paths that draw (LEXTER-D130).
+
+**Phase 6, partial redraw:**
+- drawing by damage, from the stamps and clock masks;
+- stamps on screens (LEXTER-DRAFT-dense-cell-model-D7);
+- copying surfaces by stamp, if the copies are measured to cost.
+
+**Later Formats:** formats beyond the plain format, in the manifests and
+the shader, and the line styles beyond the single underline.
+
+**The steward's:**
+- accepting or revising LEXTER-DRAFT-dense-cell-model-D1 to
+  LEXTER-DRAFT-dense-cell-model-D21, and this Log's review and numbering;
+- LEXTER-O50, what a full palette store does;
+- the status of the terminal-fixes plan's LEXTER-D72, whose geometry step 5
+  repairs;
+- erasing in the current background, as xterm does, if wanted;
+- disposing of the findings this phase addresses.
+
+**Not yet built:**
+- OSC 133, and DEC double-size lines
+  (LEXTER-DRAFT-dense-cell-model-D3);
+- the underline from XLFD properties
+  (LEXTER-DRAFT-dense-cell-model-D8);
+- freeing styles, with the packing of history (LEXTER-D118);
+- for the 3270 pane, background colours, the character set attribute,
+  Erase/Write Alternate's geometry, and double-byte characters;
+- chrome as text (LEXTER-DRAFT-dense-cell-model-D10);
+- a configuration for the blink interval (LEXTER-D94).
+
+**Elsewhere:**
+- Code outside Lexter that wrote function panes must follow their render
+  function, which now takes the pane's surface.
+- `dump-terminal` prints a pixel checksum from the live terminal it
+  recorded. A fixture's literals are taken by replaying its blob in the
+  fixtures' configuration.
+- The first edition's specification,
+  [LEXTER-DRAFT-data-structures-1e](Spec.DataStructures1e.md), still
+  describes the first edition's cells. The second edition's specification
+  supersedes it at the end of the plan.
+- The alignment of the grid's array (LEXTER-O65) was not measured.

@@ -68,6 +68,8 @@
    #:vt-pane-vt-handler
    #:vt-pane-initialized-p
    #:vt-pane-palette-slot
+   #:vt-pane-drawn-palette-slot
+   #:palette-slots-of
    #:vt-pane-read-buffer
    #:vt-pane-write-buffer
    #:vt-pane-uc-scratch
@@ -136,6 +138,7 @@
    #:compositor-atlas
    #:compositor-display
    #:compositor-swatch-store
+   #:compositor-palette-slots
    #:compositor-cols
    #:compositor-rows
    #:compositor-cell-w

@@ -36,7 +36,10 @@
            #:*test-terminal*
            ;; The GPU's stores
            #:check-gpu-stores
-           #:check-integer-texture-buffers))
+           #:check-integer-texture-buffers
+           ;; The shader against the manifests (LEXTER-D130)
+           #:reference-pixel-slot
+           #:check-record-drawing))
 
 (in-package #:lexter/test)
 
@@ -322,8 +325,7 @@
                  (error "Palette slot ~d differs from ~a." slot what)))))
       (check-palette 0 (lexter/swatches:make-default-palette) "the default palette")
       (let ((screen (terminal-screen term)))
-        (check-palette (or (lexter/panes:vt-pane-palette-slot (unix-terminal-pane term))
-                           lexter/renderer:+default-pane-palette-slot+)
+        (check-palette (lexter/panes:vt-pane-drawn-palette-slot (unix-terminal-pane term))
                        (lexter/model:screen-palette screen)
                        "the terminal's palette")))
     compared))
@@ -413,3 +415,216 @@ void main() {
                              (floor i 4) (mod i 4) (aref data i) (aref got i))))))
            (glfw:destroy-window win)))
     (glfw:terminate)))
+
+;;; --------------------------------------------------------------------------
+;;; The shader against the manifests (LEXTER-D130)
+;;; --------------------------------------------------------------------------
+;;;
+;;; The renderer's fragment shader is written by hand from the architecture's
+;;; tables. REFERENCE-PIXEL-SLOT follows the same procedure, Drawing a Pixel
+;;; in LEXTER-0016, in Lisp, reading each record through its manifests rather
+;;; than by the shader's arithmetic on its words, and CHECK-RECORD-DRAWING
+;;; compares the two over every pixel of a grid of records the manifests and
+;;; the API wrote. It is the seed of the CPU renderer of Phase 5 (LEXTER-D111).
+
+(defun reference-pixel-slot (records index x y glyph-pixel &key blink-off)
+  "The swatch slot that pixel X, Y of record INDEX of RECORDS takes, by the
+   procedure of Drawing a Pixel for the plain format (LEXTER-0016), with
+   GLYPH-PIXEL a function of an atlas position, the pixel X, Y, and the cell's
+   line size and magnified half, that gives 1 where the glyph is inked at the
+   pixel, magnified as LEXTER-D114 has it. A record of another format takes its
+   background slot (LEXTER-D82). BLINK-OFF is the blink phase (LEXTER-D94)."
+  (let ((background (lexter/manifests:read-record-common records index :background-slot)))
+    (unless (eq (lexter/manifests:record-format records index) :plain)
+      (return-from reference-pixel-slot background))
+    (multiple-value-bind (blink line-size magnified)
+        (lexter/manifests:read-record-common records index :blink :line-size :magnified-half)
+      (multiple-value-bind (count types) (lexter/manifests:record-type-bits records index)
+        (let ((n (min count lexter/manifests:+plain-glyph-words+))
+              (coverage 0)
+              (layers 0)
+              (slot background))
+          (flet ((layer-p (i) (or (zerop i) (not (logbitp (1- i) types))))
+                 (covered (i)
+                   (logxor (funcall glyph-pixel (lexter/manifests:record-glyph records index i)
+                                    x y line-size magnified)
+                           (lexter/manifests:record-selector records index i))))
+            (dotimes (i n)
+              (let ((p (covered i)))
+                (if (layer-p i)
+                    (setf coverage (logior coverage (ash p layers))
+                          layers (1+ layers))
+                    (multiple-value-bind (operation reach)
+                        (lexter/manifests:record-mask records index i)
+                      (let* ((r (min (1+ reach) layers))
+                             (reached (ash (1- (ash 1 r)) (- layers r)))
+                             (m (if (= p 1) reached 0))
+                             (result (ecase operation
+                                       (:union (logior coverage m))
+                                       (:intersection (logand coverage m))
+                                       (:exclusion (logxor coverage m))
+                                       (:mask-less-coverage (logandc2 m coverage)))))
+                        (setf coverage (logior (logandc2 coverage reached)
+                                               (logand result reached))))))))
+            (when (and (= blink 1) blink-off (plusp layers))
+              (setf coverage (logandc2 coverage (ash 1 (1- layers)))))
+            (let ((l 0))
+              (dotimes (i n)
+                (when (layer-p i)
+                  (when (logbitp l coverage)
+                    (setf slot (lexter/manifests:record-ink-slot records index i)))
+                  (incf l))))
+            slot))))))
+
+(defun %record-drawing-grid (grid table)
+  "Write GRID, whose glyphs come from its atlas, with records that exercise the
+   procedure of Drawing a Pixel, their swatches interned in TABLE."
+  (let ((a (lexter/swatches:intern-swatch table 0 15 9 12))
+        (b (lexter/swatches:intern-swatch table 4 11 10 13))
+        (records (lexter/grid:display-grid-records grid))
+        (col 0))
+    (flet ((next () (prog1 col (incf col)))
+           (glyph (char) (lexter/surface:char-glyph grid char)))
+      ;; The worked records of LEXTER-0016, and further cases
+      (lexter/surface:put-char grid (next) 0 #\g :swatch a)
+      (lexter/surface:put-char grid (next) 0 #\g :swatch a :ink-slot 0 :background-slot 1)
+      (lexter/surface:put-char grid (next) 0 #\g :swatch a :underline t)
+      (lexter/surface:put-cell grid (next) 0 `((:layer :glyph 9 :ink-slot 2)
+                                               (:layer :char #\g :ink-slot 1)
+                                               (:mask :glyph 10 :operation :union))
+                               :swatch b)
+      (lexter/surface:put-cell grid (next) 0 `((:layer :char #\| :ink-slot 1)
+                                               (:mask :char #\▆ :operation :intersection)
+                                               (:mask :char #\▂ :selector 1 :operation :intersection))
+                               :swatch a)
+      (lexter/surface:put-cell grid (next) 0 `((:layer :glyph 9 :ink-slot 2)
+                                               (:layer :char #\g :ink-slot 1)
+                                               (:mask :char #\▌ :operation :intersection :reach 1))
+                               :swatch b)
+      (lexter/surface:put-cell grid (next) 0 `((:layer :glyph 9 :ink-slot 2)
+                                               (:layer :char #\g :ink-slot 1))
+                               :swatch b :blink t)
+      (lexter/surface:put-cell grid (next) 0 `((:layer :char #\O :ink-slot 3)
+                                               (:mask :char #\X :operation :exclusion))
+                               :swatch b :background-slot 2)
+      (lexter/surface:put-cell grid (next) 0 `((:layer :char #\O :ink-slot 3)
+                                               (:mask :char #\X :operation :mask-less-coverage))
+                               :swatch b)
+      (lexter/surface:put-cell grid (next) 0 `((:layer :char #\A :selector 1 :ink-slot 2)
+                                               (:layer :char #\B :ink-slot 3))
+                               :swatch a :background-slot 1)
+      (lexter/surface:fill-cells grid (next) 0 1 1 :swatch b :background-slot 2)
+      ;; A wide glyph's two halves, and a narrow glyph over it in both
+      (lexter/surface:put-cell grid col 0 `((:layer :char ,(code-char #x4E00) :ink-slot 1)
+                                            (:layer :char #\_ :ink-slot 2))
+                               :swatch b)
+      (incf col 2)
+      ;; The bottom of a double-height line, the right of its two cells
+      (let ((index (lexter/grid:cell-index grid (next) 0)))
+        (lexter/manifests:write-plain-record records index
+          :glyph-count 1 :line-size 3 :magnified-half 1 :swatch a
+          :g0 (:glyph (glyph #\W) :ink-slot 1)))
+      ;; A format the renderer does not draw, in its background slot
+      (let ((index (lexter/grid:cell-index grid (next) 0)))
+        (lexter/manifests:write-plain-record records index :swatch b :background-slot 3)
+        (lexter/manifests:patch-record-common records index :format :tiles))
+      ;; Row 1: palette slots: the custom palette in slot 1, and a slot beyond
+      ;; the store, which draws in slot 0
+      (loop :for (slot c) :in '((1 0) (1 1) (200 2) (0 3))
+            :do (lexter/surface:put-char grid c 1 #\g :swatch a)
+                (lexter/manifests:patch-record-common
+                 records (lexter/grid:cell-index grid c 1) :palette-slot slot))
+      ;; Row 2: text through the API, and a cursor's exchanged slots
+      (lexter/surface:put-string grid 0 2 "Hello, record." :swatch a)
+      (lexter/grid:exchange-cell-slots grid 5 2))))
+
+(defun check-record-drawing (&key (font-path "../unifont-17.0.04.pcf.gz") (cols 16) (rows 3)
+                                  (pixel-scale 1))
+  "Draw a grid of records that the manifests and the API wrote with the
+   renderer, in a hidden window, in both blink phases, and compare every pixel
+   with what REFERENCE-PIXEL-SLOT gives through the swatch and palette stores
+   (LEXTER-D130). The records cover the worked records of the cell-model
+   architecture and the cases beyond them: each mask operation, a reach of two
+   layers, selectors, blink, the halves of a wide glyph, a line size, a format
+   the renderer does not draw, palette slots of the cell's own and beyond the
+   store, and the interim cursor. Floating-point traps are masked, as llvmpipe
+   needs. Owns the GLFW lifecycle. Returns the number of pixels compared, or
+   signals an error naming the first that differs."
+  (sb-int:with-float-traps-masked (:invalid :divide-by-zero :overflow :inexact)
+    (glfw:initialize)
+    (unwind-protect
+         (let* ((font (lexter/pcf:load-pcf font-path))
+                (cw (lexter/pcf:bitmap-font-cell-width font))
+                (ch (lexter/pcf:bitmap-font-cell-height font))
+                (w (* cols cw pixel-scale))
+                (h (* rows ch pixel-scale))
+                (win (glfw:create-window :title "record drawing check" :width w :height h
+                                         :visible nil
+                                         :context-version-major 3 :context-version-minor 3
+                                         :opengl-profile :opengl-core-profile
+                                         :opengl-forward-compat t)))
+           (declare (ignore win))
+           (let* ((atlas (lexter/atlas:build-atlas (list font)))
+                  (grid (lexter/grid:make-display-grid :cols cols :rows rows :atlas atlas))
+                  (store (lexter/swatches:make-swatch-store))
+                  (table (lexter/swatches:swatch-store-display-table store))
+                  (rs (lexter/renderer:make-renderer atlas w h :pixel-scale pixel-scale))
+                  (custom (lexter/swatches:make-default-palette))
+                  (compared 0))
+             ;; Slot 1: the default palette with colours 9-15 made dark, so a
+             ;; cell in it differs from the same cell in slot 0
+             (loop :for i :from 9 :to 15
+                   :do (lexter/manifests:write-palette-texel custom i (* 8 i) 40 (- 255 (* 8 i))))
+             (lexter/renderer:set-palette rs custom 1)
+             (%record-drawing-grid grid table)
+             (multiple-value-bind (tex tex-w) (lexter/atlas::%atlas-texture-data atlas)
+               (let* ((atlas-cols (lexter/atlas:atlas-cols atlas))
+                      (records (lexter/grid:display-grid-records grid))
+                      (palettes (list (cons 0 (lexter/swatches:make-default-palette))
+                                      (cons 1 custom))))
+                 (flet ((glyph-pixel (glyph x y line-size magnified)
+                          ;; LEXTER-D114: magnified two times across, and down
+                          ;; for double height
+                          (let ((gx (if (zerop line-size) x (floor (+ (* magnified cw) x) 2)))
+                                (gy (case line-size
+                                      ((0 1) y)
+                                      (t (floor (+ (* (- line-size 2) ch) y) 2)))))
+                            (if (> (aref tex (+ (* (+ (* (floor glyph atlas-cols) ch) gy) tex-w)
+                                                (* (mod glyph atlas-cols) cw) gx))
+                                   127)
+                                1 0))))
+                   (lexter/renderer:enable-offscreen rs)
+                   (dolist (blink-off '(nil t))
+                     (lexter/renderer:render-frame rs grid store :blink-off blink-off)
+                     (let ((pixels (lexter/renderer:capture-pixels rs)))
+                       (dotimes (sy h)
+                         (dotimes (sx w)
+                           (let* ((col (floor sx (* cw pixel-scale)))
+                                  (row (floor sy (* ch pixel-scale)))
+                                  (x (floor (mod sx (* cw pixel-scale)) pixel-scale))
+                                  (y (floor (mod sy (* ch pixel-scale)) pixel-scale))
+                                  (index (lexter/grid:cell-index grid col row))
+                                  (slot (reference-pixel-slot records index x y #'glyph-pixel
+                                                              :blink-off blink-off))
+                                  (swatch (multiple-value-list
+                                           (lexter/swatches:store-swatch
+                                            store (lexter/manifests:read-record-common
+                                                   records index :swatch))))
+                                  (palette-slot (lexter/manifests:read-record-common
+                                                 records index :palette-slot))
+                                  (palette (or (cdr (assoc palette-slot palettes))
+                                               (cdr (assoc 0 palettes))))
+                                  (want (subseq (multiple-value-list
+                                                 (lexter/manifests:read-palette-texel
+                                                  palette (nth slot swatch)))
+                                                0 3))
+                                  (got (list (aref pixels sy sx 0) (aref pixels sy sx 1)
+                                             (aref pixels sy sx 2))))
+                             (unless (equal want got)
+                               (error "Pixel ~d,~d of cell ~d,~d (blink ~:[on~;off~]): ~
+                                       the reference gives ~s in slot ~d, the GPU ~s."
+                                      x y col row blink-off want slot got))
+                             (incf compared))))))))
+               (lexter/renderer:destroy-renderer rs)
+               compared)))
+      (glfw:terminate))))

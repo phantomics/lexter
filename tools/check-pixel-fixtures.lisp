@@ -11,9 +11,12 @@
 ;;;; cell-model revision on an NVIDIA GL 4.6 driver (LEXTER-DRAFT-swatch-ranges),
 ;;;; and hold for that driver. Step 3 of Phase 3 changed those of "colours" and
 ;;;; "palette", whose reverse video the record draws through its background
-;;;; slot (LEXTER-D86) where the first edition drew none. Step 7 re-authors
-;;;; the fixtures on a pinned llvmpipe, with a cell checksum beside each
-;;;; (LEXTER-D108, LEXTER-D112). Each font replays the fixtures in order and
+;;;; slot (LEXTER-D86) where the first edition drew none. Step 6 changed that
+;;;; of "cjk" in terminus, which covers no ideographs: the renderer of records
+;;;; draws the "no glyph" glyph in both cells of each, where the first
+;;;; edition's stretched it over the two (LEXTER-D122, LEXTER-D126). Step 7
+;;;; re-authors the fixtures on a pinned llvmpipe, with a cell checksum beside
+;;;; each (LEXTER-D108, LEXTER-D112). Each font replays the fixtures in order and
 ;;;; then in reverse, so that a checksum that depends on the fixture before it
 ;;;; is found, and after each replay compares the GPU's stores with their
 ;;;; sources (LEXTER/TEST:CHECK-GPU-STORES).
@@ -37,7 +40,7 @@
 (defparameter *fonts*
   '(("../terminus-18n.pcf"
      ("colours" . #xF6B81E21B5962094) ("palette" . #x59BB514478D43E6C)
-     ("cjk" . #xD3758C95BC11B3B5) ("alt" . #x1E7393F293E8303D)
+     ("cjk" . #x26A2D3A202F76D9D) ("alt" . #x1E7393F293E8303D)
      ("many" . #xFF822E35378CA846))
     ("../unifont-17.0.04.pcf.gz"
      ("colours" . #x1606A08F3D7D35BA) ("palette" . #x406471A041046D3D)

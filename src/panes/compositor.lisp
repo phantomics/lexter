@@ -27,6 +27,9 @@
   ;; table holds what is drawn at the level of the display, and each terminal
   ;; takes a table of its own (LEXTER-DRAFT-cell-model-revision-D24)
   (swatch-store (lexter/swatches:make-swatch-store))
+  ;; The palette store's slots, which terminals take as they are made and give
+  ;; back as they go (LEXTER-D92); the renderer's store is of the same size
+  (palette-slots (lexter/swatches:make-palette-slots))
   ;; Dimensions (in cells)
   (cols         80  :type fixnum)
   (rows         24  :type fixnum)
@@ -364,22 +367,15 @@
                ;; 5. Flush active workspace to grid
                (when ws
                  (flush-workspace ws (compositor-display comp))
-                 ;; 5b. Sync focused pane's palette to renderer
-                 (let ((pane (focused-pane ws)))
-                   (when pane
-                     (multiple-value-bind (palette gen slot) (pane-palette pane)
-                       (when palette
-                         (let ((s (or slot lexter/renderer:+default-pane-palette-slot+)))
-                           ;; Upload palette data to slot if changed
-                           (lexter/renderer:upload-palette
-                            (compositor-renderer comp) palette gen s)
-                           ;; Set active palette slot for rendering
-                           (lexter/renderer:set-active-palette-slot
-                            (compositor-renderer comp) s)))))))
-               ;; 6. Render
+                 ;; 5b. Every pane's palette to its slot, each cell naming the
+                 ;; slot it draws in (LEXTER-D92)
+                 (%upload-pane-palettes (compositor-renderer comp) ws))
+               ;; 6. Render, in the blink phase of the cursor's clock
+               ;; (LEXTER-D94)
                (lexter/renderer:render-frame (compositor-renderer comp)
                                              (compositor-display comp)
-                                             (compositor-swatch-store comp))
+                                             (compositor-swatch-store comp)
+                                             :blink-off (not (compositor-cursor-blink-on comp)))
                ;; 6b. Present offscreen buffer to the window (no-op unless
                ;; offscreen rendering is enabled).
                (lexter/renderer:present-offscreen (compositor-renderer comp))
@@ -490,8 +486,11 @@ new context current, so the atlas/renderer GL objects belong to it."
                                              :width-policy (compositor-width-policy comp))))
         (lexter/atlas:add-cursor-glyphs atlas)
         (let ((display (lexter/grid:make-display-grid :cols cols :rows rows :atlas atlas))
-              (renderer (lexter/renderer:make-renderer atlas win-w win-h
-                                                       :pixel-scale scale))
+              (renderer (lexter/renderer:make-renderer
+                         atlas win-w win-h
+                         :pixel-scale scale
+                         :palette-slots (lexter/swatches:palette-slot-count
+                                         (compositor-palette-slots comp))))
               (palette (make-xterm-palette)))
           ;; The renderer gives palette slot 0 the default palette, and global
           ;; swatch 0 is the default swatch of the display's table, so a fresh
@@ -641,13 +640,7 @@ new context current, so the atlas/renderer GL objects belong to it."
         (pane-mark-dirty pane))
       (mark-decorations-dirty ws)
       (flush-workspace ws (compositor-display comp))
-      (let ((pane (focused-pane ws)))
-        (when pane
-          (multiple-value-bind (palette gen slot) (pane-palette pane)
-            (when palette
-              (let ((s (or slot lexter/renderer:+default-pane-palette-slot+)))
-                (lexter/renderer:upload-palette renderer palette gen s)
-                (lexter/renderer:set-active-palette-slot renderer s)))))))
+      (%upload-pane-palettes renderer ws))
     (lexter/renderer:render-frame renderer (compositor-display comp)
                                   (compositor-swatch-store comp))
     (lexter/renderer:capture-pixels renderer)))
@@ -671,6 +664,24 @@ new context current, so the atlas/renderer GL objects belong to it."
    colour is the same before a pane's palette is first uploaded as after it
    (LEXTER-O36). Kept under this name for its callers."
   (lexter/model:make-default-palette))
+
+(defun %upload-pane-palettes (renderer workspace)
+  "Upload the palette of each pane of WORKSPACE that has one to the slot it
+   draws in, unless the slot already holds it (LEXTER-D92). Slot 0 holds the
+   default palette and is never uploaded to."
+  (dolist (pane (workspace-panes workspace))
+    (multiple-value-bind (palette generation slot) (pane-palette pane)
+      (when (and palette slot (plusp slot))
+        (lexter/renderer:upload-palette renderer palette generation slot)))))
+
+(defun palette-slots-of (target)
+  "The palette slots of the compositor that draws TARGET, a compositor, a
+   workspace, or a pane, or NIL when no compositor holds it."
+  (etypecase target
+    (null nil)
+    (compositor (compositor-palette-slots target))
+    (workspace (palette-slots-of (workspace-compositor target)))
+    (pane (palette-slots-of (pane-workspace target)))))
 
 (defun swatch-store-of (target)
   "The swatch store of the compositor that draws TARGET, a compositor, a

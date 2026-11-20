@@ -2,192 +2,140 @@
 
 ;;;; GLSL 3.30 shader sources.
 ;;;;
-;;;; UV formula note:
-;;;;   PCF bitmaps are stored top-to-bottom.  glTexImage2D places the first
-;;;;   uploaded row at GL texture V=0 (the bottom).  In screen space, cell
-;;;;   corner (0,0) is top-left and maps to the TOP of the glyph (PCF row 0).
+;;;; One program draws the composed grid in one instanced call (LEXTER-D107):
+;;;; each instance is one cell, its record the two uvec4 attributes of the
+;;;; instance, words 0-3 and 4-7, passed to the fragment shader flat; its
+;;;; place in the grid follows from its instance number. The fragment shader
+;;;; follows the procedure of Drawing a Pixel in the cell-model architecture
+;;;; (LEXTER-0016) for the plain format, which is the only one built: every
+;;;; test is on integers, and it selects one palette entry for each pixel,
+;;;; without blending (LEXTER-D110). A record of another format is drawn in
+;;;; its background slot (LEXTER-D82). It is written by hand from the record's
+;;;; tables and checked against records its manifests wrote (LEXTER-D130), by
+;;;; the test rig's CHECK-RECORD-DRAWING.
 ;;;;
-;;;;   Since both the screen Y-axis and the GL texture V-axis are flipped
-;;;;   relative to each other, the two flips cancel: the natural formula
-;;;;   V = (atlas_row + corner.y) / atlas_rows is correct with no extra inversion.
+;;;; The atlas is read with texelFetch, at the pixel of the atlas column a
+;;;; glyph word names: row 0 of the texture is the top row of the atlas's
+;;;; first row of glyphs.
 ;;;;
-;;;; Colours: both fragment shaders read swatches and palettes from integer
-;;;; texture buffers (LEXTER-D109) through the functions of +COLOUR-FUNCTIONS+,
-;;;; so that every swatch is fetched in one place, where a remap of swatch
-;;;; indices would be added once (LEXTER-O73).
+;;;; Colours are read from integer texture buffers (LEXTER-D109): the swatch
+;;;; store, by the header word's swatch, and the palette store, 256 entries to
+;;;; a slot, by its palette slot; a slot beyond the store draws in slot 0
+;;;; (LEXTER-D92).
 
-(defparameter +colour-functions+
-  "uniform usamplerBuffer u_swatches;  // RGBA8UI: 4 palette indices per swatch
-uniform usamplerBuffer u_palettes;  // RGBA8UI: 256 colours per palette slot
-uniform int u_palette_slot;         // which palette slot to draw in
-
-uvec4 fetch_swatch(uint idx) {
-    return texelFetch(u_swatches, int(idx));
-}
-
-vec4 palette_colour(uint idx) {
-    return vec4(texelFetch(u_palettes, u_palette_slot * 256 + int(idx))) / 255.0;
-}
-"
-  "GLSL that the fragment shaders share: the one swatch fetch, and the palette
-   lookup.")
-
-;;; --------------------------------------------------------------------------
-;;; Simple cell shaders
-;;; --------------------------------------------------------------------------
-;;;
-;;; Per-vertex (location 0):  vec2  v_corner   unit quad corner (0..1)
-;;; Per-instance (locations 1-3, divisor=1):
-;;;   location 1  ivec2  i_cell     col (int16), row (int16)
-;;;   location 2  uint   i_glyph    glyph index (uint16)
-;;;   location 3  uint   i_swatch   swatch table index (uint16)
-
-(defparameter +simple-vert+
+(defparameter +cell-vert+
 "#version 330 core
 
-layout(location = 0) in vec2  v_corner;
-layout(location = 1) in ivec2 i_cell;
-layout(location = 2) in uint  i_glyph;
-layout(location = 3) in uint  i_swatch;
+layout(location = 0) in vec2  v_corner;   // unit quad corner (0..1)
+layout(location = 1) in uvec4 i_w0;       // record words 0-3
+layout(location = 2) in uvec4 i_w1;       // record words 4-7
 
-uniform ivec2 u_cell_size;    // cell dimensions in pixels
+uniform ivec2 u_cell_size;    // cell size on screen, in pixels
+uniform ivec2 u_glyph_size;   // cell size in the atlas, in pixels
 uniform ivec2 u_viewport;     // window size in pixels
-uniform ivec2 u_atlas_size;   // atlas dimensions in glyphs (cols, rows)
+uniform int   u_grid_cols;    // the grid's columns
 
-out vec2  f_uv;
-flat out uint f_swatch_idx;
+flat out uvec4 f_w0;
+flat out uvec4 f_w1;
+out vec2 f_local;             // the pixel's place in the cell, in atlas pixels
 
 void main() {
-    // Extract wide flag from bit 15 of swatch
-    bool wide = (i_swatch & 0x8000u) != 0u;
-    float cell_mult = wide ? 2.0 : 1.0;
-
-    int gc = int(i_glyph) % u_atlas_size.x;
-    int gr = int(i_glyph) / u_atlas_size.x;
-    // Wide glyphs span 2 atlas columns
-    f_uv = vec2(float(gc) + v_corner.x * cell_mult, float(gr) + v_corner.y)
-           / vec2(u_atlas_size);
-
-    // Wide glyphs span 2 cell widths on screen
-    vec2 px  = vec2(i_cell * u_cell_size)
-             + v_corner * vec2(u_cell_size) * vec2(cell_mult, 1.0);
+    ivec2 cell = ivec2(gl_InstanceID % u_grid_cols, gl_InstanceID / u_grid_cols);
+    vec2 px  = vec2(cell * u_cell_size) + v_corner * vec2(u_cell_size);
     vec2 ndc = px / vec2(u_viewport) * 2.0 - 1.0;
     gl_Position = vec4(ndc.x, -ndc.y, 0.0, 1.0);
-
-    f_swatch_idx = i_swatch & 0x7FFFu;
+    f_w0 = i_w0;
+    f_w1 = i_w1;
+    f_local = v_corner * vec2(u_glyph_size);
 }
 ")
 
-(defparameter +simple-frag+
-  (concatenate 'string
+(defparameter +cell-frag+
 "#version 330 core
 
-uniform sampler2D u_atlas;
-"
-+colour-functions+
-"
-in  vec2 f_uv;
-flat in uint f_swatch_idx;
+uniform sampler2D      u_atlas;        // R8: 0 or 255 for each glyph pixel
+uniform usamplerBuffer u_swatches;     // RGBA8UI: 4 palette indices per swatch
+uniform usamplerBuffer u_palettes;     // RGBA8UI: 256 colours per palette slot
+uniform ivec2 u_glyph_size;
+uniform int   u_atlas_cols;
+uniform int   u_palette_slots;
+uniform bool  u_blink_off;             // the blink phase (LEXTER-D94)
+
+flat in uvec4 f_w0;
+flat in uvec4 f_w1;
+in vec2 f_local;
 
 out vec4 frag_color;
 
-void main() {
-    float mask = texture(u_atlas, f_uv).r;
-    uvec4 sw   = fetch_swatch(f_swatch_idx);
-    // Slot 0 = bg (r), Slot 1 = fg (g)
-    frag_color = palette_colour(mask > 0.5 ? sw.g : sw.r);
+uint word(int n) {
+    return n < 4 ? f_w0[n] : f_w1[n - 4];
 }
-"))
 
-;;; --------------------------------------------------------------------------
-;;; Layered cell shaders
-;;; --------------------------------------------------------------------------
-;;;
-;;; Per-instance (locations 1-5, divisor=1):
-;;;   location 1  ivec2  i_cell     col (int16), row (int16)
-;;;   location 2  uint   i_glyph    glyph index (uint16)
-;;;   location 3  uvec2  i_ink_bg   ink-idx (uint8), bg-idx (uint8) — swatch slot refs
-;;;   location 4  uint   i_ts       transparent-side: 0=:bg, 1=:fg, 2=:none
-;;;   location 5  uint   i_swatch   swatch table index (uint16)
-;;;
-;;; The cell's 4-slot colour scheme is looked up from the GPU swatch table.
-;;; 3 layers map cleanly to 4 slots: layer 0 uses slots 0+1, layers 1-2
-;;; each use one slot (2 and 3 respectively by convention).
-
-(defparameter +layered-vert+
-"#version 330 core
-
-layout(location = 0) in vec2  v_corner;
-layout(location = 1) in ivec2 i_cell;
-layout(location = 2) in uint  i_glyph;
-layout(location = 3) in uvec2 i_ink_bg;   // ink-idx, bg-idx (swatch slot refs 0-3)
-layout(location = 4) in uint  i_ts;       // transparent-side
-layout(location = 5) in uint  i_swatch;   // swatch table index
-
-uniform ivec2 u_cell_size;
-uniform ivec2 u_viewport;
-uniform ivec2 u_atlas_size;
-
-out  vec2  f_uv;
-flat out uint  f_ink_idx;
-flat out uint  f_bg_idx;
-flat out uint  f_ts;
-flat out uint  f_swatch_idx;
-
-void main() {
-    // Extract wide flag from bit 15 of swatch
-    bool wide = (i_swatch & 0x8000u) != 0u;
-    float cell_mult = wide ? 2.0 : 1.0;
-
-    int gc = int(i_glyph) % u_atlas_size.x;
-    int gr = int(i_glyph) / u_atlas_size.x;
-    // Wide glyphs span 2 atlas columns
-    f_uv = vec2(float(gc) + v_corner.x * cell_mult, float(gr) + v_corner.y)
-           / vec2(u_atlas_size);
-
-    // Wide glyphs span 2 cell widths on screen
-    vec2 px  = vec2(i_cell * u_cell_size)
-             + v_corner * vec2(u_cell_size) * vec2(cell_mult, 1.0);
-    vec2 ndc = px / vec2(u_viewport) * 2.0 - 1.0;
-    gl_Position = vec4(ndc.x, -ndc.y, 0.0, 1.0);
-
-    f_ink_idx    = i_ink_bg.x;
-    f_bg_idx     = i_ink_bg.y;
-    f_ts         = i_ts;
-    f_swatch_idx = i_swatch & 0x7FFFu;
-}
-")
-
-(defparameter +layered-frag+
-  (concatenate 'string
-"#version 330 core
-
-uniform sampler2D u_atlas;
-"
-+colour-functions+
-"
-in  vec2  f_uv;
-flat in uint  f_ink_idx;
-flat in uint  f_bg_idx;
-flat in uint  f_ts;
-flat in uint  f_swatch_idx;
-
-out vec4 frag_color;
-
-void main() {
-    float mask = texture(u_atlas, f_uv).r;
-    uvec4 sw   = fetch_swatch(f_swatch_idx);
-    vec4 ink   = palette_colour(sw[f_ink_idx]);
-
-    if (f_ts == 2u) {
-        // Layer 0: fully opaque on both sides
-        vec4 bg     = palette_colour(sw[f_bg_idx]);
-        frag_color  = mask > 0.5 ? ink : bg;
-    } else {
-        // Overlay layer: one side is transparent
-        float alpha = (f_ts == 0u) ? mask          // :bg  — ink on mask=1
-                                   : (1.0 - mask); // :fg  — ink on mask=0
-        frag_color  = vec4(ink.rgb, alpha);
+// Glyph G at the cell's pixel X, Y: 1 where it is inked. A cell with a line
+// size reads every glyph magnified two times (LEXTER-D114).
+uint pixel_of(uint g, int x, int y, uint w0) {
+    uint sz = (w0 >> 19) & 3u;
+    int  mh = int((w0 >> 21) & 1u);
+    int gx = x;
+    int gy = y;
+    if (sz != 0u) {
+        gx = (mh * u_glyph_size.x + x) / 2;
+        gy = (sz == 1u) ? y : ((int(sz) - 2) * u_glyph_size.y + y) / 2;
     }
+    int col = int(g % uint(u_atlas_cols));
+    int row = int(g / uint(u_atlas_cols));
+    float ink = texelFetch(u_atlas, ivec2(col * u_glyph_size.x + gx,
+                                          row * u_glyph_size.y + gy), 0).r;
+    return ink > 0.5 ? 1u : 0u;
 }
-"))
+
+void main() {
+    int x = min(int(f_local.x), u_glyph_size.x - 1);
+    int y = min(int(f_local.y), u_glyph_size.y - 1);
+    uint w0 = word(0);
+    uint w1 = word(1);
+    uint f  = w0 & 0xFFu;
+    uint slot = (w1 >> 24) & 3u;                       // the background slot
+    if (f == 0u) {                                     // the plain format
+        uint n     = min((w0 >> 8) & 7u, 6u);
+        uint types = (w0 >> 11) & 0x1Fu;               // bit i-1: glyph i is a mask
+        uint cov = 0u;                                 // a bit for each layer
+        uint k   = 0u;                                 // layers so far
+        for (uint i = 0u; i < n; i++) {
+            uint w = word(2 + int(i));
+            uint p = pixel_of(w & 0xFFFFFFu, x, y, w0) ^ ((w >> 24) & 1u);
+            if (i == 0u || ((types >> (i - 1u)) & 1u) == 0u) {
+                cov |= p << k;
+                k += 1u;
+            } else {
+                uint r  = min(((w >> 27) & 7u) + 1u, k);
+                uint R  = ((1u << r) - 1u) << (k - r);   // the r layers before it
+                uint m  = (p == 1u) ? R : 0u;
+                uint op = (w >> 25) & 3u;
+                uint res;
+                if (op == 0u)      res = cov | m;      // union
+                else if (op == 1u) res = cov & m;      // intersection
+                else if (op == 2u) res = cov ^ m;      // exclusion
+                else               res = m & ~cov;     // the mask less the coverage
+                cov = (cov & ~R) | (res & R);
+            }
+        }
+        if (((w0 >> 18) & 1u) == 1u && u_blink_off && k > 0u)
+            cov &= ~(1u << (k - 1u));                  // the topmost layer blinks
+        uint l = 0u;
+        for (uint i = 0u; i < n; i++) {                // the topmost layer wins
+            uint w = word(2 + int(i));
+            if (i == 0u || ((types >> (i - 1u)) & 1u) == 0u) {
+                if (((cov >> l) & 1u) == 1u)
+                    slot = (w >> 25) & 3u;
+                l += 1u;
+            }
+        }
+    }
+    uvec4 sw = texelFetch(u_swatches, int(w1 & 0xFFFFu));
+    int palette_slot = int((w1 >> 16) & 0xFFu);
+    if (palette_slot >= u_palette_slots)
+        palette_slot = 0;
+    frag_color = vec4(texelFetch(u_palettes, palette_slot * 256 + int(sw[slot]))) / 255.0;
+}
+")

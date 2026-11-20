@@ -2,10 +2,11 @@
 
 ;;;; OpenGL 3.3 render state and per-frame draw loop.
 ;;;;
-;;;; Two render paths:
-;;;;   Simple  — one instanced draw call, blending off.
-;;;;   Layered — up to three instanced draw calls (one per layer depth);
-;;;;             layer 0 is opaque, layers 1-2 use SRC_ALPHA blending.
+;;;; The composed grid is drawn in one instanced call, blending off: each
+;;;; instance one cell, whose record is the instance's two uvec4 attributes,
+;;;; read straight from the grid's array of records, which is the upload
+;;;; buffer (LEXTER-D107, LEXTER-D129). Only the rows whose change stamps are
+;;;; newer than those the renderer took are uploaded (LEXTER-D113).
 ;;;;
 ;;;; Colours are kept on the GPU as integers, in two texture buffers of
 ;;;; RGBA8UI texels read through usamplerBuffer (LEXTER-D109): the swatch
@@ -16,26 +17,22 @@
 ;;; Constants
 ;;; --------------------------------------------------------------------------
 
-(defconstant +default-palette-slots+ 128
-  "Palette slots in the palette store unless the renderer is told otherwise
-   (LEXTER-D92).")
-
-(defconstant +default-pane-palette-slot+ 1
-  "The palette slot of a pane that names none. Slot 0 holds the default
-   palette and is never written after the renderer is made (LEXTER-D83).")
+(defconstant +record-bytes+ lexter/manifests:+record-bytes+
+  "The bytes of one record, one instance.")
 
 ;;; --------------------------------------------------------------------------
 ;;; Render state
 ;;; --------------------------------------------------------------------------
 
 (defstruct render-state
-  simple-prog
-  layered-prog
+  cell-prog
   corner-vbo
-  simple-vao
-  simple-vbo
-  layered-vao
-  layered-vbo
+  cell-vao
+  ;; The GPU's copy of the grid's records, its size in bytes, and what was
+  ;; last uploaded to it (LEXTER-D113)
+  record-vbo
+  (record-capacity 0 :type fixnum)
+  (record-uploads (make-record-upload-state) :type record-upload-state)
   ;; The swatch store: a buffer of RGBA8UI texels, one swatch to a texel, and
   ;; what the renderer last uploaded to each of its ranges, by table
   swatch-buffer
@@ -50,10 +47,9 @@
                   :type simple-vector)
   (palette-gens (make-array +default-palette-slots+ :element-type 'fixnum :initial-element 0)
                 :type (simple-array fixnum (*)))
-  (current-palette-slot 0 :type fixnum) ; active slot for rendering
-  ;; Uniform locations for u_palette_slot
-  (simple-palette-slot-loc -1 :type fixnum)
-  (layered-palette-slot-loc -1 :type fixnum)
+  ;; Uniform locations set at every frame
+  (grid-cols-loc -1 :type fixnum)
+  (blink-off-loc -1 :type fixnum)
   ;; --- Offscreen render target (opt-in, for post-processing + screenshots) ---
   ;; When OFFSCREEN-ENABLED, render-frame draws into OFFSCREEN-FBO (an RGBA8
   ;; color texture) instead of the default framebuffer; present-offscreen then
@@ -108,13 +104,11 @@
     (gl:bind-buffer :array-buffer 0)
     vbo))
 
-;;; Simple instance layout (12 bytes):
-;;;   offset 0: int16  col         → i_cell.x
-;;;   offset 2: int16  row         → i_cell.y
-;;;   offset 4: uint32 glyph       → i_glyph
-;;;   offset 8: uint16 swatch_idx  → i_swatch
-;;;   offset 10: (pad)
-(defun %make-simple-vao (corner-vbo)
+;;; An instance is one record of 32 bytes, eight little-endian words:
+;;;   location 1  uvec4  i_w0   words 0-3: the format word, the header word,
+;;;                             and glyph words 0 and 1
+;;;   location 2  uvec4  i_w1   words 4-7: glyph words 2-5
+(defun %make-cell-vao (corner-vbo)
   (let ((vao (first (gl:gen-vertex-arrays 1)))
         (vbo (first (gl:gen-buffers 1))))
     (gl:bind-vertex-array vao)
@@ -122,55 +116,14 @@
     (gl:bind-buffer :array-buffer corner-vbo)
     (gl:vertex-attrib-pointer 0 2 :float nil 8 0)
     (gl:enable-vertex-attrib-array 0)
-    ;; Instance attributes (stride +simple-stride+ = 12)
+    ;; The record's two halves, one instance a record
     (gl:bind-buffer :array-buffer vbo)
-    (%gl:vertex-attrib-ipointer 1 2 :short          +simple-stride+ (cffi:make-pointer 0))  ; i_cell
-    (%gl:vertex-attrib-ipointer 2 1 :unsigned-int   +simple-stride+ (cffi:make-pointer 4))  ; i_glyph
-    (%gl:vertex-attrib-ipointer 3 1 :unsigned-short +simple-stride+ (cffi:make-pointer 8))  ; i_swatch
+    (%gl:vertex-attrib-ipointer 1 4 :unsigned-int +record-bytes+ (cffi:make-pointer 0))
+    (%gl:vertex-attrib-ipointer 2 4 :unsigned-int +record-bytes+ (cffi:make-pointer 16))
     (gl:enable-vertex-attrib-array 1)
     (gl:enable-vertex-attrib-array 2)
-    (gl:enable-vertex-attrib-array 3)
     (%gl:vertex-attrib-divisor 1 1)
     (%gl:vertex-attrib-divisor 2 1)
-    (%gl:vertex-attrib-divisor 3 1)
-    (gl:bind-vertex-array 0)
-    (values vao vbo)))
-
-;;; Layered instance layout (16 bytes):
-;;;   offset  0: int16  col           → i_cell.x
-;;;   offset  2: int16  row           → i_cell.y
-;;;   offset  4: uint32 glyph         → i_glyph
-;;;   offset  8: uint8  ink-idx       → i_ink_bg.x
-;;;   offset  9: uint8  bg-idx        → i_ink_bg.y
-;;;   offset 10: uint8  trans-side    → i_ts
-;;;   offset 11: uint8  (pad)
-;;;   offset 12: uint16 swatch_idx    → i_swatch
-;;;   offset 14: (pad)
-(defun %make-layered-vao (corner-vbo)
-  (let ((vao (first (gl:gen-vertex-arrays 1)))
-        (vbo (first (gl:gen-buffers 1))))
-    (gl:bind-vertex-array vao)
-    ;; Attr 0: corner (per-vertex)
-    (gl:bind-buffer :array-buffer corner-vbo)
-    (gl:vertex-attrib-pointer 0 2 :float nil 8 0)
-    (gl:enable-vertex-attrib-array 0)
-    ;; Instance attributes (stride +layered-stride+ = 16) — initial pointers at offset 0
-    (gl:bind-buffer :array-buffer vbo)
-    (%gl:vertex-attrib-ipointer 1 2 :short          +layered-stride+ (cffi:make-pointer 0))
-    (%gl:vertex-attrib-ipointer 2 1 :unsigned-int   +layered-stride+ (cffi:make-pointer 4))
-    (%gl:vertex-attrib-ipointer 3 2 :unsigned-byte  +layered-stride+ (cffi:make-pointer 8))
-    (%gl:vertex-attrib-ipointer 4 1 :unsigned-byte  +layered-stride+ (cffi:make-pointer 10))
-    (%gl:vertex-attrib-ipointer 5 1 :unsigned-short +layered-stride+ (cffi:make-pointer 12))
-    (gl:enable-vertex-attrib-array 1)
-    (gl:enable-vertex-attrib-array 2)
-    (gl:enable-vertex-attrib-array 3)
-    (gl:enable-vertex-attrib-array 4)
-    (gl:enable-vertex-attrib-array 5)
-    (%gl:vertex-attrib-divisor 1 1)
-    (%gl:vertex-attrib-divisor 2 1)
-    (%gl:vertex-attrib-divisor 3 1)
-    (%gl:vertex-attrib-divisor 4 1)
-    (%gl:vertex-attrib-divisor 5 1)
     (gl:bind-vertex-array 0)
     (values vao vbo)))
 
@@ -212,15 +165,14 @@
           "Palette slot ~d out of range (the store holds ~d)"
           slot (render-state-palette-slots rs)))
 
-(defun set-palette (rs palette &optional (slot +default-pane-palette-slot+))
+(defun set-palette (rs palette &optional (slot 1))
   "Upload PALETTE (1024 bytes: 256 x RGBA) to palette SLOT.
    This is the low-level upload; prefer upload-palette for tracked updates."
   (%check-palette-slot rs slot)
   (%write-texels (render-state-palette-buffer rs) (* slot +palette-entries+)
                  palette 0 +palette-entries+))
 
-(defun upload-palette (rs palette generation
-                       &optional (slot +default-pane-palette-slot+) (owner palette))
+(defun upload-palette (rs palette generation slot &optional (owner palette))
   "Upload PALETTE to SLOT unless the slot already holds OWNER's palette at
    GENERATION. PALETTE is 1024 bytes (256 x RGBA); GENERATION is its screen's
    palette generation; OWNER names whose palette it is, by default the palette
@@ -237,22 +189,6 @@
       (setf (aref owners slot) owner
             (aref gens slot) generation)
       t)))
-
-(defun set-active-palette-slot (rs slot)
-  "Set the active palette slot for rendering. Updates uniforms in both shaders."
-  (%check-palette-slot rs slot)
-  (unless (= slot (render-state-current-palette-slot rs))
-    (setf (render-state-current-palette-slot rs) slot)
-    ;; Update uniform in simple shader
-    (gl:use-program (render-state-simple-prog rs))
-    (let ((loc (render-state-simple-palette-slot-loc rs)))
-      (when (>= loc 0)
-        (gl:uniformi loc slot)))
-    ;; Update uniform in layered shader
-    (gl:use-program (render-state-layered-prog rs))
-    (let ((loc (render-state-layered-palette-slot-loc rs)))
-      (when (>= loc 0)
-        (gl:uniformi loc slot)))))
 
 ;;; --------------------------------------------------------------------------
 ;;; Swatches
@@ -273,16 +209,18 @@
 ;;; Uniform helpers
 ;;; --------------------------------------------------------------------------
 
-(defun %set-uniforms (prog atlas win-w win-h pixel-scale)
+(defun %set-uniforms (prog atlas win-w win-h pixel-scale palette-slots)
   "Set shader uniforms. PIXEL-SCALE multiplies the cell size for nearest-neighbor scaling."
   (gl:use-program prog)
   ;; Scale cell size by pixel-scale for integer scaling
   (gl:uniformi (gl:get-uniform-location prog "u_cell_size")
                (* (atlas-cell-width atlas) pixel-scale)
                (* (atlas-cell-height atlas) pixel-scale))
+  (gl:uniformi (gl:get-uniform-location prog "u_glyph_size")
+               (atlas-cell-width atlas) (atlas-cell-height atlas))
   (gl:uniformi (gl:get-uniform-location prog "u_viewport") win-w win-h)
-  (gl:uniformi (gl:get-uniform-location prog "u_atlas_size")
-               (atlas-cols atlas) (atlas-rows atlas))
+  (gl:uniformi (gl:get-uniform-location prog "u_atlas_cols") (atlas-cols atlas))
+  (gl:uniformi (gl:get-uniform-location prog "u_palette_slots") palette-slots)
   ;; Texture unit bindings: atlas on unit 0, swatch store on unit 1, palette
   ;; store on unit 2
   (gl:uniformi (gl:get-uniform-location prog "u_atlas") 0)
@@ -298,47 +236,33 @@
   "Create a RENDER-STATE.  A GL 3.3 core context must already be current.
    PIXEL-SCALE is an integer multiplier for nearest-neighbor scaling (1-16).
    PALETTE-SLOTS is how many palettes the palette store holds, at most 256;
-   slot 0 is given the default palette, and drawing starts in it."
+   slot 0 is given the default palette. A cell names its own slot, in its
+   header word."
   (assert (<= 1 pixel-scale 16) (pixel-scale)
           "Pixel scale must be between 1 and 16, got ~d" pixel-scale)
   (assert (<= 2 palette-slots 256) (palette-slots)
           "Palette slots must be between 2 and 256, got ~d" palette-slots)
-  (let* ((sp  (%link-program +simple-vert+  +simple-frag+))
-         (lp  (%link-program +layered-vert+ +layered-frag+))
-         (cv  (%make-corner-vbo)))
-    (multiple-value-bind (svao svbo) (%make-simple-vao  cv)
-      (multiple-value-bind (lvao lvbo) (%make-layered-vao cv)
-       (multiple-value-bind (sb st) (%make-texture-buffer +store-size+)
+  (let ((prog (%link-program +cell-vert+ +cell-frag+))
+        (cv (%make-corner-vbo)))
+    (multiple-value-bind (vao vbo) (%make-cell-vao cv)
+      (multiple-value-bind (sb st) (%make-texture-buffer +store-size+)
         (multiple-value-bind (pb pt) (%make-texture-buffer (* palette-slots +palette-entries+))
-        (%set-uniforms sp atlas win-w win-h pixel-scale)
-        (%set-uniforms lp atlas win-w win-h pixel-scale)
-        ;; Cache palette slot uniform locations and set initial slot = 0
-        (let ((simple-slot-loc (gl:get-uniform-location sp "u_palette_slot"))
-              (layered-slot-loc (gl:get-uniform-location lp "u_palette_slot")))
-          (gl:use-program sp)
-          (when (>= simple-slot-loc 0)
-            (gl:uniformi simple-slot-loc 0))
-          (gl:use-program lp)
-          (when (>= layered-slot-loc 0)
-            (gl:uniformi layered-slot-loc 0))
-          (gl:use-program 0)
+          (%set-uniforms prog atlas win-w win-h pixel-scale palette-slots)
           (let ((rs (make-render-state
-                     :simple-prog  sp  :layered-prog lp
-                     :corner-vbo   cv  :simple-vao   svao
-                     :simple-vbo   svbo :layered-vao  lvao
-                     :layered-vbo  lvbo
+                     :cell-prog prog :corner-vbo cv :cell-vao vao :record-vbo vbo
                      :swatch-buffer sb :swatch-texture st
                      :palette-buffer pb :palette-texture pt
                      :palette-slots palette-slots
                      :palette-owners (make-array palette-slots :initial-element nil)
                      :palette-gens (make-array palette-slots :element-type 'fixnum
                                                              :initial-element 0)
-                     :simple-palette-slot-loc simple-slot-loc
-                     :layered-palette-slot-loc layered-slot-loc
-                     :atlas        atlas :win-w win-w :win-h win-h
-                     :pixel-scale  pixel-scale)))
+                     :grid-cols-loc (gl:get-uniform-location prog "u_grid_cols")
+                     :blink-off-loc (gl:get-uniform-location prog "u_blink_off")
+                     :atlas atlas :win-w win-w :win-h win-h
+                     :pixel-scale pixel-scale)))
+            (gl:use-program 0)
             (set-palette rs (make-default-palette) 0)
-            rs))))))))
+            rs))))))
 
 ;;; --------------------------------------------------------------------------
 ;;; Offscreen render target (opt-in: post-processing + screenshots)
@@ -441,9 +365,31 @@
 ;;; Per-frame render
 ;;; --------------------------------------------------------------------------
 
-(defun render-frame (rs grid store)
+(defun %upload-records (rs grid)
+  "Bring the GPU's copy of GRID's records up to date: the whole array when GRID
+   is not the grid last drawn or its size has changed, and otherwise each run
+   of rows whose stamps are newer than those taken (PLAN-RECORD-UPLOADS).
+   Returns the number of spans uploaded."
+  (let ((records (display-grid-records grid))
+        (row-bytes (* (display-grid-cols grid) +record-bytes+)))
+    (multiple-value-bind (spans whole) (plan-record-uploads grid (render-state-record-uploads rs))
+      (gl:bind-buffer :array-buffer (render-state-record-vbo rs))
+      (cffi:with-pointer-to-vector-data (ptr records)
+        (if (or whole (/= (length records) (render-state-record-capacity rs)))
+            (progn
+              (%gl:buffer-data :array-buffer (length records) ptr :dynamic-draw)
+              (setf (render-state-record-capacity rs) (length records)))
+            (loop :for (first count) :in spans
+                  :do (%gl:buffer-sub-data :array-buffer (* first row-bytes) (* count row-bytes)
+                                           (cffi:inc-pointer ptr (* first row-bytes))))))
+      (gl:bind-buffer :array-buffer 0)
+      (length spans))))
+
+(defun render-frame (rs grid store &key blink-off)
   "Render one frame of GRID, whose swatch indices are global indices of
-   STORE.  Call after making the GL context current.
+   STORE, in one instanced draw of its records. BLINK-OFF is the blink phase:
+   while it is true, the topmost layer of a blinking cell is not drawn
+   (LEXTER-D94). Call after making the GL context current.
    When offscreen rendering is enabled, draws into the offscreen FBO; otherwise
    draws to the default framebuffer."
   (if (render-state-offscreen-enabled rs)
@@ -454,67 +400,28 @@
       (gl:bind-framebuffer :framebuffer 0))
   (gl:clear-color 0.0 0.0 0.0 1.0)
   (gl:clear :color-buffer-bit)
-  ;; Bring the swatch store up to date with its tables
+  ;; Bring the swatch store and the records up to date
   (upload-swatches rs store)
-  (multiple-value-bind (sdata sbytes ldata lc)
-      (build-render-data grid)
-    (declare (type fixnum sbytes))
-    (let ((atlas (render-state-atlas rs))
-          (sc (floor sbytes +simple-stride+)))
-      ;; Bind atlas texture to unit 0
-      (gl:active-texture :texture0)
-      (gl:bind-texture :texture-2d (atlas-texture-id atlas))
-      ;; Bind the swatch store to unit 1 and the palette store to unit 2
-      (gl:active-texture :texture1)
-      (gl:bind-texture :texture-buffer (render-state-swatch-texture rs))
-      (gl:active-texture :texture2)
-      (gl:bind-texture :texture-buffer (render-state-palette-texture rs))
-      ;; ---- Simple cells ------------------------------------------------
-      (when (> sc 0)
-        (gl:use-program (render-state-simple-prog rs))
-        (gl:disable :blend)
-        (gl:bind-buffer :array-buffer (render-state-simple-vbo rs))
-        (cffi:with-pointer-to-vector-data (ptr sdata)
-          (%gl:buffer-data :array-buffer sbytes ptr :stream-draw))
-        (gl:bind-vertex-array (render-state-simple-vao rs))
-        (%gl:draw-arrays-instanced :triangle-strip 0 4 sc))
-      ;; ---- Layered cells -----------------------------------------------
-      (let ((total-layered (reduce #'+ lc)))
-        (when (> total-layered 0)
-          (gl:use-program (render-state-layered-prog rs))
-          ;; Upload the full merged buffer once
-          (gl:bind-buffer :array-buffer (render-state-layered-vbo rs))
-          (let ((lbytes (* total-layered +layered-stride+)))
-            (cffi:with-pointer-to-vector-data (ptr ldata)
-              (%gl:buffer-data :array-buffer lbytes ptr :stream-draw)))
-          (gl:bind-vertex-array (render-state-layered-vao rs))
-          ;; Draw each layer depth in turn, updating attrib offsets.
-          ;; GL 3.3 has no glDrawArraysInstancedBaseInstance, so we slide
-          ;; the vertex attrib pointers to the correct byte offset instead.
-          (let ((byte-off 0))
-            (dotimes (ln 3)
-              (let ((count (aref lc ln)))
-                (when (> count 0)
-                  (if (= ln 0)
-                      (gl:disable :blend)
-                      (progn
-                        (gl:enable :blend)
-                        (gl:blend-func :src-alpha :one-minus-src-alpha)))
-                  ;; Slide attrib pointers to the current layer's slice
-                  (%gl:vertex-attrib-ipointer
-                   1 2 :short          +layered-stride+ (cffi:make-pointer (+ byte-off 0)))
-                  (%gl:vertex-attrib-ipointer
-                   2 1 :unsigned-int   +layered-stride+ (cffi:make-pointer (+ byte-off 4)))
-                  (%gl:vertex-attrib-ipointer
-                   3 2 :unsigned-byte  +layered-stride+ (cffi:make-pointer (+ byte-off 8)))
-                  (%gl:vertex-attrib-ipointer
-                   4 1 :unsigned-byte  +layered-stride+ (cffi:make-pointer (+ byte-off 10)))
-                  (%gl:vertex-attrib-ipointer
-                   5 1 :unsigned-short +layered-stride+ (cffi:make-pointer (+ byte-off 12)))
-                  (%gl:draw-arrays-instanced :triangle-strip 0 4 count)
-                  (incf byte-off (* count +layered-stride+)))))))))
+  (%upload-records rs grid)
+  (let ((prog (render-state-cell-prog rs))
+        (cells (* (display-grid-cols grid) (display-grid-rows grid))))
+    ;; Bind the atlas to unit 0, the swatch store to unit 1, the palette store
+    ;; to unit 2
+    (gl:active-texture :texture0)
+    (gl:bind-texture :texture-2d (atlas-texture-id (render-state-atlas rs)))
+    (gl:active-texture :texture1)
+    (gl:bind-texture :texture-buffer (render-state-swatch-texture rs))
+    (gl:active-texture :texture2)
+    (gl:bind-texture :texture-buffer (render-state-palette-texture rs))
+    (when (plusp cells)
+      (gl:use-program prog)
+      (gl:uniformi (render-state-grid-cols-loc rs) (display-grid-cols grid))
+      (gl:uniformi (render-state-blink-off-loc rs) (if blink-off 1 0))
+      (gl:disable :blend)
+      (gl:bind-vertex-array (render-state-cell-vao rs))
+      (%gl:draw-arrays-instanced :triangle-strip 0 4 cells)))
   (gl:bind-vertex-array 0)
-  (gl:use-program 0)))
+  (gl:use-program 0))
 
 ;;; --------------------------------------------------------------------------
 ;;; Viewport and scale update
@@ -529,8 +436,8 @@
   (resize-offscreen rs win-w win-h)
   (let ((atlas (render-state-atlas rs))
         (scale (render-state-pixel-scale rs)))
-    (%set-uniforms (render-state-simple-prog rs)  atlas win-w win-h scale)
-    (%set-uniforms (render-state-layered-prog rs) atlas win-w win-h scale)
+    (%set-uniforms (render-state-cell-prog rs) atlas win-w win-h scale
+                   (render-state-palette-slots rs))
     (gl:use-program 0)))
 
 (defun set-pixel-scale (rs scale)
@@ -541,8 +448,8 @@
   (let ((atlas (render-state-atlas rs))
         (win-w (render-state-win-w rs))
         (win-h (render-state-win-h rs)))
-    (%set-uniforms (render-state-simple-prog rs)  atlas win-w win-h scale)
-    (%set-uniforms (render-state-layered-prog rs) atlas win-w win-h scale)
+    (%set-uniforms (render-state-cell-prog rs) atlas win-w win-h scale
+                   (render-state-palette-slots rs))
     (gl:use-program 0)))
 
 (defun pixel-scale (rs)
@@ -561,17 +468,14 @@
 ;;; --------------------------------------------------------------------------
 
 (defun destroy-renderer (rs)
-  (gl:delete-program (render-state-simple-prog  rs))
-  (gl:delete-program (render-state-layered-prog rs))
-  (gl:delete-buffers (list (render-state-corner-vbo  rs)
-                           (render-state-simple-vbo  rs)
-                           (render-state-layered-vbo rs)
+  (gl:delete-program (render-state-cell-prog rs))
+  (gl:delete-buffers (list (render-state-corner-vbo rs)
+                           (render-state-record-vbo rs)
                            (render-state-swatch-buffer rs)
                            (render-state-palette-buffer rs)))
   (gl:delete-textures (list (render-state-swatch-texture rs)
                             (render-state-palette-texture rs)))
-  (gl:delete-vertex-arrays (list (render-state-simple-vao  rs)
-                                 (render-state-layered-vao rs)))
+  (gl:delete-vertex-arrays (list (render-state-cell-vao rs)))
   ;; Offscreen render target, if allocated.
   (when (render-state-offscreen-fbo rs)
     (gl:delete-framebuffers (list (render-state-offscreen-fbo rs)))

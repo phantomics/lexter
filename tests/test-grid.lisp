@@ -10,17 +10,6 @@
 (in-package #:lexter-tests)
 (in-suite grid)
 
-(defun simple-instances (grid)
-  "Build GRID's render data and return its simple instances as a list of
-(col row glyph swatch-field), the swatch field with its wide bit."
-  (multiple-value-bind (buffer byte-count) (lexter/grid:build-render-data grid)
-    (loop :for base :from 0 :below byte-count :by lexter/grid:+simple-stride+
-          :collect (flet ((u16 (at) (logior (aref buffer (+ base at))
-                                            (ash (aref buffer (+ base at 1)) 8))))
-                     (list (u16 0) (u16 2)
-                           (logior (u16 4) (ash (u16 6) 16))
-                           (u16 8))))))
-
 ;;; ------------------------------------------------------------
 ;;; Double-width glyphs  (LEXTER-O19, LEXTER-O26)
 ;;; ------------------------------------------------------------
@@ -34,18 +23,6 @@ its right cell as the continuation in the grid."
     (is (= (glyph *atlas* #x4E00) (grid-glyph *grid* 0 0)))
     (is-true (grid-wide-p *grid* 0 0))
     (is-true (grid-continuation-p *grid* 1 0))))
-
-(def-test render-data-draws-wide-glyph-once ()
-  "LEXTER-O19: the instance buffer holds one instance for a double-width
-character, with the wide bit set, and none for its right half."
-  (with-clean-terminal (:cols 10 :rows 3)
-    (write-wide 0 0)
-    (flush)
-    (let* ((instances (simple-instances *grid*))
-           (left (find-if (lambda (i) (and (= 0 (first i)) (= 0 (second i)))) instances)))
-      (assert-that instances (has-length (1- (* 10 3))))
-      (is-true left)
-      (is-true (and left (logbitp 15 (fourth left)))))))
 
 (def-test cursor-on-wide-cell-keeps-pair ()
   "LEXTER-O19: drawing the cursor on a double-width character keeps it a pair
@@ -244,22 +221,65 @@ whole grid again (LEXTER-D113)."
       (is (> (lexter/grid:row-stamp grid row) stamp)))))
 
 ;;; ------------------------------------------------------------
-;;; The first edition's renderer, over records
+;;; Uploads and clocks  (LEXTER-D113, LEXTER-O40)
 ;;; ------------------------------------------------------------
 
-(def-test reverse-and-underline-reach-the-first-edition-s-instances ()
-  "Until the renderer draws records, a plain text cell is a simple instance, a
-reversed cell a layered one in its exchanged slots, and an underline a second
-layer in the text's ink, which draws the same pixels as its union mask."
-  (with-clean-terminal (:cols 4 :rows 1)
-    (feed "A" (csi "7m") "B" (csi "0;4m") "C")
-    (flush)
-    (multiple-value-bind (sbuf sbytes lbuf counts) (lexter/grid:build-render-data *grid*)
-      (declare (ignore sbuf lbuf))
-      ;; A, and the empty cell after C
-      (is (= 2 (floor sbytes lexter/grid:+simple-stride+)))
-      (is (= 2 (aref counts 0)))
-      (is (= 1 (aref counts 1))))))
+(def-test a-renderer-takes-a-new-grid-whole ()
+  "A renderer uploads the whole of a grid it has not drawn, and of a grid it
+has drawn whose size has changed (LEXTER-D113)."
+  (let ((grid (make-test-grid :cols 4 :rows 3))
+        (state (lexter/grid:make-record-upload-state)))
+    (multiple-value-bind (spans whole) (lexter/grid:plan-record-uploads grid state)
+      (is-true whole)
+      (is (equal '((0 3)) spans)))
+    (lexter/grid:resize-grid grid 5 3)
+    (is-true (nth-value 1 (lexter/grid:plan-record-uploads grid state)))
+    (is-true (nth-value 1 (lexter/grid:plan-record-uploads (make-test-grid :cols 5 :rows 3)
+                                                          state)))))
+
+(def-test a-renderer-uploads-only-the-rows-written ()
+  "LEXTER-O40: a renderer that has taken a grid uploads again only the runs of
+rows written since, as their change stamps show, and nothing when none was;
+the grid keeps no dirty bits for a reader to clear (LEXTER-D113)."
+  (let ((grid (make-test-grid :cols 4 :rows 5))
+        (state (lexter/grid:make-record-upload-state)))
+    (lexter/grid:plan-record-uploads grid state)
+    (is (null (lexter/grid:plan-record-uploads grid state)))
+    (lexter/grid:write-text-record grid 0 1 :glyph 70)
+    (lexter/grid:write-text-record grid 3 2 :glyph 70)
+    (lexter/grid:write-text-record grid 1 4 :glyph 70)
+    (multiple-value-bind (spans whole) (lexter/grid:plan-record-uploads grid state)
+      (is-false whole)
+      (is (equal '((1 2) (4 1)) spans)))
+    (is (null (lexter/grid:plan-record-uploads grid state)))))
+
+(def-test two-renderers-take-a-grid-each-for-itself ()
+  "Each renderer keeps the stamps it took, so a row one renderer uploads is
+still new to another that has not taken it (LEXTER-D113)."
+  (let ((grid (make-test-grid :cols 4 :rows 2))
+        (first (lexter/grid:make-record-upload-state))
+        (second (lexter/grid:make-record-upload-state)))
+    (lexter/grid:plan-record-uploads grid first)
+    (lexter/grid:plan-record-uploads grid second)
+    (lexter/grid:write-text-record grid 0 1 :glyph 70)
+    (is (equal '((1 1)) (lexter/grid:plan-record-uploads grid first)))
+    (is (equal '((1 1)) (lexter/grid:plan-record-uploads grid second)))))
+
+(def-test a-row-s-clock-mask-is-derived-from-its-records ()
+  "A row's clock mask is derived from its records as the renderer takes it:
+its blink bit is set while a cell in it blinks, and cleared once none does;
+writers never write it (LEXTER-D113, LEXTER-D94)."
+  (with-clean-terminal (:cols 4 :rows 2)
+    (let ((state (lexter/grid:make-record-upload-state)))
+      (feed (csi "5m") "A" (csi "25m"))
+      (flush)
+      (lexter/grid:plan-record-uploads *grid* state)
+      (is (= lexter/grid:+clock-blink+ (aref (lexter/grid:display-grid-clock-masks *grid*) 0)))
+      (is (= 0 (aref (lexter/grid:display-grid-clock-masks *grid*) 1)))
+      (feed (csi "1;1H") "B")
+      (flush)
+      (lexter/grid:plan-record-uploads *grid* state)
+      (is (= 0 (aref (lexter/grid:display-grid-clock-masks *grid*) 0))))))
 
 (def-test the-grid-holds-records-only ()
   "LEXTER-D129: the composed grid holds its records in one array of bytes,

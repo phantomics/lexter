@@ -21,22 +21,17 @@
 ;;;; A surface is a grid with text beside its records: a rectangle that the API
 ;;;; writes (surface.lisp), and copies into the composed grid (LEXTER-D124).
 ;;;;
-;;;; Until the renderer draws records (step 6 of Phase 3), BUILD-RENDER-DATA
-;;;; turns them into the first edition's instances.
+;;;; The renderer takes the records as they are, as the instances of one draw
+;;;; (LEXTER-D107), uploading the rows whose stamps are newer than those it
+;;;; took, as PLAN-RECORD-UPLOADS decides without GL, and deriving each row's
+;;;; clock mask as it takes it (LEXTER-D113).
 
 ;;; --------------------------------------------------------------------------
-;;; Constants
+;;; Clocks
 ;;; --------------------------------------------------------------------------
 
-;; Simple instance: col(2) row(2) glyph(4) swatch(2) pad(2) = 12
-;; (glyph is 32-bit so atlas positions can exceed 65535 for very large fonts;
-;;  2 pad bytes keep the next instance's 32-bit glyph 4-byte aligned.)
-(defconstant +simple-stride+  12)
-;; Layered instance: col(2) row(2) glyph(4) ink(1) bg(1) ts(1) pad(1) swatch(2) pad(2) = 16
-(defconstant +layered-stride+ 16)
-(defconstant +max-layers+ 3
-  "The layers the first edition's layered instances draw.")
-(defconstant +swatch-slots+ 4)
+(defconstant +clock-blink+ 1
+  "The bit of a row's clock mask set when a cell in it blinks (LEXTER-D94).")
 
 ;;; --------------------------------------------------------------------------
 ;;; Change stamps
@@ -63,30 +58,17 @@
   (records (make-record-array 0) :type record-array)
   ;; The drawn rows' change stamps (LEXTER-D113)
   (stamps  (make-array 0 :element-type '(unsigned-byte 64)) :type (simple-array (unsigned-byte 64) (*)))
+  ;; The drawn rows' clock masks, which the renderer derives from the
+  ;; records as it takes each row (LEXTER-D113)
+  (clock-masks (make-array 0 :element-type '(unsigned-byte 8))
+               :type (simple-array (unsigned-byte 8) (*)))
   ;; The atlas whose glyphs the API writes by codepoint, and the palette slot
   ;; its records draw in
   (atlas nil)
-  (palette-slot 0 :type (unsigned-byte 8))
-  ;; --- The first edition's instance buffers, built from the records ---
-  (simple-buffer   nil)
-  (simple-count    0   :type fixnum)
-  (layered-buffer  nil)
-  (layered-counts  nil))  ; (simple-array fixnum (3))
+  (palette-slot 0 :type (unsigned-byte 8)))
 
-(defun %allocate-render-buffers (grid)
-  "Allocate or reallocate render buffers for GRID's current size."
-  (let ((n (* (display-grid-cols grid) (display-grid-rows grid))))
-    (setf (display-grid-simple-buffer grid)
-          (make-array (* n +simple-stride+)
-                      :element-type '(unsigned-byte 8)
-                      :initial-element 0)
-          (display-grid-simple-count grid) 0
-          (display-grid-layered-buffer grid)
-          (make-array (* n +layered-stride+ +max-layers+)
-                      :element-type '(unsigned-byte 8)
-                      :initial-element 0)
-          (display-grid-layered-counts grid)
-          (make-array +max-layers+ :element-type 'fixnum :initial-element 0))))
+(defun %clock-mask-array (rows)
+  (make-array rows :element-type '(unsigned-byte 8) :initial-element 0))
 
 (defun %stamp-array (rows)
   (make-array rows :element-type '(unsigned-byte 64) :initial-element (next-change-stamp)))
@@ -96,11 +78,10 @@
    of zeros, a blank in global swatch 0, the default colours (LEXTER-D83),
    whose API writes take glyphs from ATLAS. Every row is newer than any stamp
    a reader took before."
-  (let ((grid (%make-display-grid :cols cols :rows rows :atlas atlas
-                                  :records (make-record-array (* cols rows))
-                                  :stamps (%stamp-array rows))))
-    (%allocate-render-buffers grid)
-    grid))
+  (%make-display-grid :cols cols :rows rows :atlas atlas
+                      :records (make-record-array (* cols rows))
+                      :stamps (%stamp-array rows)
+                      :clock-masks (%clock-mask-array rows)))
 
 (defstruct (surface (:include display-grid) (:constructor %make-surface))
   "A rectangle of records with text beside them, written only through the
@@ -116,7 +97,8 @@
   (%make-surface :cols cols :rows rows :atlas atlas :palette-slot palette-slot
                  :records (make-record-array (* cols rows))
                  :text (make-text-array (* cols rows))
-                 :stamps (%stamp-array rows)))
+                 :stamps (%stamp-array rows)
+                 :clock-masks (%clock-mask-array rows)))
 
 (defun resize-surface (surface cols rows)
   "Give SURFACE COLS by ROWS cells, all empty, and new stamps in every row."
@@ -124,7 +106,8 @@
         (display-grid-rows surface) rows
         (display-grid-records surface) (make-record-array (* cols rows))
         (surface-text surface) (make-text-array (* cols rows))
-        (display-grid-stamps surface) (%stamp-array rows))
+        (display-grid-stamps surface) (%stamp-array rows)
+        (display-grid-clock-masks surface) (%clock-mask-array rows))
   surface)
 
 (declaim (inline %idx))
@@ -220,26 +203,6 @@
   "The global swatch index of the cell at COL, ROW."
   (read-record-common (display-grid-records grid) (%idx grid col row) :swatch))
 
-(defun %first-edition-layers (records index)
-  "The layers the first edition draws for record INDEX of RECORDS, a plain
-   record, as a list of (glyph selector ink-slot): each layer, and after it a
-   layer in its ink for each union mask that cuts it alone, which draws the
-   same pixels. Other masks are not drawn until the renderer draws records."
-  (multiple-value-bind (n types) (record-type-bits records index)
-    (let ((layers '()))
-      (dotimes (i (min n +plain-glyph-words+) (nreverse layers))
-        (if (or (zerop i) (not (logbitp (1- i) types)))
-            (push (list (record-glyph records index i)
-                        (record-selector records index i)
-                        (record-ink-slot records index i))
-                  layers)
-            (multiple-value-bind (operation reach) (record-mask records index i)
-              (when (and (eq operation :union) (zerop reach) layers)
-                (push (list (record-glyph records index i)
-                            (record-selector records index i)
-                            (third (first layers)))
-                      layers))))))))
-
 ;;; --------------------------------------------------------------------------
 ;;; The interim cursor
 ;;; --------------------------------------------------------------------------
@@ -270,132 +233,63 @@
     (touch-row grid row)))
 
 ;;; --------------------------------------------------------------------------
-;;; The first edition's instances, built from the records
+;;; Uploads (the renderer's decision, without GL)
 ;;; --------------------------------------------------------------------------
 
-(declaim (inline %u16-lo %u16-hi %u32-b0 %u32-b1 %u32-b2 %u32-b3))
+(defstruct (record-upload-state (:constructor make-record-upload-state ()))
+  "What a renderer last took of a grid: the grid, its size, and each row's
+   change stamp as it took it (LEXTER-D113)."
+  (grid nil)
+  (cols 0 :type fixnum)
+  (rows 0 :type fixnum)
+  (stamps (make-array 0 :element-type '(unsigned-byte 64))
+          :type (simple-array (unsigned-byte 64) (*))))
 
-(defun %u16-lo (v) (ldb (byte 8 0) v))
-(defun %u16-hi (v) (ldb (byte 8 8) v))
+(defun %derive-clock-mask (grid row)
+  "The clock mask of ROW of GRID, from its records: +CLOCK-BLINK+ when a cell
+   in it blinks (LEXTER-D94)."
+  (let ((records (display-grid-records grid))
+        (base (%idx grid 0 row)))
+    (if (loop :for col :below (display-grid-cols grid)
+              :thereis (= 1 (read-record-common records (+ base col) :blink)))
+        +clock-blink+
+        0)))
 
-;; Little-endian byte extractors for 32-bit glyph indices.
-(defun %u32-b0 (v) (ldb (byte 8 0) v))
-(defun %u32-b1 (v) (ldb (byte 8 8) v))
-(defun %u32-b2 (v) (ldb (byte 8 16) v))
-(defun %u32-b3 (v) (ldb (byte 8 24) v))
-
-(defun build-render-data (grid)
-  "Build the first edition's instance buffers from every record of GRID, until
-   the renderer draws records. A right half is passed over, its left half
-   drawn as the whole glyph; a cell of one glyph layer in ink slot 1 over
-   background slot 0 is a simple instance, and any other plain cell layered
-   instances: its first layer opaque over its background slot, the rest
-   transparent where their selectors leave them, each union mask that cuts
-   one layer drawn as a layer in that layer's ink, and other masks and blink
-   not drawn. A record of another format is a blank.
-   Returns (values simple-buffer simple-byte-count layered-buffer layered-layer-counts).
-   The returned buffers are the grid's cached buffers - do NOT modify them."
-  (let* ((cols   (display-grid-cols grid))
-         (rows   (display-grid-rows grid))
-         (records (display-grid-records grid))
-         (sbuf   (display-grid-simple-buffer grid))
-         (lbuf   (display-grid-layered-buffer grid))
-         (lc     (display-grid-layered-counts grid))
-         (si     0)   ; simple buffer write index
-         (sc     0)   ; simple cell count
-         ;; Layer write indices: one per layer, offset into lbuf
-         (li     (make-array +max-layers+ :element-type 'fixnum :initial-element 0)))
-    (declare (type fixnum si sc)
-             (type record-array records)
-             (type (simple-array (unsigned-byte 8) (*)) sbuf lbuf)
-             (type (simple-array fixnum (*)) lc li))
-    (dotimes (i +max-layers+) (setf (aref lc i) 0))
-    (let ((layer-base (* cols rows +layered-stride+)))
-      (dotimes (ln +max-layers+)
-        (setf (aref li ln) (* ln layer-base))))
-    (labels ((simple (col row glyph swatch)
-               (setf (aref sbuf si)       (%u16-lo col)
-                     (aref sbuf (+ si 1)) (%u16-hi col)
-                     (aref sbuf (+ si 2)) (%u16-lo row)
-                     (aref sbuf (+ si 3)) (%u16-hi row)
-                     (aref sbuf (+ si 4)) (%u32-b0 glyph)
-                     (aref sbuf (+ si 5)) (%u32-b1 glyph)
-                     (aref sbuf (+ si 6)) (%u32-b2 glyph)
-                     (aref sbuf (+ si 7)) (%u32-b3 glyph)
-                     (aref sbuf (+ si 8)) (%u16-lo swatch)
-                     (aref sbuf (+ si 9)) (%u16-hi swatch))
-               (incf si +simple-stride+)
-               (incf sc))
-             (layer (ln col row glyph ink bg ts swatch)
-               (let ((idx (aref li ln)))
-                 (setf (aref lbuf idx)       (%u16-lo col)
-                       (aref lbuf (+ idx 1)) (%u16-hi col)
-                       (aref lbuf (+ idx 2)) (%u16-lo row)
-                       (aref lbuf (+ idx 3)) (%u16-hi row)
-                       (aref lbuf (+ idx 4)) (%u32-b0 glyph)
-                       (aref lbuf (+ idx 5)) (%u32-b1 glyph)
-                       (aref lbuf (+ idx 6)) (%u32-b2 glyph)
-                       (aref lbuf (+ idx 7)) (%u32-b3 glyph)
-                       (aref lbuf (+ idx 8)) ink
-                       (aref lbuf (+ idx 9)) bg
-                       (aref lbuf (+ idx 10)) ts
-                       (aref lbuf (+ idx 11)) 0
-                       (aref lbuf (+ idx 12)) (%u16-lo swatch)
-                       (aref lbuf (+ idx 13)) (%u16-hi swatch))
-                 (incf (aref li ln) +layered-stride+)
-                 (incf (aref lc ln))))
-             (layered (index col row sw background)
-               ;; Any other plain cell: layered instances, the first layer
-               ;; opaque over the background slot
-               (let ((layers (%first-edition-layers records index)))
-                 (if (and (zerop background) (null (rest layers))
-                          (or (null layers) (equal '(0 1) (rest (first layers)))))
-                     (simple col row (if layers (first (first layers)) 0) sw)
-                     (progn
-                       (destructuring-bind (&optional (glyph 0) (selector 0) (ink background))
-                           (first layers)
-                         ;; Layer 0 is opaque: its ink where it covers, the
-                         ;; background slot elsewhere
-                         (if (zerop selector)
-                             (layer 0 col row glyph ink background 2 sw)
-                             (layer 0 col row glyph background ink 2 sw)))
-                       (loop :for (glyph selector ink) :in (rest layers)
-                             :for ln :from 1 :below +max-layers+
-                             :do (layer ln col row glyph ink 0
-                                        (if (zerop selector) 0 1) sw)))))))
+(defun plan-record-uploads (grid state)
+  "The rows of GRID that a renderer whose last uploads STATE records must
+   upload, as a list of spans (first-row count), and STATE updated to hold
+   them as taken: every row when GRID is not the grid STATE last took or its
+   size has changed, and otherwise each run of rows whose change stamps are
+   newer than those taken (LEXTER-D113). The clock mask of each row taken is
+   derived from its records. The second value is true when the whole grid is
+   to be uploaded."
+  (let* ((rows (display-grid-rows grid))
+         (cols (display-grid-cols grid))
+         (stamps (display-grid-stamps grid))
+         (whole (not (and (eq grid (record-upload-state-grid state))
+                          (= cols (record-upload-state-cols state))
+                          (= rows (record-upload-state-rows state))))))
+    (when whole
+      (setf (record-upload-state-grid state) grid
+            (record-upload-state-cols state) cols
+            (record-upload-state-rows state) rows
+            (record-upload-state-stamps state)
+            (make-array rows :element-type '(unsigned-byte 64) :initial-element 0)))
+    (let ((taken (record-upload-state-stamps state))
+          (spans '())
+          (start nil))
       (dotimes (row rows)
-        (dotimes (col cols)
-          (let ((index (%idx grid col row)))
-            (multiple-value-bind (format wide right-half swatch background)
-                (read-record-common records index :format :wide :right-half :swatch :background-slot)
-              (unless (and (= wide 1) (= right-half 1))
-                ;; The wide flag rides in bit 15 of the swatch
-                (let ((sw (if (= wide 1) (logior swatch #x8000) swatch)))
-                  (if (not (eq format :plain))
-                      (simple col row 0 sw)
-                      ;; Most cells are text: no glyph, or one layer in ink
-                      ;; slot 1 over background slot 0, drawn simple
-                      (multiple-value-bind (n glyph selector ink)
-                          (read-plain-record records index :glyph-count
-                                             (:g0 :glyph) (:g0 :selector) (:g0 :ink-slot))
-                        (cond ((and (zerop background) (zerop n))
-                               (simple col row 0 sw))
-                              ((and (zerop background) (= n 1) (zerop selector) (= ink 1))
-                               (simple col row glyph sw))
-                              (t (layered index col row sw background))))))))))))
-    ;; Compact layered data: move each layer's data to be contiguous
-    (let ((layer-max (* cols rows +layered-stride+))
-          (dst (* (aref lc 0) +layered-stride+)))
-      (loop :for ln :from 1 :below +max-layers+
-            :for count := (aref lc ln)
-            :when (> count 0)
-              :do (let ((src (* ln layer-max))
-                        (len (* count +layered-stride+)))
-                    (replace lbuf lbuf :start1 dst :end1 (+ dst len)
-                                       :start2 src :end2 (+ src len))
-                    (incf dst len))))
-    (setf (display-grid-simple-count grid) sc)
-    (values sbuf (* sc +simple-stride+) lbuf lc)))
+        (let ((newer (or whole (> (aref stamps row) (aref taken row)))))
+          (when newer
+            (setf (aref taken row) (aref stamps row)
+                  (aref (display-grid-clock-masks grid) row) (%derive-clock-mask grid row))
+            (unless start (setf start row)))
+          (when (and start (not newer))
+            (push (list start (- row start)) spans)
+            (setf start nil))))
+      (when start
+        (push (list start (- rows start)) spans))
+      (values (nreverse spans) whole))))
 
 ;;; --------------------------------------------------------------------------
 ;;; Resize
@@ -412,7 +306,8 @@
     (setf (display-grid-cols grid) new-cols
           (display-grid-rows grid) new-rows
           (display-grid-records grid) new
-          (display-grid-stamps grid) (%stamp-array new-rows))
+          (display-grid-stamps grid) (%stamp-array new-rows)
+          (display-grid-clock-masks grid) (%clock-mask-array new-rows))
     (dotimes (row new-rows)
       (dotimes (col new-cols)
         (if (and (< row old-rows) (< col old-cols))
@@ -424,5 +319,4 @@
       (dotimes (row (min old-rows new-rows))
         (when (wide-left-p grid (1- new-cols) row)
           (patch-record-common new (%idx grid (1- new-cols) row) :wide 0))))
-    (%allocate-render-buffers grid)
     (touch-all-rows grid)))

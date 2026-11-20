@@ -306,3 +306,75 @@ replaced, as TERMINAL-RESET does, and returns the range when it is destroyed."
       (is (eq table (lexter/swatches:range-owner store 1)))
       (lexter/panes:pane-destroy pane)
       (is (null (lexter/swatches:range-owner store 1))))))
+
+;;; ------------------------------------------------------------
+;;; Palette slots  (LEXTER-D92)
+;;; ------------------------------------------------------------
+
+(def-test palette-slots-are-handed-out-from-1 ()
+  "The allocator hands out the lowest free slot from 1, never slot 0, which
+holds the default palette, and hands a slot given back out again (LEXTER-D92)."
+  (let ((slots (lexter/swatches:make-palette-slots :count 4)))
+    (is (equal '(1 2 3) (loop :for owner :in '(:a :b :c)
+                              :collect (lexter/swatches:allocate-palette-slot slots owner))))
+    (lexter/swatches:release-palette-slot slots 2)
+    (is (null (lexter/swatches:palette-slot-owner slots 2)))
+    (is (= 2 (lexter/swatches:allocate-palette-slot slots :d)))
+    (is (eq :d (lexter/swatches:palette-slot-owner slots 2)))))
+
+(def-test a-full-store-gives-the-default-palette-s-slot ()
+  "When every slot is taken, a terminal is given slot 0 and draws in the
+default palette, the interim rule while LEXTER-O50 is open; giving back slot 0
+frees nothing (LEXTER-D92)."
+  (let ((slots (lexter/swatches:make-palette-slots :count 2)))
+    (is (= 1 (lexter/swatches:allocate-palette-slot slots :a)))
+    (is (= 0 (lexter/swatches:allocate-palette-slot slots :b)))
+    (lexter/swatches:release-palette-slot slots 0)
+    (is (eq :a (lexter/swatches:palette-slot-owner slots 1)))))
+
+(def-test a-terminal-takes-and-returns-a-palette-slot ()
+  "A terminal pane takes a palette slot from its compositor's allocator when
+its screen is made, draws in it and reports it with its palette, takes one
+again when its screen is replaced, and gives it back when it is destroyed,
+as it does its swatch range (LEXTER-D92)."
+  (let* ((pane (make-instance 'lexter/panes:uterm-pane :width 10 :height 3))
+         (comp (make-test-compositor pane))
+         (slots (lexter/panes:compositor-palette-slots comp))
+         (atlas (make-test-atlas)))
+    (lexter/panes:pane-initialize pane atlas)
+    (is (= 1 (lexter/panes:vt-pane-drawn-palette-slot pane)))
+    (is (eq pane (lexter/swatches:palette-slot-owner slots 1)))
+    (is (= 1 (nth-value 2 (lexter/panes:pane-palette pane))))
+    (lexter/panes:vt-pane-init-screen pane atlas)
+    (is (= 1 (lexter/panes:vt-pane-drawn-palette-slot pane)))
+    (lexter/panes:pane-destroy pane)
+    (is (null (lexter/swatches:palette-slot-owner slots 1)))))
+
+(def-test a-pane-that-names-a-slot-takes-none ()
+  "A pane that names a palette slot draws in it and takes none from the
+allocator, so that panes can share a palette; the pane does not own it
+(LEXTER-D92)."
+  (let* ((pane (make-instance 'lexter/panes:uterm-pane :width 10 :height 3 :palette-slot 5))
+         (comp (make-test-compositor pane))
+         (slots (lexter/panes:compositor-palette-slots comp)))
+    (lexter/panes:pane-initialize pane (make-test-atlas))
+    (is (= 5 (lexter/panes:vt-pane-drawn-palette-slot pane)))
+    (is (null (lexter/swatches:palette-slot-owner slots 1)))
+    (is (null (lexter/swatches:palette-slot-owner slots 5)))))
+
+(def-test a-terminal-s-records-name-its-palette-slot ()
+  "The records of a terminal pane's rows name the palette slot it draws in, so
+that each pane draws in its own palette within the one composed grid
+(LEXTER-D92, LEXTER-D107)."
+  (let* ((pane (make-instance 'lexter/panes:uterm-pane :width 4 :height 1))
+         (other (make-instance 'lexter/panes:uterm-pane :col 4 :width 4 :height 1))
+         (comp (make-test-compositor pane other))
+         (grid (make-test-grid :cols 8 :rows 1))
+         (atlas (make-test-atlas)))
+    (declare (ignore comp))
+    (lexter/panes:pane-initialize pane atlas)
+    (lexter/panes:pane-initialize other atlas)
+    (lexter/panes:pane-flush pane grid)
+    (lexter/panes:pane-flush other grid)
+    (is (= 1 (getf (grid-record grid 0 0) :palette-slot)))
+    (is (= 2 (getf (grid-record grid 4 0) :palette-slot)))))

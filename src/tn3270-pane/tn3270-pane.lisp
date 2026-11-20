@@ -118,7 +118,8 @@
       (lexter/model:flush-to-display
        (lexter/tn3270:screen-model screen) grid
        :atlas atlas
-       :palette-slot lexter/renderer:+default-pane-palette-slot+
+       ;; Its colours are the default palette's, slot 0 (LEXTER-D92)
+       :palette-slot 0
        :col-offset (lexter/panes:pane-col pane)
        :row-offset (lexter/panes:pane-row pane)
        :cursor-blink-on lexter/panes::*cursor-blink-on*))))

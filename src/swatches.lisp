@@ -44,6 +44,10 @@
 (defconstant +palette-bytes+ (* +palette-entries+ 4)
   "Bytes in one palette: an RGBA8 texel for each colour.")
 
+(defconstant +default-palette-slots+ 128
+  "Palette slots in the palette store unless the configuration sets another
+   number (LEXTER-D92).")
+
 ;;; --------------------------------------------------------------------------
 ;;; The default palette
 ;;; --------------------------------------------------------------------------
@@ -342,3 +346,46 @@
             (setf (aref ids r) (swatch-table-id table)
                   (aref versions r) (swatch-table-version table)
                   (aref counts r) used)))))))
+
+;;; --------------------------------------------------------------------------
+;;; Palette slots
+;;; --------------------------------------------------------------------------
+;;;
+;;; One allocator hands out the palette store's slots from 1 upwards, to
+;;; terminals as they are made, which give them back when they go away
+;;; (LEXTER-D92). Slot 0 holds the default palette and is never handed out.
+;;; When no slot is free a terminal is given slot 0 and draws in the default
+;;; palette: an interim rule, while what a full store does is LEXTER-O50.
+
+(defstruct (palette-slots (:constructor %make-palette-slots))
+  "The palette store's slots, and the owner of each one handed out."
+  (owners (make-array +default-palette-slots+ :initial-element nil) :type simple-vector))
+
+(defun make-palette-slots (&key (count +default-palette-slots+))
+  "An allocator of the COUNT slots of a palette store, none handed out."
+  (assert (<= 2 count 256) (count) "Palette slots must be between 2 and 256, got ~d" count)
+  (%make-palette-slots :owners (make-array count :initial-element nil)))
+
+(defun palette-slot-count (slots)
+  "How many slots the store of SLOTS holds, slot 0 among them."
+  (length (palette-slots-owners slots)))
+
+(defun allocate-palette-slot (slots owner)
+  "Hand OWNER the lowest free slot of SLOTS, 1 or above, and return it; or 0,
+   the default palette's, when every slot is taken (LEXTER-O50)."
+  (let ((owners (palette-slots-owners slots)))
+    (loop :for slot :from 1 :below (length owners)
+          :unless (aref owners slot)
+            :do (setf (aref owners slot) owner)
+                (return slot)
+          :finally (return 0))))
+
+(defun release-palette-slot (slots slot)
+  "Give SLOT back to SLOTS, to be handed out again; slot 0 is never taken."
+  (when (plusp slot)
+    (setf (aref (palette-slots-owners slots) slot) nil))
+  slot)
+
+(defun palette-slot-owner (slots slot)
+  "The owner of SLOT of SLOTS, or NIL when it is free."
+  (aref (palette-slots-owners slots) slot))

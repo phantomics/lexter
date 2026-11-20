@@ -70,13 +70,20 @@
                 :initform nil
                 :type boolean
                 :documentation "Has pane-initialize been called?")
-   ;; Palette slot for GPU paging (NIL = the renderer's default pane slot)
+   ;; The palette slot the terminal draws in (LEXTER-D92)
    (palette-slot :initarg :palette-slot
                  :accessor vt-pane-palette-slot
                  :initform nil
-                 :documentation "GPU palette slot index, from 1 to the store's last slot,
-                  or NIL for the renderer's default pane slot. Slot 0 holds the
-                  default palette and is never uploaded to.")
+                 :documentation "A palette slot the pane names, from 1 to the store's
+                  last, so that panes may share one palette; the pane does not own
+                  it. NIL for the slot the compositor's allocator gives the
+                  terminal.")
+   (allocated-palette-slot :accessor vt-pane-allocated-palette-slot
+                           :initform 0
+                           :documentation "The slot the compositor's allocator gave
+                            the terminal, given back with its swatch range; 0, the
+                            default palette, when none was free or no compositor
+                            draws the pane.")
    ;; I/O buffers
    (read-buffer :accessor vt-pane-read-buffer
                 :initform (make-array 4096 :element-type '(unsigned-byte 8))
@@ -193,6 +200,11 @@
    share; a screen made again, as TERMINAL-RESET makes it, first returns the
    old table's ranges (LEXTER-DRAFT-cell-model-revision-D24)."
   (%release-pane-swatches pane)
+  (let ((slots (palette-slots-of pane)))
+    (setf (vt-pane-allocated-palette-slot pane)
+          (if (and slots (null (vt-pane-palette-slot pane)))
+              (lexter/swatches:allocate-palette-slot slots pane)
+              0)))
   (let* ((width (content-width pane))
          (height (content-height pane))
          (store (swatch-store-of pane))
@@ -236,21 +248,26 @@
       (lexter/model:flush-to-display
        screen grid
        :atlas (and handler (lexter/vt-handler:vt-handler-atlas handler))
-       :palette-slot (or (vt-pane-palette-slot pane)
-                         lexter/renderer:+default-pane-palette-slot+)
+       :palette-slot (vt-pane-drawn-palette-slot pane)
        :col-offset (pane-col pane)
        :row-offset (content-row pane)
        :cursor-blink-on *cursor-blink-on*))))
 
+(defun vt-pane-drawn-palette-slot (pane)
+  "The palette slot PANE's terminal draws in: the slot the pane names, or else
+   the one its allocator gave it (LEXTER-D92)."
+  (or (vt-pane-palette-slot pane) (vt-pane-allocated-palette-slot pane)))
+
 (defmethod pane-palette ((pane vt-pane))
-  "Return the terminal's palette for GPU upload with optional slot.
+  "Return the terminal's palette for GPU upload, its generation, and the slot
+   it draws in.
    The active screen owns the palette, so the alternate buffer's palette is used
    while it is active and the primary's is restored on exit."
   (let ((screen (vt-pane-active-screen pane)))
     (when screen
       (values (lexter/model:screen-palette screen)
               (lexter/model:screen-palette-generation screen)
-              (vt-pane-palette-slot pane)))))
+              (vt-pane-drawn-palette-slot pane)))))
 
 (defmethod scroll-state ((pane vt-pane))
   "Return scroll state from the active screen's scrollback model.
@@ -404,10 +421,15 @@
       (lexter/model:mark-screen-dirty screen))))
 
 (defun %release-pane-swatches (pane)
-  "Return the ranges of the swatch table of PANE's terminal, if it has one."
-  (let ((screen (vt-pane-screen pane)))
+  "Return the ranges of the swatch table of PANE's terminal, if it has one,
+   and the palette slot its allocator gave it (LEXTER-D92)."
+  (let ((screen (vt-pane-screen pane))
+        (slots (palette-slots-of pane)))
     (when screen
-      (lexter/swatches:release-swatch-table (lexter/model:screen-swatches screen)))))
+      (lexter/swatches:release-swatch-table (lexter/model:screen-swatches screen)))
+    (when slots
+      (lexter/swatches:release-palette-slot slots (vt-pane-allocated-palette-slot pane)))
+    (setf (vt-pane-allocated-palette-slot pane) 0)))
 
 (defmethod pane-destroy ((pane vt-pane))
   "Destroy the terminal's backend connection, and return its swatch table's

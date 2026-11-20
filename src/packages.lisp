@@ -156,13 +156,12 @@
            #:row-stamp
            #:touch-row
            #:touch-all-rows
-           ;; Render data
-           #:build-render-data
-           ;; Constants
-           #:+max-layers+
-           #:+swatch-slots+
-           #:+simple-stride+
-           #:+layered-stride+))
+           ;; Uploads and clocks (LEXTER-D113)
+           #:record-upload-state
+           #:make-record-upload-state
+           #:plan-record-uploads
+           #:display-grid-clock-masks
+           #:+clock-blink+))
 
 (defpackage #:lexter/surface
   (:use #:cl)
@@ -230,21 +229,27 @@
            ;; Uploads
            #:swatch-upload-records
            #:make-swatch-upload-records
-           #:plan-swatch-uploads))
+           #:plan-swatch-uploads
+           ;; Palette slots (LEXTER-D92)
+           #:+default-palette-slots+
+           #:palette-slots
+           #:make-palette-slots
+           #:palette-slot-count
+           #:allocate-palette-slot
+           #:release-palette-slot
+           #:palette-slot-owner))
 
 (defpackage #:lexter/shaders
   (:use #:cl)
-  (:export #:+simple-vert+
-           #:+simple-frag+
-           #:+layered-vert+
-           #:+layered-frag+))
+  (:export #:+cell-vert+
+           #:+cell-frag+))
 
 (defpackage #:lexter/renderer
   (:use #:cl #:lexter/atlas #:lexter/grid #:lexter/shaders)
   (:import-from #:lexter/swatches
                 #:+store-size+ #:+palette-entries+ #:make-default-palette
                 #:swatch-upload-records #:make-swatch-upload-records
-                #:plan-swatch-uploads)
+                #:plan-swatch-uploads #:+default-palette-slots+)
   (:export #:make-renderer
            #:render-state
            #:render-state-atlas
@@ -253,11 +258,9 @@
            #:render-state-pixel-scale
            #:set-palette
            #:upload-palette
-           #:set-active-palette-slot
            #:upload-swatches
            #:render-state-palette-slots
            #:+default-palette-slots+
-           #:+default-pane-palette-slot+
            #:render-frame
            #:update-viewport
            #:set-pixel-scale

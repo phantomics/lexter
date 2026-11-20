@@ -76,16 +76,14 @@ screen slot, which holds the primary screen while the alternate one is shown
   (is-false (search "unix-terminal-screen"
                     (uiop:read-file-string (source-path "src/origin-impulse.lisp")))))
 
-(def-test render-data-claims-no-incremental-rebuild ()
-  "LEXTER-O40: building the render data takes no flag it ignores and claims no
-incremental rebuild of dirty rows, since it rebuilds every instance."
-  (is-false (member "FORCE-FULL"
-                    (sb-introspect:function-lambda-list #'lexter/grid:build-render-data)
-                    :key (lambda (x) (and (symbolp x) (symbol-name x)))
-                    :test #'equal))
-  (is-false (search "dirty rows"
-                    (or (documentation 'lexter/grid:build-render-data 'function) "")
-                    :test #'char-equal)))
+(def-test the-first-edition-s-renderer-is-gone ()
+  "LEXTER-D107: the grid is drawn from its records in one call, so neither the
+first edition's instances nor its simple and layered shaders remain, nor the
+uniform palette slot that every cell once shared (LEXTER-D92)."
+  (is (null (find-symbol "BUILD-RENDER-DATA" '#:lexter/grid)))
+  (dolist (name '("+SIMPLE-FRAG+" "+LAYERED-FRAG+" "+SIMPLE-VERT+" "+LAYERED-VERT+"))
+    (is (null (find-symbol name '#:lexter/shaders)) "~a" name))
+  (is (null (find-symbol "SET-ACTIVE-PALETTE-SLOT" '#:lexter/renderer))))
 
 (def-test terminal-modes-have-one-home ()
   "LEXTER-D78: the VT handler is the one home of terminal modes, so the screen

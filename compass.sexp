@@ -8,7 +8,8 @@
  :doc-directory "doc/"
  :federation ((:namespace "COMPASS" :path "../../lisp/compass")
               (:namespace "CLASSIC" :path "../../lisp/classic")
-              (:namespace "ORIGIN" :path "../../lisp/origin"))
+              (:namespace "ORIGIN" :path "../../lisp/origin")
+              (:namespace "CLVT" :path "../../lisp/cl-vt"))
  :commands ((:name :test-mouse :repl "(asdf:test-system \"lexter/mouse-tests\")"
              :doc "Run the mouse-reporting tests (no display needed)")
             (:name :test-origin :repl "(asdf:test-system \"lexter/origin-tests\")"

@@ -43,10 +43,6 @@
 ;;; VT handler structure
 ;;; --------------------------------------------------------------------------
 
-(defconstant +max-osc-length+ 4096
-  "The longest operating-system command the handler keeps; the rest of a
-   longer one is dropped (LEXTER-D68).")
-
 (defstruct (vt-handler (:constructor %make-vt-handler))
   "Handler that connects cl-vt parser to terminal model."
   ;; The terminal screen model
@@ -87,9 +83,6 @@
   (callback        nil :type (or null function))
   ;; Tab stops (bit vector, 1 = tab stop at that column)
   (tab-stops       nil :type (or null simple-bit-vector))
-  ;; OSC string accumulator, which stops growing at +MAX-OSC-LENGTH+
-  (osc-string      (make-array 0 :element-type 'character :adjustable t :fill-pointer 0)
-                   :type string)
   ;; Window title (set via OSC)
   (window-title    ""  :type string)
   ;; UTF-8 decoding state
@@ -207,8 +200,9 @@
 ;;; --------------------------------------------------------------------------
 
 (defun dispatch-action (handler parser action byte)
-  "Dispatch a parser action to the appropriate handler."
-  (declare (ignore parser))
+  "Dispatch a parser action to the appropriate handler. An operating-system
+   command is read whole when it ends, from the parser's buffer, which holds
+   its first 512 bytes (CLVT-DRAFT-osc-strings-D4, LEXTER-D68)."
   (when *debug-vt*
     (format t "~&[DISPATCH] action=~S byte=~D (#x~X)~%" action byte byte))
   (case action
@@ -216,12 +210,7 @@
     (:execute     (handle-execute handler byte))
     (:csi-dispatch (handle-csi-with-final handler byte))
     (:esc-dispatch (handle-esc handler byte))
-    (:osc-start   (setf (fill-pointer (vt-handler-osc-string handler)) 0))
-    (:osc-put     (let ((osc (vt-handler-osc-string handler)))
-                    ;; The host cannot make it grow without bound (LEXTER-D68)
-                    (when (< (length osc) +max-osc-length+)
-                      (vector-push-extend (code-char byte) osc))))
-    (:osc-end     (handle-osc handler))
+    (:osc-end     (handle-osc handler (%osc-text handler (cl-vt:vt-parser-osc-bytes parser))))
     (otherwise    nil)))
 
 ;;; --------------------------------------------------------------------------
@@ -312,6 +301,56 @@
            ;; Stay at right edge
            (set-cursor-position screen (1- cols) row)))))))
 
+(defun %utf8-step (byte needed codepoint)
+  "Take BYTE into a UTF-8 decoder whose state is NEEDED, the continuation
+   bytes still expected, and CODEPOINT, the value so far. Return three values:
+   the codepoint BYTE completes, or NIL; and the new NEEDED and CODEPOINT. A
+   continuation byte that no lead byte expects, and a byte that cannot begin a
+   sequence, are passed over; a new lead byte or an ASCII byte abandons a
+   sequence left incomplete. A value beyond Unicode, or a surrogate, completes
+   as U+FFFD, so that no host reaches the values above U+10FFFF where Lexter
+   names its generated glyphs (LEXTER-D68, LEXTER-D89). Printed text and
+   operating-system commands are decoded alike (CLVT-DRAFT-osc-strings-D3)."
+  (cond
+    ;; Continuation byte (10xxxxxx)
+    ((= (logand byte #xC0) #x80)
+     (if (plusp needed)
+         (let ((value (logior (ash codepoint 6) (logand byte #x3F)))
+               (needed (1- needed)))
+           (if (zerop needed)
+               (values (if (or (> value #x10FFFF) (<= #xD800 value #xDFFF))
+                           #xFFFD
+                           value)
+                       0 0)
+               (values nil needed value)))
+         (values nil needed codepoint)))
+    ;; ASCII (0xxxxxxx)
+    ((< byte #x80) (values byte 0 0))
+    ;; Lead bytes of 2, 3, and 4 bytes
+    ((= (logand byte #xE0) #xC0) (values nil 1 (logand byte #x1F)))
+    ((= (logand byte #xF0) #xE0) (values nil 2 (logand byte #x0F)))
+    ((= (logand byte #xF8) #xF0) (values nil 3 (logand byte #x07)))
+    ;; A byte that cannot begin a sequence
+    (t (values nil needed codepoint))))
+
+(defun %osc-text (handler bytes)
+  "Decode BYTES, an operating-system command's data, as HANDLER decodes
+   printed text: through the CP437 table in CP437 mode, and otherwise as UTF-8,
+   dropping a character that the parser's limit cut short."
+  (if (eq (vt-handler-encoding handler) :cp437)
+      (let ((table (or (vt-handler-cp437-table handler)
+                       lexter/telnet:+cp437-to-unicode+)))
+        (map 'string (lambda (byte) (code-char (aref table byte))) bytes))
+      (let ((out (make-string-output-stream))
+            (needed 0)
+            (codepoint 0))
+        (loop :for byte :across bytes
+              :do (multiple-value-bind (done next value) (%utf8-step byte needed codepoint)
+                    (setf needed next codepoint value)
+                    (when done
+                      (write-char (code-char done) out))))
+        (get-output-stream-string out))))
+
 (defun handle-print (handler byte)
   "Handle a printable byte, decoding UTF-8 sequences into codepoints.
    In CP437 mode, bytes are translated directly via the CP437 table."
@@ -329,50 +368,14 @@
   ;; Ignore DEL (0x7F) - it should not reach here but just in case
   (when (= byte #x7F)
     (return-from handle-print))
-  (cond
-    ;; Continuation byte (10xxxxxx)?
-    ((= (logand byte #xC0) #x80)
-     (if (> (vt-handler-utf8-bytes-needed handler) 0)
-         ;; Expected continuation: accumulate
-         (progn
-           (setf (vt-handler-utf8-codepoint handler)
-                 (logior (ash (vt-handler-utf8-codepoint handler) 6)
-                         (logand byte #x3F)))
-           (decf (vt-handler-utf8-bytes-needed handler))
-           ;; If complete, print it: a value beyond Unicode or a surrogate is
-           ;; U+FFFD, so that no host reaches the values above U+10FFFF where
-           ;; Lexter names its generated glyphs (LEXTER-D68, LEXTER-D89)
-           (when (zerop (vt-handler-utf8-bytes-needed handler))
-             (let ((codepoint (vt-handler-utf8-codepoint handler)))
-               (%print-codepoint handler
-                                 (if (or (> codepoint #x10FFFF)
-                                         (<= #xD800 codepoint #xDFFF))
-                                     #xFFFD
-                                     codepoint)))))
-         ;; Unexpected continuation byte - skip it
-         (when *debug-vt*
-           (format t "~&[PRINT] Unexpected UTF-8 continuation byte~%"))))
-    ;; ASCII (0xxxxxxx)?
-    ((< byte #x80)
-     ;; Reset any pending UTF-8 state and print directly
-     (setf (vt-handler-utf8-bytes-needed handler) 0)
-     (%print-codepoint handler byte))
-    ;; 2-byte sequence start (110xxxxx)?
-    ((= (logand byte #xE0) #xC0)
-     (setf (vt-handler-utf8-codepoint handler) (logand byte #x1F)
-           (vt-handler-utf8-bytes-needed handler) 1))
-    ;; 3-byte sequence start (1110xxxx)?
-    ((= (logand byte #xF0) #xE0)
-     (setf (vt-handler-utf8-codepoint handler) (logand byte #x0F)
-           (vt-handler-utf8-bytes-needed handler) 2))
-    ;; 4-byte sequence start (11110xxx)?
-    ((= (logand byte #xF8) #xF0)
-     (setf (vt-handler-utf8-codepoint handler) (logand byte #x07)
-           (vt-handler-utf8-bytes-needed handler) 3))
-    ;; Invalid UTF-8 lead byte - ignore
-    (t
-     (when *debug-vt*
-       (format t "~&[PRINT] Invalid UTF-8 lead byte: ~D~%" byte)))))
+  (multiple-value-bind (codepoint needed value)
+      (%utf8-step byte
+                  (vt-handler-utf8-bytes-needed handler)
+                  (vt-handler-utf8-codepoint handler))
+    (setf (vt-handler-utf8-bytes-needed handler) needed
+          (vt-handler-utf8-codepoint handler) value)
+    (when codepoint
+      (%print-codepoint handler codepoint))))
 
 ;;; --------------------------------------------------------------------------
 ;;; C0 control handlers
@@ -1026,10 +1029,10 @@
       (multiple-value-bind (r g b) (%parse-osc-color spec)
         (when r (%osc-set-palette-entry handler palette-index r g b))))))
 
-(defun handle-osc (handler)
-  "Handle an OSC sequence (window title and palette control)."
-  (let* ((str (vt-handler-osc-string handler))
-         (semi-pos (position #\; str))
+(defun handle-osc (handler str)
+  "Handle the operating-system command STR, decoded (window title and palette
+   control)."
+  (let* ((semi-pos (position #\; str))
          (ps (parse-integer str :end (or semi-pos (length str)) :junk-allowed t))
          (data (if semi-pos (subseq str (1+ semi-pos)) "")))
     (when ps

@@ -32,8 +32,10 @@ Project-specific facts the skills cannot infer:
 - The `compass` command: `compass` on the PATH after `make install` in
   `~/src/lisp/compass`; otherwise `~/src/lisp/compass/bin/compass`
 - Federated repositories: COMPASS (`../../lisp/compass`), CLASSIC
-  (`../../lisp/classic`), ORIGIN (`../../lisp/origin`), as listed in
-  `compass.sexp`
+  (`../../lisp/classic`), ORIGIN (`../../lisp/origin`), CLVT
+  (`../../lisp/cl-vt`, the VT parser), as listed in `compass.sexp`.
+  `compass check --federation` checks references into them;
+  `compass show ID --root ../../lisp/cl-vt` prints a CLVT record
 - Migration: complete, following `doc/Plan.CompassMigration.md`
   (LEXTER-DRAFT-compass-migration) and recorded in `doc/Log.CompassMigration.md`
   (LEXTER-DRAFT-compass-migration-log). Every document carries front-matter, and

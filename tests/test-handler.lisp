@@ -276,10 +276,38 @@ where Lexter names its generated glyphs (LEXTER-D68, LEXTER-D89)."
     (is (= (glyph *atlas* #xFFFD) (screen-glyph *screen* 1 0)))))
 
 (def-test long-osc-string-is-bounded ()
-  "LEXTER-O21: an operating-system command longer than the handler keeps is
-cut at its limit, so that a host cannot make it grow without bound
-(LEXTER-D68)."
+  "LEXTER-O21: an operating-system command longer than the parser keeps is cut
+at its limit of 512 bytes, so that a host cannot make it grow without bound
+(LEXTER-D68, CLVT-DRAFT-osc-strings-D4)."
   (with-clean-terminal ()
     (feed #x1B "]0;" (make-string 20000 :initial-element #\a) #x1B "\\")
-    (is (<= (length (window-title)) 4096))
+    (is (<= (length (window-title)) 512))
     (is (plusp (length (window-title))))))
+
+(def-test osc-ended-by-bel-is-applied ()
+  "LEXTER-O44: an operating-system command ended by BEL, as shells set the
+window title, is applied, and the text after it is drawn rather than taken
+into the command (CLVT-DRAFT-osc-strings-D1)."
+  (with-clean-terminal ()
+    (feed #x1B "]0;two" 7 "AB")
+    (is (string= "two" (window-title)))
+    (is (= (glyph *atlas* #x41) (screen-glyph *screen* 0 0)))
+    (is (= (glyph *atlas* #x42) (screen-glyph *screen* 1 0)))))
+
+(def-test osc-string-is-decoded-as-printed-text-is ()
+  "An operating-system command's bytes are decoded as printed text is, as
+UTF-8 here, so that a title holding a character beyond ASCII reads as the host
+sent it (CLVT-DRAFT-osc-strings-D3)."
+  (with-clean-terminal ()
+    (feed #x1B "]0;caf" (string (code-char #xE9)) #x1B "\\")
+    (is (string= (format nil "caf~c" (code-char #xE9)) (window-title)))))
+
+(def-test osc-string-cut-within-a-character-drops-it ()
+  "An operating-system command cut at the parser's limit within a UTF-8
+character drops that character, rather than showing the bytes it has
+(CLVT-DRAFT-osc-strings-D3, CLVT-DRAFT-osc-strings-D4)."
+  (with-clean-terminal ()
+    ;; 512 bytes are kept: 0;x and 254 two-byte characters, then one lead byte
+    (feed #x1B "]0;x" (make-string 600 :initial-element (code-char #xE9)) #x1B "\\")
+    (is (= 255 (length (window-title))))
+    (is (every (lambda (c) (char= c (code-char #xE9))) (subseq (window-title) 1)))))

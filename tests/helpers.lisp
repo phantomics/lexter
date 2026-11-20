@@ -71,6 +71,10 @@
   :description "Workspaces in a compositor: switching between them repaints the one shown"
   :in lexter)
 
+(def-suite manifests
+  :description "The record, the text cell, and the texels, as their manifests write and read them"
+  :in lexter)
+
 (def-suite pty-slow
   :description "The PTY's descriptor and child after the child exits; spawns a process (excluded by :skip-slow)"
   :in lexter)
@@ -81,7 +85,7 @@
 
 (defparameter *fast-suites*
   '(atlas handler model grid swatches structure tn3270 telnet pty
-    width profiles scrollback workspaces)
+    width profiles scrollback workspaces manifests)
   "The child suites run when slow tests are skipped.")
 
 (defun run-all-tests (&key skip-slow)
@@ -225,6 +229,16 @@ store; without STORE, in a store of its own."
 (defvar *screen* nil "The screen of the terminal WITH-CLEAN-TERMINAL makes.")
 (defvar *handler* nil "The VT handler of the terminal WITH-CLEAN-TERMINAL makes.")
 (defvar *grid* nil "The display grid of the terminal WITH-CLEAN-TERMINAL makes.")
+
+(defvar *records* nil "The record array WITH-CLEAN-RECORDS makes.")
+(defvar *text-cells* nil "The text-cell array WITH-CLEAN-RECORDS makes.")
+
+(defmacro with-clean-records ((&key (count 4)) &body body)
+  "Run BODY with *RECORDS* bound to a fresh array of COUNT records, every one a
+record of zeros, and *TEXT-CELLS* to a fresh array of COUNT text cells."
+  `(let ((*records* (lexter/manifests:make-record-array ,count))
+         (*text-cells* (lexter/manifests:make-text-array ,count)))
+     ,@body))
 
 (defmacro with-clean-terminal ((&key (cols 10) (rows 3)) &body body)
   "Run BODY with *ATLAS*, *STORE*, *SCREEN*, *HANDLER*, and *GRID* bound to a

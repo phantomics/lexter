@@ -168,12 +168,7 @@
 (defun set-palette-entry (screen idx r g b &optional (a 255))
   "Set palette entry IDX to the given RGBA bytes (0-255).
    Increments the palette generation for GPU sync."
-  (let ((p (screen-palette screen))
-        (base (* idx 4)))
-    (setf (aref p (+ base 0)) r
-          (aref p (+ base 1)) g
-          (aref p (+ base 2)) b
-          (aref p (+ base 3)) a))
+  (write-palette-texel (screen-palette screen) idx r g b a)
   (incf (screen-palette-generation screen)))
 
 (defun set-palette-entry-rgb8 (screen idx r g b)
@@ -183,12 +178,7 @@
 
 (defun get-palette-entry (screen idx)
   "Return the RGBA bytes of palette entry IDX as multiple values."
-  (let ((p (screen-palette screen))
-        (base (* idx 4)))
-    (values (aref p (+ base 0))
-            (aref p (+ base 1))
-            (aref p (+ base 2))
-            (aref p (+ base 3)))))
+  (read-palette-texel (screen-palette screen) idx))
 
 (defun reset-palette (screen)
   "Reset the screen's palette to the default xterm colors.

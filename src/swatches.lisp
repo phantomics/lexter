@@ -58,9 +58,7 @@
   (let ((p (make-array +palette-bytes+ :element-type '(unsigned-byte 8)
                                        :initial-element 255)))
     (flet ((set-rgb (i r g b)
-             (setf (aref p (+ (* i 4) 0)) r
-                   (aref p (+ (* i 4) 1)) g
-                   (aref p (+ (* i 4) 2)) b))
+             (write-palette-texel p i r g b))
            (comp6 (v) (if (zerop v) 0 (+ 55 (* 40 v)))))
       ;; Colours 0-15: standard ANSI
       (loop :for (r g b) :in '((0   0   0)    ; 0  black
@@ -171,12 +169,7 @@
   (let ((local (swatch-table-count table)))
     (when (or (< local (* (length (swatch-table-ranges table)) +range-size+))
               (%take-range (swatch-table-store table) table))
-      (let ((base (* local 4))
-            (data (swatch-table-data table)))
-        (setf (aref data (+ base 0)) s0
-              (aref data (+ base 1)) s1
-              (aref data (+ base 2)) s2
-              (aref data (+ base 3)) s3))
+      (write-swatch-texel (swatch-table-data table) local s0 s1 s2 s3)
       (incf (swatch-table-count table))
       (%local->global table local))))
 
@@ -226,9 +219,9 @@
 
 (defun %colour-distance (palette a b)
   "The squared distance between the RGB values of palette entries A and B."
-  (let ((pa (* a 4)) (pb (* b 4)))
-    (loop :for c :below 3
-          :sum (expt (- (aref palette (+ pa c)) (aref palette (+ pb c))) 2))))
+  (multiple-value-bind (ra ga ba) (read-palette-texel palette a)
+    (multiple-value-bind (rb gb bb) (read-palette-texel palette b)
+      (+ (expt (- ra rb) 2) (expt (- ga gb) 2) (expt (- ba bb) 2)))))
 
 (defun %nearest-swatch (table s0 s1 s2 s3 palette)
   "The global index of TABLE's swatch whose four slots are nearest to S0-S3,
@@ -237,13 +230,13 @@
         (best nil)
         (best-distance nil))
     (dotimes (local (swatch-table-count table))
-      (let* ((base (* local 4))
-             (d (+ (%colour-distance palette s0 (aref data base))
-                   (%colour-distance palette s1 (aref data (+ base 1)))
-                   (%colour-distance palette s2 (aref data (+ base 2)))
-                   (%colour-distance palette s3 (aref data (+ base 3))))))
-        (when (or (null best-distance) (< d best-distance))
-          (setf best local best-distance d))))
+      (multiple-value-bind (t0 t1 t2 t3) (read-swatch-texel data local)
+        (let ((d (+ (%colour-distance palette s0 t0)
+                    (%colour-distance palette s1 t1)
+                    (%colour-distance palette s2 t2)
+                    (%colour-distance palette s3 t3))))
+          (when (or (null best-distance) (< d best-distance))
+            (setf best local best-distance d)))))
     (if best (%local->global table best) 0)))
 
 (defun intern-swatch (table s0 s1 s2 s3 &optional palette)
@@ -274,12 +267,8 @@
   "The palette indices of TABLE's swatch GLOBAL, as four values."
   (let ((local (or (%global->local table global)
                    (error "Swatch table ~d holds no swatch ~d."
-                          (swatch-table-id table) global)))
-        (data (swatch-table-data table)))
-    (values (aref data (* local 4))
-            (aref data (+ (* local 4) 1))
-            (aref data (+ (* local 4) 2))
-            (aref data (+ (* local 4) 3)))))
+                          (swatch-table-id table) global))))
+    (read-swatch-texel (swatch-table-data table) local)))
 
 (defun store-swatch (store global)
   "The palette indices of global swatch GLOBAL in STORE, as four values: zeros

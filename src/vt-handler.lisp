@@ -202,7 +202,7 @@
 (defun dispatch-action (handler parser action byte)
   "Dispatch a parser action to the appropriate handler. An operating-system
    command is read whole when it ends, from the parser's buffer, which holds
-   its first 512 bytes (CLVT-DRAFT-osc-strings-D4, LEXTER-D68)."
+   its first 512 bytes (CLVT-D4, LEXTER-D68)."
   (when *debug-vt*
     (format t "~&[DISPATCH] action=~S byte=~D (#x~X)~%" action byte byte))
   (case action
@@ -310,7 +310,7 @@
    sequence left incomplete. A value beyond Unicode, or a surrogate, completes
    as U+FFFD, so that no host reaches the values above U+10FFFF where Lexter
    names its generated glyphs (LEXTER-D68, LEXTER-D89). Printed text and
-   operating-system commands are decoded alike (CLVT-DRAFT-osc-strings-D3)."
+   operating-system commands are decoded alike (CLVT-D3)."
   (cond
     ;; Continuation byte (10xxxxxx)
     ((= (logand byte #xC0) #x80)
@@ -1013,11 +1013,9 @@
         (dolist (idx-str (%split-on-char data #\;))
           (let ((idx (parse-integer idx-str :junk-allowed t)))
             (when (and idx (<= 0 idx 255))
-              (let ((base (* idx 4)))
+              (multiple-value-bind (r g b) (lexter/manifests:read-palette-texel def idx)
                 (dolist (sc (%handler-screens handler))
-                  (set-palette-entry sc idx
-                                     (aref def base) (aref def (+ base 1))
-                                     (aref def (+ base 2)))))))))))
+                  (set-palette-entry sc idx r g b)))))))))
 
 (defun %osc-set-default-color (handler data palette-index)
   "Handle OSC 10/11 (default fg/bg): set PALETTE-INDEX from the first spec in

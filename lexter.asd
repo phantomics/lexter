@@ -2,10 +2,12 @@
   :description "Lexter — Lisp-Emergent eXtensible Terminal Emulator Runtime"
   :license "BSD"
   :version "0.1.0"
-  :depends-on ("cl-glfw3" "cl-opengl" "cffi" "alexandria" "babel" "chipz" "flexi-streams")
+  :depends-on ("cl-glfw3" "cl-opengl" "cffi" "alexandria" "babel" "chipz" "flexi-streams"
+               (:version "specops" "0.2.3"))
   :in-order-to ((asdf:test-op (asdf:test-op #:lexter/tests)))
   :serial t
   :components ((:file "src/packages")
+               (:file "src/manifests")
                (:file "src/width-data")
                (:file "src/width")
                (:file "src/pcf")
@@ -86,7 +88,8 @@
                              (:file "test-width")
                              (:file "test-profiles")
                              (:file "test-scrollback")
-                             (:file "test-workspaces"))))
+                             (:file "test-workspaces")
+                             (:file "test-manifests"))))
   :perform (asdf:test-op (o s)
              (uiop:symbol-call '#:lexter-tests '#:run-all-tests)))
 

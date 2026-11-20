@@ -88,8 +88,56 @@
            #:+simple-stride+
            #:+layered-stride+))
 
+(defpackage #:lexter/manifests
+  (:use #:cl)
+  (:import-from #:specops
+                #:defmanifest #:defenum #:marshal #:unmarshal
+                #:manifest-check-failed)
+  (:export ;; Sizes and values
+           #:+record-bytes+
+           #:+plain-glyph-words+
+           #:+text-cell-bytes+
+           #:+texel-bytes+
+           #:+continuation-marker+
+           ;; Record arrays
+           #:record-array
+           #:make-record-array
+           #:record-array-count
+           #:write-plain-record
+           #:patch-plain-record
+           #:read-plain-record
+           #:read-record-common
+           #:patch-record-common
+           #:record-format
+           #:copy-records
+           #:clear-records
+           ;; Glyph words by number
+           #:record-glyph
+           #:record-ink-slot
+           #:record-layer-p
+           #:record-topmost-layer
+           ;; Invariants
+           #:record-invariant-violations
+           #:half-pair-violations
+           ;; Text cells
+           #:text-array
+           #:make-text-array
+           #:text-array-count
+           #:write-text-cell
+           #:patch-text-cell
+           #:read-text-cell
+           #:text-cell-continuation-p
+           ;; Texels
+           #:write-swatch-texel
+           #:read-swatch-texel
+           #:write-palette-texel
+           #:read-palette-texel))
+
 (defpackage #:lexter/swatches
   (:use #:cl)
+  (:import-from #:lexter/manifests
+                #:write-swatch-texel #:read-swatch-texel
+                #:write-palette-texel #:read-palette-texel)
   (:export ;; Constants
            #:+range-size+
            #:+store-size+
@@ -175,6 +223,7 @@
 
 (defpackage #:lexter/model
   (:use #:cl)
+  (:import-from #:lexter/manifests #:write-palette-texel #:read-palette-texel)
   ;; The layer and swatch counts have one home, the grid (LEXTER-O36)
   (:import-from #:lexter/grid #:+max-layers+ #:+swatch-slots+)
   (:import-from #:lexter/swatches

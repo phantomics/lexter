@@ -127,6 +127,13 @@
            #:patch-text-cell
            #:read-text-cell
            #:text-cell-continuation-p
+           #:copy-text-cells
+           #:clear-text-cells
+           ;; Terminal rows
+           #:make-terminal-row-array
+           #:write-terminal-row
+           #:patch-terminal-row
+           #:read-terminal-row
            ;; Texels
            #:write-swatch-texel
            #:read-swatch-texel
@@ -223,9 +230,14 @@
 
 (defpackage #:lexter/model
   (:use #:cl)
-  (:import-from #:lexter/manifests #:write-palette-texel #:read-palette-texel)
-  ;; The layer and swatch counts have one home, the grid (LEXTER-O36)
-  (:import-from #:lexter/grid #:+max-layers+ #:+swatch-slots+)
+  (:import-from #:lexter/manifests
+                #:write-palette-texel #:read-palette-texel
+                #:+continuation-marker+
+                #:text-array #:make-text-array #:text-array-count
+                #:write-text-cell #:patch-text-cell #:read-text-cell
+                #:text-cell-continuation-p #:copy-text-cells #:clear-text-cells
+                #:make-terminal-row-array
+                #:write-terminal-row #:patch-terminal-row #:read-terminal-row)
   (:import-from #:lexter/swatches
                 #:palette #:make-default-palette
                 #:make-swatch-store #:make-swatch-table #:swatch-table
@@ -236,7 +248,39 @@
            #:screen-cols
            #:screen-rows
            #:screen-mode
-           #:screen-blank-glyph
+           ;; Colours
+           #:colour
+           #:+default-colour+
+           #:palette-colour
+           #:rgb-colour
+           #:colour-palette-index
+           #:colour-rgb
+           #:rgb-to-256
+           ;; Styles
+           #:style
+           #:make-style
+           #:copy-style
+           #:style-foreground
+           #:style-background
+           #:style-underline-colour
+           #:style-bold
+           #:style-underline
+           #:style-line-style
+           #:style-strikethrough
+           #:style-overline
+           #:style-reverse
+           #:style-blink
+           #:style-invisible
+           #:+max-styles+
+           #:style-table
+           #:make-style-table
+           #:style-table-count
+           #:intern-style
+           #:table-style
+           #:erased-style
+           #:style-table-bold-as-bright
+           #:style-swatch
+           #:screen-styles
            ;; Swatch interning
            #:screen-swatches
            #:intern-swatch
@@ -250,20 +294,27 @@
            #:set-cursor-position
            #:set-cursor-style
            #:set-cursor-visible
-           ;; Cell access (for application use)
-           #:cell-glyph
-           #:cell-swatch
-           #:cell-attrs
-           #:topmost-layer
+           ;; Cell access
+           #:cell-content
+           #:cell-style
+           #:cell-wide-p
+           #:cell-continuation-p
+           #:cell-codepoints
+           ;; Terminal rows
+           #:row-soft-wrap-p
+           #:set-row-soft-wrap
+           #:row-prompt-kind
+           #:row-line-size
            ;; Write operations
            #:write-char-at
            #:write-string-at
+           #:join-character
            #:erase-in-display
            #:erase-in-line
            #:erase-chars
-            ;; Cursor-relative write (targets topmost layer)
-            #:put-char
-            #:delete-char
+           ;; Cursor-relative write
+           #:put-char
+           #:delete-char
            #:insert-chars
            #:delete-chars
            ;; Line operations
@@ -280,11 +331,12 @@
            ;; Scrollback
            #:scrollback-lines
            #:scrollback-line
+           #:history-row
+           #:history-row-text
+           #:history-row-codepoints
+           #:history-row-soft-wrap-p
            #:scrollback-viewport-offset
            #:set-scrollback-viewport
-           ;; Layer management
-           #:set-layer
-           #:clear-overlay-layers
            ;; Display flush
            #:flush-to-display
            ;; Dirty tracking
@@ -297,13 +349,7 @@
            #:set-palette-entry
            #:set-palette-entry-rgb8
            #:get-palette-entry
-           #:reset-palette
-           ;; Attribute word bits (universal)
-           #:+attr-bold+
-           #:+attr-underline+
-           #:+attr-blink+
-           #:+attr-reverse+
-           #:+attr-invisible+))
+           #:reset-palette))
 
 ;;; ---------------------------------------------------------------------------
 ;;; GUI iteration protocol (steppable window lifecycle)

@@ -36,8 +36,7 @@ flushes it, and (WRITE-A pane) writes A at column 0, row 1 of PANE's screen."
                 (lexter/panes:flush-workspace (lexter/panes::active-workspace ,comp) ,grid))
               (write-a (pane)
                 ;; Below the cursor's row, which every flush copies again
-                (lexter/model:write-char-at (lexter/panes:vt-pane-screen pane) 0 1
-                                            (glyph ,atlas #x41))))
+                (lexter/model:write-char-at (lexter/panes:vt-pane-screen pane) 0 1 #x41)))
          (declare (ignorable #'show #'write-a))
          ,@body))))
 

@@ -101,15 +101,14 @@ the cursor's place in the grid keeps the colours of the line it shows."
 
 (def-test short-history-line-is-padded ()
   "LEXTER-O30: a history line narrower than the pane, left by a resize, is
-drawn padded with blanks: the atlas's empty glyph, the screen's blank."
+drawn padded with blanks: the atlas's empty glyph, at position 0."
   (with-history (pane grid :width 10)
     (lexter/panes:pane-resize pane 12 3)
     (let ((wide (make-test-grid :cols 12 :rows 3)))
       (scroll-to pane 1)
       (lexter/panes:pane-flush pane wide)
       (is (= (letter #x42) (grid-glyph wide 0 0)))
-      (is (= (lexter/model:screen-blank-glyph (view-screen pane))
-             (grid-glyph wide 11 0))))))
+      (is (= lexter/atlas:+empty-glyph-position+ (grid-glyph wide 11 0))))))
 
 ;;; ------------------------------------------------------------
 ;;; The wheel  (LEXTER-O30, LEXTER-DRAFT-pane-profiles-D7)

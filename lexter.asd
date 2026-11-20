@@ -3,7 +3,7 @@
   :license "BSD"
   :version "0.1.0"
   :depends-on ("cl-glfw3" "cl-opengl" "cffi" "alexandria" "babel" "chipz" "flexi-streams"
-               (:version "specops" "0.2.3"))
+               (:version "specops" "0.2.4"))
   :in-order-to ((asdf:test-op (asdf:test-op #:lexter/tests)))
   :serial t
   :components ((:file "src/packages")
@@ -17,6 +17,7 @@
                (:file "src/shaders")
                (:file "src/renderer")
                (:file "src/gui")
+               (:file "src/styles")
                (:file "src/model")
                (:file "src/demo")))
 

@@ -109,6 +109,15 @@
   (:style :u16 :default 0)
   (masque "b:00000000000000cw" (w :wide :u :default 0) (c :cluster :u :default 0)))
 
+;; What a terminal keeps beside each row of its text grid and its history:
+;; whether autowrap carried the row's text on to the next, the OSC 133 zone at
+;; its start (0 none, 1 prompt, 2 input, 3 output), and the DEC line size (0
+;; single, 1 double width, 2 and 3 the top and bottom of double height)
+;; (LEXTER-D119). Renderers never read it.
+(defmanifest terminal-row (:unit 8 :endian :little)
+  (masque "b:000llppw" (w :soft-wrap :u :default 0) (p :prompt-kind :u :default 0)
+          (l :line-size :u :default 0)))
+
 ;;; --------------------------------------------------------------------------
 ;;; The texels
 ;;; --------------------------------------------------------------------------
@@ -145,28 +154,19 @@
 (defun %record-start (index)
   (* index +record-bytes+))
 
-(defmacro %without-sub-manifest-warnings (&body body)
-  "BODY, a write of the plain record, without the style warnings SBCL gives of
-   it: SpecOps 0.2.3 binds variables it never reads in writing a sub-manifest
-   that holds a masque, as each glyph word is. Reported to SpecOps."
-  `(locally (declare #+sbcl (sb-ext:muffle-conditions style-warning))
-     ,@body))
-
 (defmacro write-plain-record (records index &rest fields)
   "Write record INDEX of RECORDS as a plain record of FIELDS, the fields and
    values of the PLAIN-RECORD manifest; a field not given takes its default,
    zero. A glyph word's value is a literal list of its fields, as
    :G0 (:GLYPH g :INK-SLOT 1)."
-  `(%without-sub-manifest-warnings
-     (marshal plain-record ,records (:at (%record-start ,index)) ,@fields)))
+  `(marshal plain-record ,records (:at (%record-start ,index)) ,@fields))
 
 (defmacro patch-plain-record (records index &rest fields)
   "Write only FIELDS into record INDEX of RECORDS, a plain record, leaving its
    other fields as they are (LEXTER-D84). A field of a glyph word is named by a
    path, as (:G0 :INK-SLOT); a glyph word's form is the one its type bit gives,
    in FIELDS or else in the record."
-  `(%without-sub-manifest-warnings
-     (marshal plain-record ,records (:at (%record-start ,index) :patch t) ,@fields)))
+  `(marshal plain-record ,records (:at (%record-start ,index) :patch t) ,@fields))
 
 (defmacro read-plain-record (records index &rest keys)
   "Read record INDEX of RECORDS as a plain record: the values of KEYS, fields
@@ -372,6 +372,40 @@
 (defun text-cell-continuation-p (cells index)
   "True when text cell INDEX of CELLS is covered by the character before it."
   (= (read-text-cell cells index :content) +continuation-marker+))
+
+(defun copy-text-cells (from from-index to to-index count)
+  "Copy COUNT text cells of FROM, from cell FROM-INDEX, into TO at TO-INDEX."
+  (replace to from :start1 (%text-cell-start to-index)
+                   :start2 (%text-cell-start from-index)
+                   :end2 (%text-cell-start (+ from-index count))))
+
+(defun clear-text-cells (cells start count)
+  "Make COUNT text cells of CELLS, from cell START, cells of zeros: empty, in
+   style 0."
+  (fill cells 0 :start (%text-cell-start start) :end (%text-cell-start (+ start count))))
+
+;;; --------------------------------------------------------------------------
+;;; Terminal rows
+;;; --------------------------------------------------------------------------
+
+(defun make-terminal-row-array (count)
+  "A fresh array of COUNT terminal rows, each of zeros: not wrapped, in no
+   prompt zone, and of single size."
+  (make-array count :element-type '(unsigned-byte 8) :initial-element 0))
+
+(defmacro write-terminal-row (rows index &rest fields)
+  "Write terminal row INDEX of ROWS from FIELDS, the fields and values of the
+   TERMINAL-ROW manifest; a field not given takes its default, zero."
+  `(marshal terminal-row ,rows (:at ,index) ,@fields))
+
+(defmacro patch-terminal-row (rows index &rest fields)
+  "Write only FIELDS into terminal row INDEX of ROWS."
+  `(marshal terminal-row ,rows (:at ,index :patch t) ,@fields))
+
+(defmacro read-terminal-row (rows index &rest keys)
+  "Read the values of KEYS, fields of the TERMINAL-ROW manifest, from terminal
+   row INDEX of ROWS."
+  `(unmarshal terminal-row ,rows (:at ,index) ,@keys))
 
 ;;; --------------------------------------------------------------------------
 ;;; Texels

@@ -98,3 +98,17 @@ them."
     (multiple-value-bind (symbol status) (find-symbol name '#:lexter/model)
       (declare (ignore symbol))
       (is (not (eq status :external))))))
+
+(def-test terminal-screens-hold-text-and-styles-only ()
+  "LEXTER-D124: a terminal's screen keeps its text, styles, and terminal rows,
+and no cells of the display: it has no glyphs, swatches, attribute words, or
+layered cells, and the model exports no layer operations."
+  (let ((slots (mapcar (lambda (slot) (symbol-name (sb-mop:slot-definition-name slot)))
+                       (sb-mop:class-slots (find-class 'lexter/model:screen)))))
+    (dolist (name '("GLYPHS" "SWATCH-INDICES" "ATTRS" "WIDE-FLAGS" "LAYERED-CELLS"))
+      (is (null (member name slots :test #'string=)) "slot ~a" name))
+    (is (member "TEXT" slots :test #'string=)))
+  (dolist (name '("SET-LAYER" "CLEAR-OVERLAY-LAYERS" "CELL-GLYPH" "CELL-SWATCH"))
+    (multiple-value-bind (symbol status) (find-symbol name '#:lexter/model)
+      (declare (ignore symbol))
+      (is (not (eq status :external)) "~a" name))))

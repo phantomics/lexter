@@ -2,67 +2,28 @@
 
 ;;;; Terminal Model
 ;;;;
-;;;; This is the logical terminal state — independent of the display layer.
-;;;; It maintains:
-;;;;   - A screen buffer (cells with glyph, swatch, attributes)
-;;;;   - Cursor state
-;;;;   - Scrolling region
-;;;;   - Mode flags
-;;;;   - Scrollback buffer
-;;;;   - Swatch interning
+;;;; This is the logical terminal state, independent of the display layer. A
+;;;; screen holds what a terminal wrote, and no records (LEXTER-D124):
+;;;;   - a text grid of 8-byte text cells, each a codepoint or a continuation
+;;;;     marker, a style id, a wide bit, and a cluster flag (LEXTER-D127,
+;;;;     LEXTER-D119), with the codepoints that joined a cell kept beside it;
+;;;;   - a terminal row beside each row: its soft wrap, prompt kind, and line
+;;;;     size (LEXTER-D119);
+;;;;   - the terminal's styles, shared by its screens (styles.lisp);
+;;;;   - the cursor, the scrolling region, and the history, kept as text and
+;;;;     styles (LEXTER-D118).
 ;;;;
-;;;; The model is backend-agnostic: both Unix VT and 3270 backends can write
-;;;; to it, as can a CL application for custom console interfaces.
-
-;;; --------------------------------------------------------------------------
-;;; Constants
-;;; --------------------------------------------------------------------------
-
-;; Universal attribute bits (0-7)
-(defconstant +attr-bold+       #b00000001)
-(defconstant +attr-underline+  #b00000010)
-(defconstant +attr-blink+      #b00000100)
-(defconstant +attr-reverse+    #b00001000)
-(defconstant +attr-invisible+  #b00010000)
-;; Bits 5-7 reserved for future universal attributes
-;; Bits 8-31 are mode-specific (Unix, 3270, application)
-
-;; +MAX-LAYERS+ and +SWATCH-SLOTS+ are the grid's, imported (LEXTER-O36).
+;;;; Its rows are built into the display grid from their text and styles by
+;;;; one function, which builds the history's rows too (FLUSH-TO-DISPLAY).
 
 ;;; --------------------------------------------------------------------------
 ;;; Swatches and palettes
 ;;; --------------------------------------------------------------------------
 ;;;
 ;;; Swatch tables, their stores, and the default palette are in swatches.lisp
-;;; (LEXTER-D99). A screen's table hands out global indices, which its cells
-;;; hold and the flush copies unchanged (LEXTER-D100). Palettes are RGBA bytes,
-;;; as the GPU's integer store holds them (LEXTER-D109).
-
-;;; --------------------------------------------------------------------------
-;;; Cell representation
-;;; --------------------------------------------------------------------------
-
-;; Each cell in the model is represented as 3 values packed into the cell array:
-;;   - glyph-idx  (uint16)
-;;   - swatch-idx (uint16)  
-;;   - attrs      (uint32)
-;; Plus optional layer data for layered cells.
-
-(defstruct model-layer
-  "A layer within a layered cell."
-  (glyph-idx   0    :type (unsigned-byte 32))
-  (ink-slot    1    :type (unsigned-byte 2))   ; swatch slot for ink
-  (bg-slot     0    :type (unsigned-byte 2))   ; swatch slot for bg (layer 0)
-  (transparent-side :none :type keyword))
-
-(defstruct model-cell-layers
-  "Layered cell data."
-  ;; Swatch index into the screen's swatch table (same as simple cells)
-  (swatch-idx 0 :type (unsigned-byte 16))
-  ;; Layers 0-2
-  (layers (make-array +max-layers+ :initial-element nil) :type simple-vector)
-  ;; Which layer is topmost (highest active layer number)
-  (topmost 0 :type (integer 0 2)))
+;;; (LEXTER-D99). A screen's table hands out the global indices that its rows
+;;; are built in (LEXTER-D100). Palettes are RGBA bytes, as the GPU's integer
+;;; store holds them (LEXTER-D109).
 
 ;;; --------------------------------------------------------------------------
 ;;; Screen buffer
@@ -73,23 +34,16 @@
   (cols      80  :type fixnum)
   (rows      24  :type fixnum)
   (mode      :unix :type keyword)  ; :unix, :3270, :application
-  ;; The glyph index of blank cells: the atlas's empty glyph, position 0
-  ;; (LEXTER-D89), which every atlas reserves.
-  (blank-glyph 0 :type fixnum)
-  ;; --- Cell data (simple path) ---
-  ;; Indexed by (row * cols + col)
-  ;; Glyph indices are atlas positions, which can exceed 16 bits for very large
-  ;; fonts (e.g. Unifont's atlas has ~107k cells), so they are stored as 32-bit.
-  (glyphs        #() :type (simple-array (unsigned-byte 32) (*)))
-  (swatch-indices #() :type (simple-array (unsigned-byte 16) (*)))
-  (attrs         #() :type (simple-array (unsigned-byte 32) (*)))
-  ;; --- Wide character flags ---
-  ;; 1 = left half of double-wide char; right half has glyph=0, same swatch
-  (wide-flags    #*  :type simple-bit-vector)
-  ;; --- Layered cells (sparse) ---
-  (layered-cells (make-hash-table :test 'equal) :type hash-table)
-  ;; --- Swatch table: the terminal's, shared by its primary and alternate
-  ;; screens (LEXTER-DRAFT-cell-model-revision-D24) ---
+  ;; --- Text, indexed by (row * cols + col) ---
+  (text          (make-text-array 0) :type text-array)
+  ;; The codepoints after the first of each cell whose cluster flag is set:
+  ;; for each row, an alist of (column . codepoints) (LEXTER-D127)
+  (clusters      #() :type simple-vector)
+  ;; One terminal row for each row (LEXTER-D119)
+  (terminal-rows (make-terminal-row-array 0) :type (simple-array (unsigned-byte 8) (*)))
+  ;; --- Styles and swatch table: the terminal's, shared by its primary and
+  ;; alternate screens (LEXTER-DRAFT-cell-model-revision-D24) ---
+  (styles    nil :type (or null style-table))
   (swatches  nil :type (or null swatch-table))
   ;; --- Cursor state ---
   (cursor-col     0   :type fixnum)
@@ -103,63 +57,55 @@
   ;; --- Saved cursor (for DECSC/DECRC) ---
   (saved-cursor-col 0 :type fixnum)
   (saved-cursor-row 0 :type fixnum)
-  ;; --- Scrollback ---
+  ;; --- Scrollback: a ring of HISTORY-ROWs ---
   (scrollback-enabled t :type boolean)
   (scrollback-max   2000 :type fixnum)
-  (scrollback-lines nil)   ; ring buffer, implemented separately
+  (scrollback-lines nil)
   (scrollback-count 0 :type fixnum)
   (scrollback-viewport 0 :type fixnum)  ; 0 = viewing live screen
   ;; --- Per-row dirty flags (for flush optimization) ---
   (row-dirty     #*  :type simple-bit-vector)
-  ;; --- Default swatch for new cells: the global index of the table's
-  ;; default swatch ---
-  (default-swatch 0 :type fixnum)
   ;; --- Color palette (256 RGBA colors as bytes, 1024 total) ---
   (palette nil :type (or null palette))
   (palette-generation 1 :type fixnum))
+
+(defstruct (history-row (:constructor %make-history-row))
+  "A row that left a screen's top: its text cells without the continuations
+   of wide characters, the codepoints that joined its cells, by their place in
+   it, and its terminal row (LEXTER-D118)."
+  (text (make-text-array 0) :type text-array)
+  (clusters nil :type list)
+  (terminal-row (make-terminal-row-array 1) :type (simple-array (unsigned-byte 8) (1))))
 
 ;;; --------------------------------------------------------------------------
 ;;; Constructor
 ;;; --------------------------------------------------------------------------
 
 (defun make-screen (&key (cols 80) (rows 24) (mode :unix)
-                         (scrollback-max 2000) swatches palette)
-  "Create a new screen buffer whose cells take their swatches from SWATCHES, a
-   swatch table, and whose colours are PALETTE, a palette the screen copies.
-   Without SWATCHES the screen has a table of its own, in a store of its own;
-   a terminal's screens share their terminal's table, from the store of the
-   compositor that draws them (LEXTER-DRAFT-cell-model-revision-D24). Without
-   PALETTE the screen has the default palette. Every cell starts in the
-   table's default swatch."
-  (let* ((n (* cols rows))
-         (swatches (or swatches (make-swatch-table (make-swatch-store))))
-         (default (swatch-table-default swatches)))
-    (%make-screen
-     :cols            cols
-     :rows            rows
-     :mode            mode
-     :glyphs          (make-array n :element-type '(unsigned-byte 32) :initial-element 0)
-     :swatch-indices  (make-array n :element-type '(unsigned-byte 16) :initial-element default)
-     :attrs           (make-array n :element-type '(unsigned-byte 32) :initial-element 0)
-     :wide-flags      (make-array n :element-type 'bit :initial-element 0)
-     :layered-cells   (make-hash-table :test 'equal :size 64)
-     :swatches        swatches
-     :cursor-col      0
-     :cursor-row      0
-     :cursor-visible  t
-     :cursor-style    :block
-     :cursor-blink    nil ;; t
-     :scroll-top      0
-     :scroll-bottom   (1- rows)
-     :scrollback-enabled t
-     :scrollback-max  scrollback-max
-     :scrollback-lines (make-array scrollback-max :initial-element nil)
-     :scrollback-count 0
-     :scrollback-viewport 0
-     :row-dirty       (make-array rows :element-type 'bit :initial-element 1)
-     :default-swatch  default
-     :palette         (if palette (copy-seq palette) (make-default-palette))
-     :palette-generation 1)))
+                         (scrollback-max 2000) styles swatches palette)
+  "Create a new screen whose text is written in styles of STYLES, a style
+   table, and built in swatches of SWATCHES, a swatch table, and whose colours
+   are PALETTE, a palette the screen copies. Without STYLES or SWATCHES the
+   screen has tables of its own, the swatch table in a store of its own; a
+   terminal's screens share their terminal's tables, the swatch table from the
+   store of the compositor that draws them
+   (LEXTER-DRAFT-cell-model-revision-D24). Without PALETTE the screen has the
+   default palette. Every cell starts empty, in style 0."
+  (%make-screen
+   :cols            cols
+   :rows            rows
+   :mode            mode
+   :text            (make-text-array (* cols rows))
+   :clusters        (make-array rows :initial-element nil)
+   :terminal-rows   (make-terminal-row-array rows)
+   :styles          (or styles (make-style-table))
+   :swatches        (or swatches (make-swatch-table (make-swatch-store)))
+   :scroll-top      0
+   :scroll-bottom   (1- rows)
+   :scrollback-max  scrollback-max
+   :scrollback-lines (make-array scrollback-max :initial-element nil)
+   :row-dirty       (make-array rows :element-type 'bit :initial-element 1)
+   :palette         (if palette (copy-seq palette) (make-default-palette))))
 
 ;;; --------------------------------------------------------------------------
 ;;; Palettes
@@ -212,10 +158,9 @@
   screen)
 
 (defun default-swatch (screen)
-  (screen-default-swatch screen))
-
-(defun (setf default-swatch) (value screen)
-  (setf (screen-default-swatch screen) value))
+  "The global index of the swatch of SCREEN's default colours: its table's
+   default swatch, in which style 0 is built."
+  (swatch-table-default (screen-swatches screen)))
 
 ;;; --------------------------------------------------------------------------
 ;;; Cursor accessors
@@ -247,225 +192,193 @@
 ;;; --------------------------------------------------------------------------
 ;;; Cell access
 ;;; --------------------------------------------------------------------------
-
-(defun %get-layered (screen col row)
-  "Return the MODEL-CELL-LAYERS for (COL,ROW) or NIL if simple."
-  (gethash (cons col row) (screen-layered-cells screen)))
-
-(defun cell-layered-p (screen col row)
-  (not (null (%get-layered screen col row))))
-
-(defun topmost-layer (screen col row)
-  "Return the topmost active layer number at (COL, ROW).
-   For simple cells, returns 0."
-  (let ((layers (%get-layered screen col row)))
-    (if layers
-        (model-cell-layers-topmost layers)
-        0)))
-
-(defun cell-glyph (screen col row &optional (layer nil))
-  "Return the glyph at (COL, ROW).
-   If LAYER is NIL, returns the topmost layer's glyph.
-   Otherwise returns the glyph at the specified layer."
-  (let ((layers (%get-layered screen col row)))
-    (if layers
-        (let* ((ln (or layer (model-cell-layers-topmost layers)))
-               (lobj (aref (model-cell-layers-layers layers) ln)))
-          (if lobj (model-layer-glyph-idx lobj) (screen-blank-glyph screen)))
-        (aref (screen-glyphs screen) (%idx screen col row)))))
-
-(defun cell-swatch (screen col row)
-  "Return the swatch index at (COL, ROW)."
-  (let ((layers (%get-layered screen col row)))
-    (if layers
-        (model-cell-layers-swatch-idx layers)
-        (aref (screen-swatch-indices screen) (%idx screen col row)))))
-
-(defun cell-attrs (screen col row)
-  "Return the attribute word at (COL, ROW)."
-  (aref (screen-attrs screen) (%idx screen col row)))
-
-;;; --------------------------------------------------------------------------
-;;; Layer management
-;;; --------------------------------------------------------------------------
-
-(defun %ensure-layered (screen col row)
-  "Ensure (COL, ROW) is in layered mode, creating if needed."
-  (let ((key (cons col row)))
-    (or (gethash key (screen-layered-cells screen))
-        (let* ((i (%idx screen col row))
-               (layers (make-model-cell-layers)))
-          ;; Copy swatch index (same table lookup as simple cells)
-          (setf (model-cell-layers-swatch-idx layers)
-                (aref (screen-swatch-indices screen) i))
-          ;; Initialize layer 0 from current cell
-          (setf (aref (model-cell-layers-layers layers) 0)
-                (make-model-layer :glyph-idx (aref (screen-glyphs screen) i)
-                                  :ink-slot  1
-                                  :bg-slot   0
-                                  :transparent-side :none))
-          (setf (model-cell-layers-topmost layers) 0)
-          (setf (gethash key (screen-layered-cells screen)) layers)
-          layers))))
-
-(defun set-layer (screen col row layer-num glyph-idx
-                  &key (ink-slot 1) (bg-slot 0) (transparent-side :none))
-  "Set a specific layer at (COL, ROW).
-   LAYER-NUM 0 is the base layer; 1-2 are overlay layers."
-  (assert (<= 0 layer-num (1- +max-layers+)))
-  (let ((layers (%ensure-layered screen col row)))
-    (setf (aref (model-cell-layers-layers layers) layer-num)
-          (make-model-layer :glyph-idx glyph-idx
-                            :ink-slot ink-slot
-                            :bg-slot bg-slot
-                            :transparent-side transparent-side))
-    ;; Update topmost
-    (when (> layer-num (model-cell-layers-topmost layers))
-      (setf (model-cell-layers-topmost layers) layer-num))
-    (%mark-dirty screen row)))
-
-(defun clear-overlay-layers (screen col row)
-  "Clear layers 1 and 2, leaving layer 0 intact.
-   The cell remains layered but topmost becomes 0."
-  (let ((layers (%get-layered screen col row)))
-    (when layers
-      (setf (aref (model-cell-layers-layers layers) 1) nil
-            (aref (model-cell-layers-layers layers) 2) nil
-            (model-cell-layers-topmost layers) 0)
-      (%mark-dirty screen row))))
-
-;;; --------------------------------------------------------------------------
-;;; Write operations
-;;; --------------------------------------------------------------------------
-
-(defun write-char-at (screen col row glyph-idx &key (swatch nil) (attrs nil) wide)
-  "Write a character at (COL, ROW) to the topmost active layer.
-   For simple cells, this writes to layer 0.
-   For layered cells, this writes to the topmost layer.
-   SWATCH and ATTRS, if provided, update those values.
-   WIDE, when T, marks this as a double-wide character: it occupies (COL,ROW) and
-   (COL+1,ROW). The right half is cleared and acts as a continuation cell."
-  (let* ((cols (screen-cols screen))
-         (i (%idx screen col row)))
-    ;; A pair never begins in the last column, where its right half would fall
-    ;; outside the row (LEXTER-O26)
-    (when (and wide (>= col (1- cols)))
-      (setf wide nil))
-    ;; If overwriting the right half of an existing wide char, clear the left half
-    (when (and (> col 0)
-               (= 1 (sbit (screen-wide-flags screen) (%idx screen (1- col) row))))
-      (let ((left-i (%idx screen (1- col) row)))
-        (setf (sbit (screen-wide-flags screen) left-i) 0
-              (aref (screen-glyphs screen) left-i) (screen-blank-glyph screen))))
-    ;; If this cell was wide, clear its old continuation
-    (when (= 1 (sbit (screen-wide-flags screen) i))
-      (let ((next-col (1+ col)))
-        (when (< next-col cols)
-          (let ((next-i (%idx screen next-col row)))
-            (setf (aref (screen-glyphs screen) next-i) (screen-blank-glyph screen))))))
-    (let ((layers (%get-layered screen col row)))
-      (if layers
-          ;; Layered: write to topmost layer, and give the cell the swatch and
-          ;; attributes as a simple cell takes them (LEXTER-O27)
-          (let* ((ln (model-cell-layers-topmost layers))
-                 (lobj (aref (model-cell-layers-layers layers) ln)))
-            (if lobj
-                (setf (model-layer-glyph-idx lobj) glyph-idx)
-                (setf (aref (model-cell-layers-layers layers) ln)
-                      (make-model-layer :glyph-idx glyph-idx
-                                        :ink-slot 1
-                                        :bg-slot 0
-                                        :transparent-side (if (zerop ln) :none :bg))))
-            (when swatch
-              (setf (model-cell-layers-swatch-idx layers) swatch
-                    (aref (screen-swatch-indices screen) i) swatch))
-            (when attrs
-              (setf (aref (screen-attrs screen) i) attrs)))
-          ;; Simple: write directly
-          (progn
-            (setf (aref (screen-glyphs screen) i) glyph-idx)
-            (when swatch
-              (setf (aref (screen-swatch-indices screen) i) swatch))
-            (when attrs
-              (setf (aref (screen-attrs screen) i) attrs)))))
-    ;; Set/clear wide flag
-    (setf (sbit (screen-wide-flags screen) i) (if wide 1 0))
-    ;; Handle wide: mark continuation cell
-    (when wide
-      (let ((next-col (1+ col)))
-        (when (< next-col cols)
-          (let ((next-i (%idx screen next-col row)))
-            (setf (aref (screen-glyphs screen) next-i) 0
-                  (sbit (screen-wide-flags screen) next-i) 0)
-            (when swatch
-              (setf (aref (screen-swatch-indices screen) next-i) swatch))))))
-    (%mark-dirty screen row)))
-
-(defun write-string-at (screen col row string &key (swatch nil) (attrs nil)
-                                                   (codepoint-fn #'char-code))
-  "Write STRING starting at (COL, ROW).
-   CODEPOINT-FN converts each character to a glyph index."
-  (loop :for c :across string
-        :for x :from col
-        :while (< x (screen-cols screen))
-        :do (write-char-at screen x row (funcall codepoint-fn c)
-                           :swatch swatch :attrs attrs)))
-
-;;; --------------------------------------------------------------------------
-;;; Cursor-relative write (targets topmost layer)
-;;; --------------------------------------------------------------------------
-
-(defun put-char (screen glyph-idx &key (swatch nil) (attrs nil) (advance t) wide)
-  "Write a character at the cursor position and optionally advance.
-   Targets the topmost active layer.
-   WIDE, when T, writes a double-wide character and advances by 2."
-  (let ((col (screen-cursor-col screen))
-        (cols (screen-cols screen)))
-    ;; A wide char cannot begin in the last column: blank it and write the pair
-    ;; at the start of the next row, scrolling at the bottom (LEXTER-O26)
-    (when (and wide (>= col (1- cols)) (> cols 1))
-      (write-char-at screen col (screen-cursor-row screen)
-                     (screen-blank-glyph screen) :swatch swatch)
-      (line-feed screen)
-      (setf col 0))
-    (write-char-at screen col (screen-cursor-row screen)
-                   glyph-idx :swatch swatch :attrs attrs :wide wide)
-    (when advance
-      (let ((advance-by (if wide 2 1)))
-        (let ((new-col (+ col advance-by)))
-          (if (>= new-col cols)
-              ;; Wrap or stay at edge depending on mode
-              (setf (screen-cursor-col screen) (1- cols))
-              (setf (screen-cursor-col screen) new-col)))))))
-
-(defun delete-char (screen)
-  "Delete the character at cursor by writing the blank on the topmost layer."
-  (write-char-at screen (screen-cursor-col screen) (screen-cursor-row screen)
-                 (screen-blank-glyph screen)))
-
-;;; --------------------------------------------------------------------------
-;;; Erase operations
-;;; --------------------------------------------------------------------------
 ;;;
-;;; A cell's glyph, swatch, attributes, wide flag, and layered entry move and
-;;; clear together, and every range operation repairs a double-width pair it
-;;; cuts at its edges, as a terminal blanks the other half of a pair when one
-;;; half is overwritten (LEXTER-D98, LEXTER-O26). In the first edition a pair is
-;;; a left half marked wide and a right half holding glyph 0, the empty glyph.
+;;; A cell's content is a codepoint, 0 for an empty cell, or the continuation
+;;; marker in a cell that the character before it covers. Both halves of a
+;;; double-width character set the wide bit; the right half holds the marker
+;;; (LEXTER-D119).
+
+(defun cell-content (screen col row)
+  "The content word of the cell at COL, ROW: its first codepoint, 0 when it is
+   empty, or +CONTINUATION-MARKER+."
+  (read-text-cell (screen-text screen) (%idx screen col row) :content))
+
+(defun cell-style (screen col row)
+  "The id of the style in which the cell at COL, ROW was written."
+  (read-text-cell (screen-text screen) (%idx screen col row) :style))
+
+(defun cell-wide-p (screen col row)
+  "True when the cell at COL, ROW is either half of a double-width character."
+  (= 1 (read-text-cell (screen-text screen) (%idx screen col row) :wide)))
+
+(defun cell-continuation-p (screen col row)
+  "True when the cell at COL, ROW is covered by the character before it."
+  (text-cell-continuation-p (screen-text screen) (%idx screen col row)))
+
+(defun cell-codepoints (screen col row)
+  "The codepoints of the cell at COL, ROW, as a list: its first, then those of
+   zero width that joined it; NIL for an empty cell or a continuation."
+  (let ((content (cell-content screen col row)))
+    (unless (or (zerop content) (= content +continuation-marker+))
+      (cons content (coerce (%cluster screen col row) 'list)))))
 
 (declaim (inline %wide-left-p))
 (defun %wide-left-p (screen col row)
   "True when the cell at COL, ROW is the left half of a double-width pair."
   (and (< -1 col (screen-cols screen))
-       (= 1 (sbit (screen-wide-flags screen) (%idx screen col row)))))
+       (multiple-value-bind (content wide)
+           (read-text-cell (screen-text screen) (%idx screen col row) :content :wide)
+         (and (= wide 1) (/= content +continuation-marker+)))))
+
+;;; --------------------------------------------------------------------------
+;;; Clusters
+;;; --------------------------------------------------------------------------
+;;;
+;;; The codepoints after the first of a cell are kept for each row, by column,
+;;; and move and clear with their cells (LEXTER-D127).
+
+(defun %cluster (screen col row)
+  (cdr (assoc col (svref (screen-clusters screen) row))))
+
+(defun %set-cluster (screen col row codepoints)
+  "Keep CODEPOINTS as the joined codepoints of the cell at COL, ROW, or with
+   NIL none, and set the cell's cluster flag to match."
+  (let ((rest (remove col (svref (screen-clusters screen) row) :key #'car)))
+    (setf (svref (screen-clusters screen) row)
+          (if codepoints (acons col codepoints rest) rest))
+    (patch-text-cell (screen-text screen) (%idx screen col row)
+                     :cluster (if codepoints 1 0))))
+
+;;; --------------------------------------------------------------------------
+;;; Terminal rows
+;;; --------------------------------------------------------------------------
+
+(defun row-soft-wrap-p (screen row)
+  "True when autowrap carried ROW's text on to the next row (LEXTER-D119)."
+  (= 1 (read-terminal-row (screen-terminal-rows screen) row :soft-wrap)))
+
+(defun set-row-soft-wrap (screen row wrapped)
+  "Record whether ROW's text continues on the next row because autowrap
+   carried it there."
+  (patch-terminal-row (screen-terminal-rows screen) row :soft-wrap (if wrapped 1 0)))
+
+(defun row-prompt-kind (screen row)
+  "The OSC 133 zone at ROW's start: 0 none, 1 prompt, 2 input, 3 output."
+  (read-terminal-row (screen-terminal-rows screen) row :prompt-kind))
+
+(defun row-line-size (screen row)
+  "ROW's DEC line size: 0 single, 1 double width, 2 and 3 the top and bottom
+   of double height."
+  (read-terminal-row (screen-terminal-rows screen) row :line-size))
+
+(defun %copy-terminal-row (from from-index to to-index)
+  (multiple-value-bind (soft-wrap prompt-kind line-size)
+      (read-terminal-row from from-index :soft-wrap :prompt-kind :line-size)
+    (write-terminal-row to to-index
+                        :soft-wrap soft-wrap :prompt-kind prompt-kind :line-size line-size)))
+
+;;; --------------------------------------------------------------------------
+;;; Write operations
+;;; --------------------------------------------------------------------------
+;;;
+;;; A character's cells, the codepoints that joined it, and its wide bit are
+;;; written and erased together; every operation that cuts a double-width
+;;; pair blanks the half it leaves, as a terminal blanks the other half of a
+;;; pair when one half is overwritten (LEXTER-D98, LEXTER-O26).
+
+(defun %set-cell (screen col row content style wide)
+  "Write the cell at COL, ROW whole: CONTENT, STYLE, and WIDE, 0 or 1, with
+   no joined codepoints."
+  (%set-cluster screen col row nil)
+  (write-text-cell (screen-text screen) (%idx screen col row)
+                   :content content :style style :wide wide))
 
 (defun %blank-cell (screen col row)
-  "Blank the simple cell at COL, ROW: the blank glyph, no attributes, not
-   wide. Its swatch is kept, and a layered entry is left to the caller."
-  (let ((i (%idx screen col row)))
-    (setf (aref (screen-glyphs screen) i) (screen-blank-glyph screen)
-          (aref (screen-attrs screen) i) 0
-          (sbit (screen-wide-flags screen) i) 0)))
+  "Empty the cell at COL, ROW: no character, not wide, in the style that keeps
+   only its colours (ERASED-STYLE)."
+  (%set-cell screen col row 0
+             (erased-style (screen-styles screen) (cell-style screen col row))
+             0))
+
+(defun write-char-at (screen col row codepoint &key (style 0) wide)
+  "Write CODEPOINT in the style whose id is STYLE at (COL, ROW). WIDE, when
+   true, writes a double-width character, which covers (COL, ROW) and
+   (COL+1, ROW): the right half holds the continuation marker. A pair never
+   begins in the last column, where its right half would fall outside the row
+   (LEXTER-O26); there CODEPOINT is written narrow."
+  (let ((cols (screen-cols screen)))
+    (when (and wide (>= col (1- cols)))
+      (setf wide nil))
+    ;; Overwriting the right half of a pair blanks its left half
+    (when (cell-continuation-p screen col row)
+      (when (%wide-left-p screen (1- col) row)
+        (%blank-cell screen (1- col) row)))
+    ;; Overwriting a left half, or covering a cell that begins a pair, blanks
+    ;; the right half left behind
+    (loop :for c :from col :to (if wide (1+ col) col)
+          :when (and (%wide-left-p screen c row) (< (1+ c) cols))
+            :do (%blank-cell screen (1+ c) row))
+    (%set-cell screen col row codepoint style (if wide 1 0))
+    (when wide
+      (%set-cell screen (1+ col) row +continuation-marker+ style 1))
+    (%mark-dirty screen row)))
+
+(defun write-string-at (screen col row string &key (style 0))
+  "Write the narrow characters of STRING from (COL, ROW), in the style whose id
+   is STYLE, as far as the row reaches."
+  (loop :for c :across string
+        :for x :from col
+        :while (< x (screen-cols screen))
+        :do (write-char-at screen x row (char-code c) :style style)))
+
+(defun join-character (screen codepoint)
+  "Join CODEPOINT, a character of width 0, to the cell of the character before
+   the cursor: on its row, or at the end of the row before when autowrap
+   carried the text on (LEXTER-D119). A character with none before it is
+   dropped. Only the cell's first codepoint is drawn (LEXTER-O63)."
+  (let ((col (1- (screen-cursor-col screen)))
+        (row (screen-cursor-row screen)))
+    (when (and (< col 0) (plusp row) (row-soft-wrap-p screen (1- row)))
+      (setf row (1- row)
+            col (1- (screen-cols screen))))
+    (when (and (>= col 0) (cell-continuation-p screen col row))
+      (decf col))
+    (when (and (>= col 0) (plusp (cell-content screen col row))
+               (not (cell-continuation-p screen col row)))
+      (%set-cluster screen col row
+                    (concatenate '(vector (unsigned-byte 32))
+                                 (%cluster screen col row) (list codepoint)))
+      (%mark-dirty screen row))))
+
+;;; --------------------------------------------------------------------------
+;;; Cursor-relative write
+;;; --------------------------------------------------------------------------
+
+(defun put-char (screen codepoint &key (style 0) (advance t) wide)
+  "Write CODEPOINT at the cursor in the style whose id is STYLE, and optionally
+   advance. WIDE, when T, writes a double-wide character and advances by 2."
+  (let ((col (screen-cursor-col screen))
+        (cols (screen-cols screen)))
+    ;; A wide char cannot begin in the last column: blank it and write the pair
+    ;; at the start of the next row, scrolling at the bottom (LEXTER-O26)
+    (when (and wide (>= col (1- cols)) (> cols 1))
+      (%blank-cell screen col (screen-cursor-row screen))
+      (set-row-soft-wrap screen (screen-cursor-row screen) t)
+      (line-feed screen)
+      (setf col 0))
+    (write-char-at screen col (screen-cursor-row screen) codepoint :style style :wide wide)
+    (when advance
+      (let ((new-col (+ col (if wide 2 1))))
+        (setf (screen-cursor-col screen) (min new-col (1- cols)))))))
+
+(defun delete-char (screen)
+  "Erase the character at the cursor."
+  (%erase-range screen (screen-cursor-row screen)
+                (screen-cursor-col screen) (1+ (screen-cursor-col screen))))
+
+;;; --------------------------------------------------------------------------
+;;; Erase operations
+;;; --------------------------------------------------------------------------
 
 (defun %repair-pair-edges (screen row start end)
   "Before an operation changes columns START to END - 1 of ROW, blank the half
@@ -476,37 +389,25 @@
     (when (and (< 0 start cols) (%wide-left-p screen (1- start) row))
       (%blank-cell screen (1- start) row))
     (when (and (< 0 end cols) (%wide-left-p screen (1- end) row))
-      (%blank-cell screen end row)
-      (setf (sbit (screen-wide-flags screen) (%idx screen (1- end) row)) 0))))
-
-(defun %erase-cell (screen col row)
-  "Erase a single cell on the topmost layer, and its wide flag."
-  (let ((layers (%get-layered screen col row))
-        (blank (screen-blank-glyph screen))
-        (i (%idx screen col row)))
-    (setf (sbit (screen-wide-flags screen) i) 0)
-    (if layers
-        ;; Write blank to topmost layer
-        (let* ((ln (model-cell-layers-topmost layers))
-               (lobj (aref (model-cell-layers-layers layers) ln)))
-          (when lobj
-            (setf (model-layer-glyph-idx lobj) blank)))
-        ;; Simple cell
-        (setf (aref (screen-glyphs screen) i) blank
-              (aref (screen-attrs screen) i) 0))))
+      (%blank-cell screen end row))))
 
 (defun %erase-range (screen row start end)
-  "Erase columns START to END - 1 of ROW, repairing a pair cut at either edge."
-  (let ((end (min end (screen-cols screen))))
+  "Erase columns START to END - 1 of ROW, repairing a pair cut at either edge.
+   An erase that reaches the row's last column leaves the row unwrapped, since
+   its text no longer runs on to the next."
+  (let* ((cols (screen-cols screen))
+         (end (min end cols)))
     (when (< start end)
       (%repair-pair-edges screen row start end)
-      (loop :for col :from start :below end :do (%erase-cell screen col row)))
+      (loop :for col :from start :below end :do (%blank-cell screen col row))
+      (when (= end cols)
+        (set-row-soft-wrap screen row nil)))
     (%mark-dirty screen row)))
 
 (defun erase-in-display (screen mode)
   "Erase parts of the display.
    MODE 0: cursor to end of screen
-   MODE 1: start of screen to cursor  
+   MODE 1: start of screen to cursor
    MODE 2: entire screen
    MODE 3: entire screen + scrollback"
   (let ((cols (screen-cols screen))
@@ -524,6 +425,7 @@
        (loop :for row :from 0 :below rows :do (%erase-range screen row 0 cols)))
       (3 ;; Entire screen + scrollback
        (erase-in-display screen 2)
+       (fill (screen-scrollback-lines screen) nil)
        (setf (screen-scrollback-count screen) 0
              (screen-scrollback-viewport screen) 0)))))
 
@@ -550,24 +452,12 @@
 ;;; --------------------------------------------------------------------------
 
 (defun %move-cell (screen src-col dst-col row)
-  "Copy the cell at SRC-COL to DST-COL of ROW whole: its glyph, swatch,
-   attributes, wide flag, and layered entry."
-  (let ((si (%idx screen src-col row))
-        (di (%idx screen dst-col row))
-        (table (screen-layered-cells screen)))
-    (setf (aref (screen-glyphs screen) di) (aref (screen-glyphs screen) si)
-          (aref (screen-swatch-indices screen) di) (aref (screen-swatch-indices screen) si)
-          (aref (screen-attrs screen) di) (aref (screen-attrs screen) si)
-          (sbit (screen-wide-flags screen) di) (sbit (screen-wide-flags screen) si))
-    (let ((layers (gethash (cons src-col row) table)))
-      (if layers
-          (setf (gethash (cons dst-col row) table) layers)
-          (remhash (cons dst-col row) table)))))
-
-(defun %clear-cell-whole (screen col row)
-  "Make the cell at COL, ROW a blank simple cell, removing any layered entry."
-  (%blank-cell screen col row)
-  (remhash (cons col row) (screen-layered-cells screen)))
+  "Copy the cell at SRC-COL to DST-COL of ROW whole: its text cell and the
+   codepoints that joined it."
+  (let ((i (%idx screen 0 row)))
+    (copy-text-cells (screen-text screen) (+ i src-col) (screen-text screen) (+ i dst-col) 1)
+    (let ((cluster (%cluster screen src-col row)))
+      (%set-cluster screen dst-col row cluster))))
 
 (defun insert-chars (screen n)
   "Insert N blank characters at cursor, shifting rest of line right."
@@ -583,14 +473,15 @@
             :do (%move-cell screen (- c n) c row))
       ;; Clear inserted positions
       (loop :for c :from col :below (+ col n)
-            :do (%clear-cell-whole screen c row))
+            :do (%blank-cell screen c row))
       ;; A pair whose right half was pushed off the end loses its left half
       (when (%wide-left-p screen (1- cols) row)
         (%blank-cell screen (1- cols) row)))
     (%mark-dirty screen row)))
 
 (defun delete-chars (screen n)
-  "Delete N characters at cursor, shifting rest of line left."
+  "Delete N characters at cursor, shifting rest of line left. The blanks
+   shifted in at the row's end leave it unwrapped."
   (let* ((row (screen-cursor-row screen))
          (col (screen-cursor-col screen))
          (cols (screen-cols screen))
@@ -603,7 +494,8 @@
             :do (%move-cell screen (+ c n) c row))
       ;; Clear vacated positions
       (loop :for c :from (- cols n) :below cols
-            :do (%clear-cell-whole screen c row)))
+            :do (%blank-cell screen c row))
+      (set-row-soft-wrap screen row nil))
     (%mark-dirty screen row)))
 
 ;;; --------------------------------------------------------------------------
@@ -611,42 +503,23 @@
 ;;; --------------------------------------------------------------------------
 
 (defun %copy-row (screen src-row dst-row)
-  "Copy row data from SRC-ROW to DST-ROW: glyphs, swatches, attributes, wide
-   flags, and layered entries."
-  (let* ((cols (screen-cols screen))
-         (src (%idx screen 0 src-row))
-         (dst (%idx screen 0 dst-row)))
-    (replace (screen-glyphs screen) (screen-glyphs screen)
-             :start1 dst :start2 src :end2 (+ src cols))
-    (replace (screen-swatch-indices screen) (screen-swatch-indices screen)
-             :start1 dst :start2 src :end2 (+ src cols))
-    (replace (screen-attrs screen) (screen-attrs screen)
-             :start1 dst :start2 src :end2 (+ src cols))
-    (replace (screen-wide-flags screen) (screen-wide-flags screen)
-             :start1 dst :start2 src :end2 (+ src cols))
-    ;; Handle layered cells
-    (loop :for col :from 0 :below cols
-          :for src-key = (cons col src-row)
-          :for dst-key = (cons col dst-row)
-          :for layers = (gethash src-key (screen-layered-cells screen))
-          :do (if layers
-                  (setf (gethash dst-key (screen-layered-cells screen)) layers)
-                  (remhash dst-key (screen-layered-cells screen))))
+  "Copy row SRC-ROW to DST-ROW whole: its text cells, the codepoints that
+   joined them, and its terminal row."
+  (let ((cols (screen-cols screen)))
+    (copy-text-cells (screen-text screen) (%idx screen 0 src-row)
+                     (screen-text screen) (%idx screen 0 dst-row) cols)
+    (setf (svref (screen-clusters screen) dst-row)
+          (copy-alist (svref (screen-clusters screen) src-row)))
+    (%copy-terminal-row (screen-terminal-rows screen) src-row
+                        (screen-terminal-rows screen) dst-row)
     (%mark-dirty screen dst-row)))
 
 (defun %clear-row (screen row)
-  "Clear a row to blank cells."
-  (let ((cols (screen-cols screen))
-        (blank (screen-blank-glyph screen))
-        (default-sw (screen-default-swatch screen)))
-    (loop :for col :from 0 :below cols
-          :for i = (%idx screen col row)
-          :do (setf (aref (screen-glyphs screen) i) blank
-                    (aref (screen-swatch-indices screen) i) default-sw
-                    (aref (screen-attrs screen) i) 0
-                    (sbit (screen-wide-flags screen) i) 0)
-              (remhash (cons col row) (screen-layered-cells screen)))
-    (%mark-dirty screen row)))
+  "Make ROW a row of empty cells in style 0, with a terminal row of zeros."
+  (clear-text-cells (screen-text screen) (%idx screen 0 row) (screen-cols screen))
+  (setf (svref (screen-clusters screen) row) nil)
+  (write-terminal-row (screen-terminal-rows screen) row)
+  (%mark-dirty screen row))
 
 (defun insert-lines (screen n)
   "Insert N blank lines at cursor row, scrolling lines down within scroll region."
@@ -670,24 +543,32 @@
 ;;; Scrolling
 ;;; --------------------------------------------------------------------------
 
+(defun %history-row (screen row)
+  "ROW of SCREEN as history keeps it: its text cells without continuations,
+   the codepoints that joined them by their place in the history row, and its
+   terminal row (LEXTER-D118)."
+  (let* ((cols (screen-cols screen))
+         (text (screen-text screen))
+         (base (%idx screen 0 row))
+         (kept (loop :for col :below cols
+                     :unless (text-cell-continuation-p text (+ base col))
+                       :collect col))
+         (history (%make-history-row :text (make-text-array (length kept)))))
+    (loop :for col :in kept
+          :for k :from 0
+          :do (copy-text-cells text (+ base col) (history-row-text history) k 1)
+              (let ((cluster (%cluster screen col row)))
+                (when cluster
+                  (push (cons k cluster) (history-row-clusters history)))))
+    (%copy-terminal-row (screen-terminal-rows screen) row (history-row-terminal-row history) 0)
+    history))
+
 (defun %save-to-scrollback (screen row)
   "Save a row to scrollback before it scrolls off."
   (when (screen-scrollback-enabled screen)
     (let* ((max (screen-scrollback-max screen))
-           (count (screen-scrollback-count screen))
-           (lines (screen-scrollback-lines screen))
-           (cols (screen-cols screen))
-           ;; Save as a simple list: (glyph swatch attrs) per cell
-           (line (make-array cols)))
-      (loop :for col :from 0 :below cols
-            :for i = (%idx screen col row)
-            :do (setf (aref line col)
-                      (list (aref (screen-glyphs screen) i)
-                            (aref (screen-swatch-indices screen) i)
-                            (aref (screen-attrs screen) i))))
-      ;; Ring buffer insert
-      (let ((idx (mod count max)))
-        (setf (aref lines idx) line))
+           (count (screen-scrollback-count screen)))
+      (setf (aref (screen-scrollback-lines screen) (mod count max)) (%history-row screen row))
       (setf (screen-scrollback-count screen) (1+ count)))))
 
 (defun line-feed (screen)
@@ -755,7 +636,8 @@
   (min (screen-scrollback-count screen) (screen-scrollback-max screen)))
 
 (defun scrollback-line (screen n)
-  "Return scrollback line N (0 = most recent). Returns NIL if out of range."
+  "Return scrollback line N (0 = most recent), a HISTORY-ROW, or NIL if out of
+   range."
   (let* ((count (scrollback-lines screen))
          (max (screen-scrollback-max screen))
          (total (screen-scrollback-count screen))
@@ -763,6 +645,18 @@
     (when (< n count)
       (let ((idx (mod (- total 1 n) max)))
         (aref lines idx)))))
+
+(defun history-row-codepoints (history)
+  "The first codepoint of each cell of the HISTORY-ROW HISTORY, as a list, 0
+   for an empty cell."
+  (let ((text (history-row-text history)))
+    (loop :for k :below (text-array-count text)
+          :collect (read-text-cell text k :content))))
+
+(defun history-row-soft-wrap-p (history)
+  "True when the HISTORY-ROW HISTORY continued on the next row because
+   autowrap carried it there."
+  (= 1 (read-terminal-row (history-row-terminal-row history) 0 :soft-wrap)))
 
 (defun scrollback-viewport-offset (screen)
   (screen-scrollback-viewport screen))
@@ -780,134 +674,112 @@
   "Resize the screen. Preserves content where possible."
   (let* ((old-cols (screen-cols screen))
          (old-rows (screen-rows screen))
-         (new-n (* new-cols new-rows))
-         (blank (screen-blank-glyph screen))
-         (new-glyphs (make-array new-n :element-type '(unsigned-byte 32) :initial-element blank))
-         (new-swatch-indices (make-array new-n :element-type '(unsigned-byte 16)
-                                                :initial-element (screen-default-swatch screen)))
-         (new-attrs (make-array new-n :element-type '(unsigned-byte 32) :initial-element 0))
-         (new-wide-flags (make-array new-n :element-type 'bit :initial-element 0))
-         (new-layered (make-hash-table :test 'equal :size 64))
-         (new-dirty (make-array new-rows :element-type 'bit :initial-element 1)))
-    ;; Copy existing data
-    (loop :for row :from 0 :below (min old-rows new-rows)
-          :do (loop :for col :from 0 :below (min old-cols new-cols)
-                    :for old-i = (+ (* row old-cols) col)
-                    :for new-i = (+ (* row new-cols) col)
-                     :do (setf (aref new-glyphs new-i) (aref (screen-glyphs screen) old-i)
-                               (aref new-swatch-indices new-i) (aref (screen-swatch-indices screen) old-i)
-                               (aref new-attrs new-i) (aref (screen-attrs screen) old-i)
-                               (sbit new-wide-flags new-i) (sbit (screen-wide-flags screen) old-i))))
-    ;; A pair cut by a narrower right edge loses its left half (LEXTER-O26)
-    (when (< new-cols old-cols)
-      (loop :for row :from 0 :below (min old-rows new-rows)
-            :for i = (+ (* row new-cols) (1- new-cols))
-            :when (= 1 (sbit new-wide-flags i))
-              :do (setf (sbit new-wide-flags i) 0
-                        (aref new-glyphs i) blank)))
-    ;; Copy layered cells that fit
-    (maphash (lambda (key layers)
-               (destructuring-bind (col . row) key
-                 (when (and (< col new-cols) (< row new-rows))
-                   (setf (gethash key new-layered) layers))))
-             (screen-layered-cells screen))
-    ;; Update
+         (old-text (screen-text screen))
+         (old-clusters (screen-clusters screen))
+         (old-terminal-rows (screen-terminal-rows screen))
+         (keep-rows (min old-rows new-rows))
+         (keep-cols (min old-cols new-cols)))
     (setf (screen-cols screen) new-cols
           (screen-rows screen) new-rows
-          (screen-glyphs screen) new-glyphs
-          (screen-swatch-indices screen) new-swatch-indices
-          (screen-attrs screen) new-attrs
-          (screen-wide-flags screen) new-wide-flags
-          (screen-layered-cells screen) new-layered
-          (screen-row-dirty screen) new-dirty
+          (screen-text screen) (make-text-array (* new-cols new-rows))
+          (screen-clusters screen) (make-array new-rows :initial-element nil)
+          (screen-terminal-rows screen) (make-terminal-row-array new-rows)
+          (screen-row-dirty screen) (make-array new-rows :element-type 'bit :initial-element 1)
+          (screen-scroll-top screen) 0
           (screen-scroll-bottom screen) (1- new-rows))
+    (dotimes (row keep-rows)
+      (copy-text-cells old-text (* row old-cols) (screen-text screen) (* row new-cols) keep-cols)
+      (setf (svref (screen-clusters screen) row)
+            (remove-if-not (lambda (entry) (< (car entry) new-cols))
+                           (svref old-clusters row)))
+      (%copy-terminal-row old-terminal-rows row (screen-terminal-rows screen) row)
+      ;; A pair cut by a narrower right edge loses its left half (LEXTER-O26)
+      (when (and (< new-cols old-cols) (%wide-left-p screen (1- new-cols) row))
+        (%blank-cell screen (1- new-cols) row)))
     ;; Clamp cursor
     (setf (screen-cursor-col screen) (min (screen-cursor-col screen) (1- new-cols))
           (screen-cursor-row screen) (min (screen-cursor-row screen) (1- new-rows)))
     screen))
 
 ;;; --------------------------------------------------------------------------
-;;; Flush to display grid
+;;; Building rows into the display grid
 ;;; --------------------------------------------------------------------------
+;;;
+;;; One function builds every terminal row, of the screen and of its history,
+;;; from text cells, their styles, and the terminal's settings, so that a
+;;; fault found on either path is repaired for both (LEXTER-D124). What a cell
+;;; is drawn with is decided here: its glyph, from the atlas, by its codepoint
+;;; and width; and its swatch, from its style under the presentation rules
+;;; (LEXTER-D125). Until the record arrives (step 3 of Phase 3), the rows are
+;;; built into the first edition's display grid.
 
-(defun %flush-cell (screen display-grid col row grid-col grid-row space-glyph)
-  "Copy the cell at COL, ROW of SCREEN to GRID-COL, GRID-ROW of DISPLAY-GRID:
-   a layered cell whole, its absent layers included, or a simple cell whose
-   glyph 0 is drawn as SPACE-GLYPH. A double-width pair whose right half would
+(defun %cell-glyph (atlas content width space-glyph)
+  "The atlas position of a cell whose content word is CONTENT and whose
+   character is WIDTH columns wide: SPACE-GLYPH for an empty cell, and the
+   \"no glyph\" glyph for a character no font covers (LEXTER-D122)."
+  (cond ((zerop content) space-glyph)
+        ((and atlas (lexter/atlas:atlas-glyph-index atlas content width)))
+        (t lexter/atlas:+no-glyph-position+)))
+
+(defun %build-row (screen display-grid text start count grid-row col-offset atlas space-glyph)
+  "Build the COUNT text cells of TEXT from cell START, one terminal row, into
+   GRID-ROW of DISPLAY-GRID from column COL-OFFSET, as SCREEN's terminal draws
+   them. Cells that continue a character are passed over, so that a row of
+   the screen and a row of history, which keeps none, are built alike; a row
+   shorter than the screen, as history leaves it after a resize, is filled
+   with empty cells in style 0. A double-width pair whose right half would
    fall past the grid's right edge is clipped to its left half."
-  (let ((layers (%get-layered screen col row)))
-    (if layers
-        ;; Layered cell: rebuilt from nothing, so that a layer the model has
-        ;; cleared is cleared in the grid too (LEXTER-O27)
-        (let ((sw-idx (model-cell-layers-swatch-idx layers)))
-          (lexter/grid:clear-cell-layers display-grid grid-col grid-row)
-          (lexter/grid:set-cell-swatch display-grid grid-col grid-row sw-idx)
-          (loop :for ln :from 0 :below +max-layers+
-                :for lobj = (aref (model-cell-layers-layers layers) ln)
-                :when lobj
-                :do (lexter/grid:set-cell-layer
-                     display-grid grid-col grid-row ln
-                     (model-layer-glyph-idx lobj)
-                     (model-layer-ink-slot lobj)
-                     :bg-slot (model-layer-bg-slot lobj)
-                     :transparent-side (model-layer-transparent-side lobj))))
-        ;; Simple cell - clear any overlay layers first
-        (progn
-          (lexter/grid:clear-cell-layers display-grid grid-col grid-row)
-          (let ((i (%idx screen col row)))
-            (lexter/grid:set-simple-cell
-             display-grid grid-col grid-row
-             (let ((g (aref (screen-glyphs screen) i)))
-               (if (zerop g) space-glyph g))
-             (aref (screen-swatch-indices screen) i)
-             :wide (and (= 1 (sbit (screen-wide-flags screen) i))
-                        (< (1+ grid-col) (lexter/grid:display-grid-cols display-grid)))))))))
+  (let ((styles (screen-styles screen))
+        (swatches (screen-swatches screen))
+        (palette (screen-palette screen))
+        (cols (screen-cols screen))
+        (grid-cols (lexter/grid:display-grid-cols display-grid))
+        (col 0))
+    (flet ((put (col glyph swatch wide)
+             (let ((grid-col (+ col col-offset)))
+               (when (< grid-col grid-cols)
+                 (lexter/grid:clear-cell-layers display-grid grid-col grid-row)
+                 (lexter/grid:set-simple-cell display-grid grid-col grid-row glyph swatch
+                                              :wide (and wide (< (1+ grid-col) grid-cols)))))))
+      (loop :for i :from start :below (+ start count)
+            :while (< col cols)
+            :do (multiple-value-bind (content style wide)
+                    (read-text-cell text i :content :style :wide)
+                  (unless (= content +continuation-marker+)
+                    (let ((width (if (and (= wide 1) (< (1+ col) cols)) 2 1)))
+                      (put col (%cell-glyph atlas content width space-glyph)
+                           (style-swatch styles swatches style palette)
+                           (= width 2))
+                      (incf col width)))))
+      (loop :for c :from col :below cols
+            :do (put c space-glyph (style-swatch styles swatches 0 palette) nil)))))
 
 (defun %check-row-pairs (screen row)
-  "Blank any left half of a pair in ROW of SCREEN that has no right half: one
-   in the last column, or one whose next cell holds a glyph or begins a pair of
-   its own. A safety net under the operations that keep pairs (LEXTER-D98)."
+  "Blank either half of a pair in ROW of SCREEN that has lost the other: a left
+   half in the last column or before a cell that does not continue it, and a
+   continuation after a cell that is no left half. A safety net under the
+   operations that keep pairs (LEXTER-D98)."
   (let ((cols (screen-cols screen)))
-    (loop :for col :from 0 :below cols
-          :for i = (%idx screen col row)
-          :when (and (= 1 (sbit (screen-wide-flags screen) i))
-                     (or (= col (1- cols))
-                         (/= 0 (aref (screen-glyphs screen) (1+ i)))
-                         (= 1 (sbit (screen-wide-flags screen) (1+ i)))))
-            :do (setf (sbit (screen-wide-flags screen) i) 0
-                      (aref (screen-glyphs screen) i) (screen-blank-glyph screen)))))
+    (dotimes (col cols)
+      (cond ((%wide-left-p screen col row)
+             (unless (and (< (1+ col) cols) (cell-continuation-p screen (1+ col) row))
+               (%blank-cell screen col row)))
+            ((cell-continuation-p screen col row)
+             (unless (%wide-left-p screen (1- col) row)
+               (%blank-cell screen col row)))))))
 
-(defun %flush-history-row (screen display-grid line grid-row col-offset space-glyph)
-  "Write the history LINE, a vector of (glyph swatch attrs) for each cell as
-   %SAVE-TO-SCROLLBACK keeps it, to GRID-ROW of DISPLAY-GRID from COL-OFFSET, as
-   simple cells, a glyph 0 drawn as SPACE-GLYPH. A line narrower than SCREEN,
-   left by a resize, is padded with blanks in the screen's default swatch."
-  (let ((grid-cols (lexter/grid:display-grid-cols display-grid))
-        (width (if line (length line) 0)))
-    (loop :for col :from 0 :below (screen-cols screen)
-          :for grid-col = (+ col col-offset)
-          :when (< grid-col grid-cols)
-          :do (destructuring-bind (glyph swatch &rest attrs)
-                  (if (< col width)
-                      (aref line col)
-                      (list 0 (screen-default-swatch screen) 0))
-                (declare (ignore attrs))
-                (lexter/grid:set-simple-cell display-grid grid-col grid-row
-                                             (if (zerop glyph) space-glyph glyph)
-                                             swatch)))))
-
-(defun flush-to-display (screen display-grid &key (atlas nil) (space-glyph 0)
+(defun flush-to-display (screen display-grid &key (atlas nil)
+                                                   (space-glyph lexter/atlas:+empty-glyph-position+)
                                                    (cursor-blink-on t)
                                                    (col-offset 0) (row-offset 0))
-  "Copy screen state to the display grid for rendering.
-   ATLAS is used to look up cursor glyph indices.
-   SPACE-GLYPH is the atlas index for space character.
+  "Build SCREEN's rows into the display grid for rendering.
+   ATLAS gives each character's glyph, by its codepoint and width.
+   SPACE-GLYPH is the atlas position drawn in an empty cell.
    CURSOR-BLINK-ON controls whether a blinking cursor is currently visible.
    COL-OFFSET and ROW-OFFSET position the screen within the grid (for panes).
    While the screen's scrollback viewport is above 0, the grid shows history
    above the top rows of the screen, every row is repainted, and no cursor is
    drawn."
-  (declare (ignore atlas))
   (let ((cols (screen-cols screen))
         (rows (screen-rows screen))
         (cc (screen-cursor-col screen))
@@ -918,17 +790,11 @@
     ;; This ensures cursor blink and movement are always rendered
     (when (< cr rows)
       (setf (sbit (screen-row-dirty screen) cr) 1))
-    ;; Cells hold global swatch indices, which mean the same in the grid and
-    ;; on the GPU, so they are copied unchanged and no table is copied into
-    ;; the grid (LEXTER-D100).
-    ;; Copy cells (including clearing old cursor position). Row D of the pane
-    ;; shows, with the viewport V lines back, history line V-1-D while that is
-    ;; 0 or more, and otherwise the screen's row D-V. At V = 0 that is the
-    ;; screen itself, and only its dirty rows are copied; above 0 the view is
-    ;; shifted, so every row is repainted (LEXTER-DRAFT-pane-profiles-D5).
-    ;; Each pair is written once, from its left half, which marks the right
-    ;; half as its continuation in the grid (LEXTER-D98).
-    ;; Bounds: iterate screen coords, but clip to grid bounds after offset
+    ;; Row D of the pane shows, with the viewport V lines back, history line
+    ;; V-1-D while that is 0 or more, and otherwise the screen's row D-V. At
+    ;; V = 0 that is the screen itself, and only its dirty rows are built;
+    ;; above 0 the view is shifted, so every row is built
+    ;; (LEXTER-DRAFT-pane-profiles-D5).
     (let ((viewport (screen-scrollback-viewport screen)))
       (loop :for row :from 0 :below rows
             :for grid-row = (+ row row-offset)
@@ -937,17 +803,15 @@
                            (= 1 (sbit (screen-row-dirty screen) row)))
                        (< grid-row grid-rows))
             :do (if (and (plusp viewport) (>= history-line 0))
-                    (%flush-history-row screen display-grid
-                                        (scrollback-line screen history-line)
-                                        grid-row col-offset space-glyph)
+                    (let* ((history (scrollback-line screen history-line))
+                           (text (if history (history-row-text history) (make-text-array 0))))
+                      (%build-row screen display-grid text 0 (text-array-count text)
+                                  grid-row col-offset atlas space-glyph))
                     (let ((source-row (- row viewport)))
                       (%check-row-pairs screen source-row)
-                      (loop :for col :from 0 :below cols
-                            :for grid-col = (+ col col-offset)
-                            :when (and (< grid-col grid-cols)
-                                       (not (%wide-left-p screen (1- col) source-row)))
-                            :do (%flush-cell screen display-grid col source-row
-                                             grid-col grid-row space-glyph))))))
+                      (%build-row screen display-grid (screen-text screen)
+                                  (%idx screen 0 source-row) cols
+                                  grid-row col-offset atlas space-glyph)))))
     ;; No cursor is drawn while the view is scrolled back into the history.
     (when (plusp (screen-scrollback-viewport screen))
       (fill (screen-row-dirty screen) 0)
@@ -955,8 +819,8 @@
     ;; The cursor is drawn by exchanging the ink and background slots of its
     ;; cell's layer 0 in the grid, keeping the cell's swatch, layers, and wide
     ;; flag, so that it interns no swatch and breaks no pair (LEXTER-D101). The
-    ;; cursor's row is copied from the model at every flush, which removes it
-    ;; from where it was.
+    ;; cursor's row is built at every flush, which removes it from where it
+    ;; was.
     (let ((cursor-visible (and (screen-cursor-visible screen)
                                (or (not (screen-cursor-blink screen))
                                    cursor-blink-on)))

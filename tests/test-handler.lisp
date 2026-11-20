@@ -21,7 +21,7 @@
 column."
   (with-clean-terminal ()
     (feed "A")
-    (is (= (glyph *atlas* #x41) (screen-glyph *screen* 0 0)))
+    (is (= #x41 (screen-char *screen* 0 0)))
     (is (= 1 (lexter/model:cursor-col *screen*)))))
 
 ;;; ------------------------------------------------------------
@@ -33,7 +33,7 @@ column."
 left cell marked as the left half of a double-width character."
   (with-clean-terminal ()
     (apply #'feed *u4e00-bytes*)
-    (is (= (glyph *atlas* #x4E00) (screen-glyph *screen* 0 0)))
+    (is (= #x4E00 (screen-char *screen* 0 0)))
     (is-true (screen-wide-p *screen* 0 0))
     (is-false (screen-wide-p *screen* 1 0))))
 
@@ -44,7 +44,7 @@ so the next character does not overwrite its right half."
     (apply #'feed *u4e00-bytes*)
     (is (= 2 (lexter/model:cursor-col *screen*)))
     (feed "A")
-    (is (= (glyph *atlas* #x41) (screen-glyph *screen* 2 0)))
+    (is (= #x41 (screen-char *screen* 2 0)))
     (is-true (screen-wide-p *screen* 0 0))))
 
 (def-test wide-character-in-last-column-wraps-first ()
@@ -54,9 +54,9 @@ cannot be split across rows (LEXTER-D98)."
   (with-clean-terminal (:cols 10 :rows 3)
     (feed (csi 1 ";" 10 "H"))
     (apply #'feed *u4e00-bytes*)
-    (is (= (lexter/model:screen-blank-glyph *screen*) (screen-glyph *screen* 9 0)))
+    (is (= 0 (screen-char *screen* 9 0)))
     (is-false (screen-wide-p *screen* 9 0))
-    (is (= (glyph *atlas* #x4E00) (screen-glyph *screen* 0 1)))
+    (is (= #x4E00 (screen-char *screen* 0 1)))
     (is-true (screen-wide-p *screen* 0 1))
     (is (= 2 (lexter/model:cursor-col *screen*)))
     (is (= 1 (lexter/model:cursor-row *screen*)))))
@@ -77,7 +77,9 @@ and the text after it is written; the parse is not abandoned partway through
 the buffer."
   (with-clean-terminal ()
     (finishes (feed (csi "38;2;248;248;248m") "A"))
-    (is (= (glyph *atlas* #x41) (screen-glyph *screen* 0 0)))))
+    (is (= #x41 (screen-char *screen* 0 0)))
+    (flush)
+    (is (equal '(0 255 255 0) (grid-cell-colours *grid* 0 0)))))
 
 (def-test indexed-colour-out-of-range-is-ignored ()
   "LEXTER-O21: an indexed colour above 255 is ignored, and the current colour
@@ -85,7 +87,7 @@ stays as it was (LEXTER-D68)."
   (with-clean-terminal ()
     (feed (csi "31m"))
     (finishes (feed (csi "38;5;300m")))
-    (is (= 1 (lexter/vt-handler::vt-handler-current-fg *handler*)))))
+    (is (= (lexter/model:palette-colour 1) (lexter/model:style-foreground (current-style))))))
 
 (def-test tab-after-widening-reaches-the-new-stops ()
   "LEXTER-O21: after the terminal is widened, a tab beyond the old width moves
@@ -107,9 +109,9 @@ inside it (LEXTER-D69)."
   (with-clean-terminal (:cols 5 :rows 10)
     (feed (csi "1;5r") (csi "5;5H") "AB")
     (is (= 4 (lexter/model:cursor-row *screen*)))
-    (is (= (glyph *atlas* #x42) (screen-glyph *screen* 0 4)))
-    (is (= (glyph *atlas* #x41) (screen-glyph *screen* 4 3)))
-    (is (= (lexter/model:screen-blank-glyph *screen*) (screen-glyph *screen* 0 5)))))
+    (is (= #x42 (screen-char *screen* 0 4)))
+    (is (= #x41 (screen-char *screen* 4 3)))
+    (is (= 0 (screen-char *screen* 0 5)))))
 
 (def-test line-feed-below-the-region-does-not-scroll-it ()
   "LEXTER-O33: a line feed on the screen's last row, below the scrolling
@@ -117,7 +119,7 @@ region, leaves the region as it is, since the region scrolls only from its
 own bottom margin (LEXTER-D69)."
   (with-clean-terminal (:cols 5 :rows 5)
     (feed (csi "1;3r") "A" (csi "5;1H") 10)
-    (is (= (glyph *atlas* #x41) (screen-glyph *screen* 0 0)))
+    (is (= #x41 (screen-char *screen* 0 0)))
     (is (= 4 (lexter/model:cursor-row *screen*)))))
 
 (def-test reverse-index-above-the-region-does-not-scroll-it ()
@@ -126,7 +128,7 @@ region, leaves the region as it is, since the region scrolls down only from
 its own top margin (LEXTER-D69)."
   (with-clean-terminal (:cols 5 :rows 5)
     (feed (csi "3;5r") (csi "3;1H") "A" (csi "1;1H") #x1B "M")
-    (is (= (glyph *atlas* #x41) (screen-glyph *screen* 0 2)))
+    (is (= #x41 (screen-char *screen* 0 2)))
     (is (= 0 (lexter/model:cursor-row *screen*)))))
 
 ;;; ------------------------------------------------------------
@@ -152,30 +154,50 @@ share one palette (LEXTER-D70)."
 (defmacro with-terminal-on-atlas ((atlas-form &key (cols 10) (rows 3)) &body body)
   "Run BODY as WITH-CLEAN-TERMINAL does, but on the atlas ATLAS-FORM makes."
   `(let* ((*atlas*   ,atlas-form)
-          (*screen*  (make-test-screen :cols ,cols :rows ,rows :atlas *atlas*))
+          (*screen*  (make-test-screen :cols ,cols :rows ,rows))
           (*handler* (lexter/vt-handler:make-vt-handler *screen* *atlas*))
           (*grid*    (make-test-grid :cols ,cols :rows ,rows)))
      ,@body))
 
-(def-test zero-width-character-is-dropped ()
-  "A character of width 0, such as a combining mark, is dropped and does not
-move the cursor, until the text grid of Phase 3 gives it a cell to join."
+(def-test zero-width-character-joins-the-cell-before-it ()
+  "A character of width 0, such as a combining mark, joins the cell of the
+character before it and does not move the cursor (LEXTER-D119, LEXTER-D127)."
   (with-clean-terminal ()
     (feed "A" (string (code-char #x0301)) "B")
-    (is (= (glyph *atlas* #x42) (screen-glyph *screen* 1 0)))
+    (is (equal '(#x41 #x0301) (lexter/model:cell-codepoints *screen* 0 0)))
+    (is (= #x42 (screen-char *screen* 1 0)))
     (is (= 2 (lexter/model:cursor-col *screen*)))))
 
+(def-test zero-width-character-joins-across-a-soft-wrap ()
+  "A character of width 0 written after autowrap carried the text on joins the
+last character of the row before, the character it follows (LEXTER-D119)."
+  (with-clean-terminal (:cols 3 :rows 2)
+    (feed "ABC" (string (code-char #x0301)))
+    (is (equal '(#x43 #x0301) (lexter/model:cell-codepoints *screen* 2 0)))
+    (is (equal '() (lexter/model:cell-codepoints *screen* 0 1)))))
+
+(def-test zero-width-character-with-nothing-before-it-is-dropped ()
+  "A character of width 0 at the start of a row that no soft wrap reaches has
+no character to join, and is dropped (LEXTER-D119)."
+  (with-clean-terminal ()
+    (feed (string (code-char #x0301)) "A")
+    (is (equal '(#x41) (lexter/model:cell-codepoints *screen* 0 0)))))
+
 (def-test uncovered-character-draws-the-no-glyph-glyph ()
-  "A character that no font covers is written at its width from the table with
-the \"no glyph\" glyph, and moves the cursor by its width."
+  "A character that no font covers is written at its width from the table,
+moves the cursor by its width, and is drawn with the \"no glyph\" glyph
+(LEXTER-D122)."
   (with-clean-terminal ()
     (feed (string (code-char #xE9)))
-    (is (= lexter/atlas:+no-glyph-position+ (screen-glyph *screen* 0 0)))
+    (is (= #xE9 (screen-char *screen* 0 0)))
     (is (= 1 (lexter/model:cursor-col *screen*)))
     (feed (string (code-char #x1F600)))
-    (is (= lexter/atlas:+no-glyph-position+ (screen-glyph *screen* 1 0)))
     (is-true (screen-wide-p *screen* 1 0))
-    (is (= 3 (lexter/model:cursor-col *screen*)))))
+    (is (= 3 (lexter/model:cursor-col *screen*)))
+    (flush)
+    (is (= lexter/atlas:+no-glyph-position+ (grid-glyph *grid* 0 0)))
+    (is (= lexter/atlas:+no-glyph-position+ (grid-glyph *grid* 1 0)))
+    (is-true (grid-wide-p *grid* 1 0))))
 
 (def-test width-comes-from-the-table-not-the-font ()
   "A character's width is the table's, whatever its glyph's: an ideograph
@@ -207,6 +229,10 @@ policy gives it."
 ;;; LEXTER-D68 extends the rule of LEXTER-O21 to every parameter the handler
 ;;; stores; these are the further cases its audit found.
 
+(defun current-style ()
+  "The style in which *HANDLER* writes the next character."
+  (lexter/vt-handler::vt-handler-current-style *handler*))
+
 (defun window-title ()
   "The window title *HANDLER* holds."
   (lexter/vt-handler::vt-handler-window-title *handler*))
@@ -219,8 +245,8 @@ xterm documents, is ignored, and the current colour stays as it was
     (feed (csi "31m"))
     (finishes (feed (csi "38;2;300;0;0m")))
     (finishes (feed (csi "48;2;1000;1000;1000m")))
-    (is (= 1 (lexter/vt-handler::vt-handler-current-fg *handler*)))
-    (is (= 0 (lexter/vt-handler::vt-handler-current-bg *handler*)))))
+    (is (= (lexter/model:palette-colour 1) (lexter/model:style-foreground (current-style))))
+    (is (= lexter/model:+default-colour+ (lexter/model:style-background (current-style))))))
 
 (def-test erase-with-an-undefined-mode-is-ignored ()
   "LEXTER-O21: an erase in display or in line whose mode xterm does not define
@@ -229,8 +255,8 @@ is ignored, and the parse goes on (LEXTER-D68)."
     (feed "AB" (csi "1;1H"))
     (finishes (feed (csi "5J")))
     (finishes (feed (csi "9K")))
-    (is (= (glyph *atlas* #x41) (screen-glyph *screen* 0 0)))
-    (is (= (glyph *atlas* #x42) (screen-glyph *screen* 1 0)))))
+    (is (= #x41 (screen-char *screen* 0 0)))
+    (is (= #x42 (screen-char *screen* 1 0)))))
 
 (def-test scrolling-region-bottom-of-zero-is-the-window-s ()
   "LEXTER-O21: a scrolling region whose bottom margin is given as 0 takes the
@@ -260,9 +286,9 @@ than the region holds, rather than scrolling once for each line asked for
     (feed "ABC")
     (feed (csi "100000S"))
     (is (<= (lexter/model:scrollback-lines *screen*) 3))
-    (is (= (lexter/model:screen-blank-glyph *screen*) (screen-glyph *screen* 0 0)))
+    (is (= 0 (screen-char *screen* 0 0)))
     (feed (csi "100000T"))
-    (is (= (lexter/model:screen-blank-glyph *screen*) (screen-glyph *screen* 0 0)))))
+    (is (= 0 (screen-char *screen* 0 0)))))
 
 (def-test utf-8-beyond-unicode-is-the-replacement-character ()
   "LEXTER-O21: a UTF-8 sequence that decodes above U+10FFFF, or to a
@@ -271,9 +297,9 @@ where Lexter names its generated glyphs (LEXTER-D68, LEXTER-D89)."
   (with-terminal-on-atlas ((make-test-atlas
                             :fonts (list (make-test-font :narrow '(#x41 #x20 #xFFFD) :wide '()))))
     (feed (octets #xF5 #x80 #x80 #x80))
-    (is (= (glyph *atlas* #xFFFD) (screen-glyph *screen* 0 0)))
+    (is (= #xFFFD (screen-char *screen* 0 0)))
     (feed (octets #xED #xA0 #x80))
-    (is (= (glyph *atlas* #xFFFD) (screen-glyph *screen* 1 0)))))
+    (is (= #xFFFD (screen-char *screen* 1 0)))))
 
 (def-test long-osc-string-is-bounded ()
   "LEXTER-O21: an operating-system command longer than the parser keeps is cut
@@ -291,8 +317,8 @@ into the command (CLVT-D1)."
   (with-clean-terminal ()
     (feed #x1B "]0;two" 7 "AB")
     (is (string= "two" (window-title)))
-    (is (= (glyph *atlas* #x41) (screen-glyph *screen* 0 0)))
-    (is (= (glyph *atlas* #x42) (screen-glyph *screen* 1 0)))))
+    (is (= #x41 (screen-char *screen* 0 0)))
+    (is (= #x42 (screen-char *screen* 1 0)))))
 
 (def-test osc-string-is-decoded-as-printed-text-is ()
   "An operating-system command's bytes are decoded as printed text is, as
@@ -311,3 +337,102 @@ character drops that character, rather than showing the bytes it has
     (feed #x1B "]0;x" (make-string 600 :initial-element (code-char #xE9)) #x1B "\\")
     (is (= 255 (length (window-title))))
     (is (every (lambda (c) (char= c (code-char #xE9))) (subseq (window-title) 1)))))
+
+;;; ------------------------------------------------------------
+;;; Styles and terminal rows  (LEXTER-D119, LEXTER-D125)
+;;; ------------------------------------------------------------
+
+(defun style-at (col row)
+  "The style in which the cell at COL, ROW of *SCREEN* was written."
+  (lexter/model:table-style (lexter/model:screen-styles *screen*)
+                            (lexter/model:cell-style *screen* col row)))
+
+(def-test sgr-is-kept-as-the-host-sent-it ()
+  "The style a cell is written in holds its SGR attributes as the host sent
+them: a palette foreground, a 24-bit background, bold, strikethrough,
+overline, and an SGR 58 line colour; drawing them is decided later
+(LEXTER-D118, LEXTER-D125)."
+  (with-clean-terminal ()
+    (feed (csi "1;9;53;31;48;2;1;2;3;58;5;196m") "A")
+    (let ((style (style-at 0 0)))
+      (is-true (lexter/model:style-bold style))
+      (is-true (lexter/model:style-strikethrough style))
+      (is-true (lexter/model:style-overline style))
+      (is (= (lexter/model:palette-colour 1) (lexter/model:style-foreground style)))
+      (is (= (lexter/model:rgb-colour 1 2 3) (lexter/model:style-background style)))
+      (is (= (lexter/model:palette-colour 196) (lexter/model:style-underline-colour style))))))
+
+(def-test default-colours-are-not-palette-colours ()
+  "SGR 39 and 49 select the default colours, which a style keeps apart from
+palette colours 7 and 0, so that bold-as-bright can leave the default
+foreground alone (LEXTER-D125)."
+  (with-clean-terminal ()
+    (feed (csi "37;40m") "A" (csi "39;49m") "B")
+    (is (= (lexter/model:palette-colour 7) (lexter/model:style-foreground (style-at 0 0))))
+    (is (= lexter/model:+default-colour+ (lexter/model:style-foreground (style-at 1 0))))
+    (is (= lexter/model:+default-colour+ (lexter/model:style-background (style-at 1 0))))))
+
+(def-test saved-cursor-restores-the-style ()
+  "DECSC saves the current style with the cursor, and DECRC restores it."
+  (with-clean-terminal ()
+    (feed (csi "1;32m") #x1B "7" (csi "0m") (csi "1;3H") "A" #x1B "8" "B")
+    (is-false (lexter/model:style-bold (style-at 2 0)))
+    (is-true (lexter/model:style-bold (style-at 0 0)))))
+
+(def-test alternate-screen-shares-the-style-table ()
+  "A terminal's primary and alternate screens share one style table, as they
+share their swatch table (LEXTER-DRAFT-cell-model-revision-D24)."
+  (with-clean-terminal ()
+    (feed (csi "?1049h"))
+    (let ((alternate (lexter/vt-handler:vt-handler-screen *handler*)))
+      (is-false (eq alternate *screen*))
+      (is (eq (lexter/model:screen-styles *screen*) (lexter/model:screen-styles alternate))))))
+
+(def-test autowrap-marks-the-row-wrapped ()
+  "A row whose text autowrap carried on to the next is marked wrapped, and a
+row ended by a line feed is not (LEXTER-D119)."
+  (with-clean-terminal (:cols 3 :rows 3)
+    (feed "ABCD" 13 10 "E")
+    (is-true (lexter/model:row-soft-wrap-p *screen* 0))
+    (is-false (lexter/model:row-soft-wrap-p *screen* 1))
+    (is-false (lexter/model:row-soft-wrap-p *screen* 2))))
+
+(def-test a-wide-character-wrapped-early-marks-the-row-wrapped ()
+  "A double-width character that cannot begin in the last column wraps the
+row early, and the row is marked wrapped (LEXTER-D119, LEXTER-D98)."
+  (with-clean-terminal (:cols 3 :rows 2)
+    (feed "AB" (string (code-char #x4E00)))
+    (is-true (lexter/model:row-soft-wrap-p *screen* 0))
+    (is (= #x4E00 (screen-char *screen* 0 1)))))
+
+(def-test erasing-to-the-row-s-end-unwraps-it ()
+  "An erase that reaches a row's last column leaves the row unwrapped, since
+its text no longer runs on to the next; one that stops short does not
+(LEXTER-D119)."
+  (with-clean-terminal (:cols 3 :rows 3)
+    (feed "ABCDEFG")
+    (feed (csi "1;1H") (csi "1X"))
+    (is-true (lexter/model:row-soft-wrap-p *screen* 0))
+    (feed (csi "K"))
+    (is-false (lexter/model:row-soft-wrap-p *screen* 0))
+    (feed (csi "2;1H") (csi "2J"))
+    (is-false (lexter/model:row-soft-wrap-p *screen* 1))))
+
+(def-test text-at-the-edge-without-autowrap-unwraps-the-row ()
+  "With autowrap off, a character written in the last column leaves the row
+unwrapped, as nothing carries its text on (LEXTER-D119)."
+  (with-clean-terminal (:cols 3 :rows 3)
+    (feed "ABCD")
+    (feed (csi "?7l") (csi "1;1H") "XYZ")
+    (is-false (lexter/model:row-soft-wrap-p *screen* 0))))
+
+(def-test a-wrapped-row-keeps-its-mark-as-it-scrolls ()
+  "A row's soft wrap moves with it as the screen scrolls, and goes with it
+into the history (LEXTER-D118, LEXTER-D119)."
+  (with-clean-terminal (:cols 3 :rows 2)
+    (feed "ABCDE")
+    (is-true (lexter/model:row-soft-wrap-p *screen* 0))
+    (feed 13 10)
+    (is-true (lexter/model:history-row-soft-wrap-p (lexter/model:scrollback-line *screen* 0)))
+    (is (= #x44 (screen-char *screen* 0 0)))
+    (is-false (lexter/model:row-soft-wrap-p *screen* 0))))

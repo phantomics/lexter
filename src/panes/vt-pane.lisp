@@ -184,7 +184,8 @@
 (defun vt-pane-init-screen (pane atlas &key (encoding :utf8) bold-as-bright)
   "Initialize the screen and VT handler for a vt-pane. Called by subclasses.
    ENCODING is :utf8 (default) or :cp437 (for BBS/DOS compatibility).
-   BOLD-AS-BRIGHT when T promotes fg colors 0-7 to 8-15 when bold is set.
+   BOLD-AS-BRIGHT when T draws bold text of palette colours 0-7 in colours
+   8-15 (LEXTER-D125).
    Uses content-width and content-height so chrome panes reserve space for
    scroll bars, headers, and footers.
    The terminal takes a swatch table of its own from the store of the
@@ -198,8 +199,6 @@
          (screen (lexter/model:make-screen
                   :cols width :rows height
                   :swatches (and store (lexter/swatches:make-swatch-table store)))))
-    ;; The blank is the atlas's empty glyph (LEXTER-D89, LEXTER-O28)
-    (setf (lexter/model:screen-blank-glyph screen) lexter/atlas:+empty-glyph-position+)
     ;; Store screen
     (setf (vt-pane-screen pane) screen)
     ;; Set up VT handler
@@ -229,13 +228,16 @@
 (defmethod pane-flush ((pane vt-pane) grid)
   "Flush terminal screen content to grid at pane's offset.
    Uses content-row to account for header chrome."
-  (let ((screen (vt-pane-active-screen pane)))
+  (let ((screen (vt-pane-active-screen pane))
+        (handler (vt-pane-vt-handler pane)))
     (when screen
+      ;; An empty cell is drawn in the atlas's empty glyph (LEXTER-D89,
+      ;; LEXTER-O28), FLUSH-TO-DISPLAY's default
       (lexter/model:flush-to-display
        screen grid
+       :atlas (and handler (lexter/vt-handler:vt-handler-atlas handler))
        :col-offset (pane-col pane)
        :row-offset (content-row pane)
-       :space-glyph (lexter/model:screen-blank-glyph screen)
        :cursor-blink-on *cursor-blink-on*))))
 
 (defmethod pane-palette ((pane vt-pane))

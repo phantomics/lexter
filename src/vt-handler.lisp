@@ -51,16 +51,14 @@
   (atlas nil)
   ;; The cl-vt parser instance  
   (parser nil)
-  ;; Current SGR state (for new characters)
-  (current-fg      7  :type (unsigned-byte 8))   ; default white
-  (current-bg      0  :type (unsigned-byte 8))   ; default black
-  (current-attrs   0  :type (unsigned-byte 32))
+  ;; Current SGR state (for new characters): the style as the host sent it,
+  ;; and its id once interned
+  (current-style    (make-style) :type style)
+  (current-style-id 0 :type (or null fixnum))
   ;; Saved cursor state (DECSC/DECRC -- ESC 7 / ESC 8)
   (saved-col       0  :type fixnum)
   (saved-row       0  :type fixnum)
-  (saved-fg        7  :type (unsigned-byte 8))
-  (saved-bg        0  :type (unsigned-byte 8))
-  (saved-attrs     0  :type (unsigned-byte 32))
+  (saved-style     (make-style) :type style)
   ;; Alternate screen buffer (DEC private modes 47 / 1047 / 1048 / 1049).
   ;; SCREEN is always the *active* buffer (all write ops use it). PRIMARY-SCREEN
   ;; holds the normal buffer while the alternate is active; ALT-SCREEN is the
@@ -74,9 +72,7 @@
   ;; the two save/restore mechanisms never interfere).
   (alt-saved-col   0  :type fixnum)
   (alt-saved-row   0  :type fixnum)
-  (alt-saved-fg    7  :type (unsigned-byte 8))
-  (alt-saved-bg    0  :type (unsigned-byte 8))
-  (alt-saved-attrs 0  :type (unsigned-byte 32))
+  (alt-saved-style (make-style) :type style)
   ;; Autowrap mode
   (autowrap        t   :type boolean)
   ;; Application callback for actions we can't handle
@@ -92,7 +88,6 @@
   (encoding        :utf8 :type keyword)
   ;; Bold-as-bright: when T, bold attribute promotes fg colors 0-7 to 8-15
   ;; Classic BBS behavior (ESC[1;31m = bright red, not bold dark red)
-  (bold-as-bright  nil :type boolean)
   ;; CP437 translation table (nil = use default from lexter/telnet)
   (cp437-table     nil :type (or null (simple-array (unsigned-byte 32) (256))))
   ;; Raw-input recording (test rig). NIL = off; otherwise an adjustable
@@ -123,11 +118,27 @@
           :do (setf (sbit tabs i) 1))
     tabs))
 
+(defun vt-handler-bold-as-bright (handler)
+  "True when HANDLER's terminal draws bold text of palette colours 0-7 in
+   colours 8-15 (LEXTER-D125)."
+  (style-table-bold-as-bright (screen-styles (vt-handler-screen handler))))
+
+(defun (setf vt-handler-bold-as-bright) (value handler)
+  "Set the bold-as-bright rule of HANDLER's terminal, and mark its screens'
+   rows to be built again under it (LEXTER-D125)."
+  (setf (style-table-bold-as-bright (screen-styles (vt-handler-screen handler))) value)
+  (dolist (screen (list (vt-handler-primary-screen handler) (vt-handler-alt-screen handler)))
+    (when screen
+      (mark-screen-dirty screen)))
+  value)
+
 (defun make-vt-handler (screen atlas &key callback (encoding :utf8) bold-as-bright)
   "Create a VT handler for SCREEN using ATLAS for codepoint mapping.
    CALLBACK is called for unhandled sequences: (funcall callback :type data).
    ENCODING is :utf8 (default) or :cp437 (for BBS/DOS compatibility).
-   BOLD-AS-BRIGHT when T promotes fg colors 0-7 to 8-15 when bold is set."
+   BOLD-AS-BRIGHT when T draws bold text of palette colours 0-7 in colours
+   8-15, a setting of the terminal's that its rows are built under
+   (LEXTER-D125)."
   (let* ((cols (screen-cols screen))
          (tab-stops (%default-tab-stops cols))
          (handler (%make-vt-handler :screen screen
@@ -135,12 +146,8 @@
                                     :atlas atlas
                                     :callback callback
                                     :tab-stops tab-stops
-                                    :encoding encoding
-                                    :bold-as-bright bold-as-bright)))
-    ;; The blank is the atlas's empty glyph, at the position every atlas
-    ;; reserves for it, not the glyph of the space (LEXTER-D89, LEXTER-O28)
-    (setf (screen-blank-glyph screen) lexter/atlas:+empty-glyph-position+)
-    (fill (lexter/model::screen-glyphs screen) lexter/atlas:+empty-glyph-position+)
+                                    :encoding encoding)))
+    (setf (style-table-bold-as-bright (screen-styles screen)) bold-as-bright)
     ;; Create parser with our dispatch function
     (setf (vt-handler-parser handler)
           (cl-vt:make-vt-parser (lambda (parser action byte)
@@ -217,22 +224,24 @@
 ;;; Print handler with UTF-8 decoding
 ;;; --------------------------------------------------------------------------
 
-(defun %wrap-to-next-line (handler)
+(defun %wrap-to-next-line (handler &key soft)
   "Move the cursor to the start of the next row, as autowrap and NEL do: a
    carriage return and a line feed, which applies the scrolling region
-   (LEXTER-D69)."
+   (LEXTER-D69). SOFT, for autowrap, marks the row left as continuing on the
+   next (LEXTER-D119)."
   (let ((screen (vt-handler-screen handler)))
+    (when soft
+      (set-row-soft-wrap screen (cursor-row screen) t))
     (set-cursor-position screen 0 (cursor-row screen))
     (line-feed screen)))
 
 (defun %print-codepoint (handler codepoint)
   "Print a fully-decoded Unicode codepoint at the cursor. Its width comes from
    the width table, through the atlas's width policy (LEXTER-D117): a character
-   of width 0 is dropped until the text grid of Phase 3 gives it a cell to join
-   (LEXTER-DRAFT-cell-model-revision-D23); a character of width 2 is written as
-   a pair and moves the cursor two columns, wrapping first when it would begin
-   in the last column (LEXTER-D98); and a character that no font covers is
-   written at its width with the \"no glyph\" glyph."
+   of width 0 joins the cell of the character before it (LEXTER-D119); a
+   character of width 2 is written as a pair and moves the cursor two columns,
+   wrapping first when it would begin in the last column (LEXTER-D98). Which
+   glyph draws it is decided when its row is built."
   (let* ((screen (vt-handler-screen handler))
          (atlas (vt-handler-atlas handler))
          (width (lexter/width:char-width codepoint
@@ -240,6 +249,7 @@
                                              (lexter/atlas:atlas-width-policy atlas)
                                              lexter/width:*default-width-policy*))))
     (when (zerop width)
+      (join-character screen codepoint)
       (return-from %print-codepoint))
     (when (and (= width 2) (< (screen-cols screen) 2))
       (setf width 1))
@@ -248,58 +258,35 @@
     (when (and (= width 2) (= (cursor-col screen) (1- (screen-cols screen))))
       (if (vt-handler-autowrap handler)
           (progn
-            (write-char-at screen (cursor-col screen) (cursor-row screen)
-                           (screen-blank-glyph screen))
-            (%wrap-to-next-line handler))
+            (erase-chars screen 1)
+            (%wrap-to-next-line handler :soft t))
           (set-cursor-position screen (- (screen-cols screen) 2) (cursor-row screen))))
     (%write-printed-char handler codepoint width)))
 
 (defun %write-printed-char (handler codepoint width)
-  "Write CODEPOINT, of WIDTH 1 or 2, at the cursor, which has room for it, and
-   advance the cursor by WIDTH."
+  "Write CODEPOINT, of WIDTH 1 or 2, at the cursor in the current style, where
+   it has room, and advance the cursor by WIDTH. A character that reaches the
+   last column wraps the row when autowrap is on, and otherwise leaves it
+   unwrapped (LEXTER-D119)."
   (let* ((screen (vt-handler-screen handler))
-         (atlas (vt-handler-atlas handler))
          (cols (screen-cols screen))
          (col (cursor-col screen))
-         (row (cursor-row screen))
-         (glyph-idx (or (and atlas (lexter/atlas:atlas-glyph-index atlas codepoint width))
-                        lexter/atlas:+no-glyph-position+)))
+         (row (cursor-row screen)))
     (when *debug-vt*
-      (format t "~&[PRINT] codepoint=~D (#x~X) width=~D glyph-idx=~S~%"
-              codepoint codepoint width glyph-idx))
-    ;; Calculate effective foreground color
-    ;; Bold-as-bright: promote fg 0-7 to 8-15 when bold is active
-    (let* ((attrs (vt-handler-current-attrs handler))
-           (base-fg (vt-handler-current-fg handler))
-           (effective-fg (if (and (vt-handler-bold-as-bright handler)
-                                  (logtest attrs +attr-bold+)
-                                  (<= 0 base-fg 7))
-                             (+ base-fg 8)
-                             base-fg))
-           ;; The swatch of the current colours, a global index from the
-           ;; terminal's table; a full table gives its nearest swatch, as drawn
-           ;; in this screen's palette (LEXTER-DRAFT-cell-model-revision-D24)
-           (swatch-idx (intern-swatch (screen-swatches screen)
-                                      (vt-handler-current-bg handler)
-                                      effective-fg
-                                      effective-fg
-                                      0
-                                      (screen-palette screen))))
-      ;; Write character at cursor position
-      (write-char-at screen col row glyph-idx
-                     :swatch swatch-idx
-                     :attrs attrs
-                     :wide (= width 2))
-      ;; Advance cursor
-      (let ((new-col (+ col width)))
-        (cond
-          ((< new-col cols)
-           (set-cursor-position screen new-col row))
-          ((vt-handler-autowrap handler)
-           (%wrap-to-next-line handler))
-          (t
-           ;; Stay at right edge
-           (set-cursor-position screen (1- cols) row)))))))
+      (format t "~&[PRINT] codepoint=~D (#x~X) width=~D~%" codepoint codepoint width))
+    (write-char-at screen col row codepoint
+                   :style (%current-style-id handler)
+                   :wide (= width 2))
+    (let ((new-col (+ col width)))
+      (cond
+        ((< new-col cols)
+         (set-cursor-position screen new-col row))
+        ((vt-handler-autowrap handler)
+         (%wrap-to-next-line handler :soft t))
+        (t
+         ;; Stay at right edge
+         (set-row-soft-wrap screen row nil)
+         (set-cursor-position screen (1- cols) row))))))
 
 (defun %utf8-step (byte needed codepoint)
   "Take BYTE into a UTF-8 decoder whose state is NEEDED, the continuation
@@ -545,139 +532,92 @@
 ;;; --------------------------------------------------------------------------
 
 (defun handle-sgr (handler)
-  "Handle SGR sequence for text attributes and colors."
+  "Handle an SGR sequence, which sets the attributes of the text that follows.
+   The current style is recorded as the host sent it: colours as the default,
+   a palette index, or 24-bit values, and the other attributes as flags; how
+   they are drawn is decided when rows are built (LEXTER-D125)."
   (let* ((parser (vt-handler-parser handler))
-         (params (vt-parser-params-list parser)))
-    ;; Empty SGR = reset
-    (when (null params)
-      (setf params '(0)))
+         (params (or (vt-parser-params-list parser) '(0)))
+         ;; A new style: an interned one is never changed
+         (style (copy-style (vt-handler-current-style handler))))
     (let ((i 0))
       (loop :while (< i (length params))
             :for p = (or (nth i params) 0)
             :do (cond
-                  ;; Reset
-                  ((= p 0)
-                   (setf (vt-handler-current-fg handler) 7
-                         (vt-handler-current-bg handler) 0
-                         (vt-handler-current-attrs handler) 0))
-                  ;; Bold
-                  ((= p 1)
-                   (setf (vt-handler-current-attrs handler)
-                         (logior (vt-handler-current-attrs handler) +attr-bold+)))
-                  ;; Dim/faint (we treat as normal)
+                  ((= p 0) (setf style (make-style)))
+                  ((= p 1) (setf (style-bold style) t))
+                  ;; Dim/faint and italic are not kept
                   ((= p 2) nil)
-                  ;; Italic (store in attrs, not rendered distinctly)
                   ((= p 3) nil)
-                  ;; Underline
-                  ((= p 4)
-                   (setf (vt-handler-current-attrs handler)
-                         (logior (vt-handler-current-attrs handler) +attr-underline+)))
-                  ;; Blink
-                  ((= p 5)
-                   (setf (vt-handler-current-attrs handler)
-                         (logior (vt-handler-current-attrs handler) +attr-blink+)))
-                  ;; Reverse
-                  ((= p 7)
-                   (setf (vt-handler-current-attrs handler)
-                         (logior (vt-handler-current-attrs handler) +attr-reverse+)))
-                  ;; Hidden/invisible
-                  ((= p 8)
-                   (setf (vt-handler-current-attrs handler)
-                         (logior (vt-handler-current-attrs handler) +attr-invisible+)))
-                  ;; Reset bold
-                  ((= p 21)
-                   (setf (vt-handler-current-attrs handler)
-                         (logandc2 (vt-handler-current-attrs handler) +attr-bold+)))
-                  ;; Reset bold/dim
-                  ((= p 22)
-                   (setf (vt-handler-current-attrs handler)
-                         (logandc2 (vt-handler-current-attrs handler) +attr-bold+)))
-                  ;; Reset underline
-                  ((= p 24)
-                   (setf (vt-handler-current-attrs handler)
-                         (logandc2 (vt-handler-current-attrs handler) +attr-underline+)))
-                  ;; Reset blink
-                  ((= p 25)
-                   (setf (vt-handler-current-attrs handler)
-                         (logandc2 (vt-handler-current-attrs handler) +attr-blink+)))
-                  ;; Reset reverse
-                  ((= p 27)
-                   (setf (vt-handler-current-attrs handler)
-                         (logandc2 (vt-handler-current-attrs handler) +attr-reverse+)))
-                  ;; Reset hidden
-                  ((= p 28)
-                   (setf (vt-handler-current-attrs handler)
-                         (logandc2 (vt-handler-current-attrs handler) +attr-invisible+)))
-                  ;; Foreground colors 30-37
-                  ((<= 30 p 37)
-                   (setf (vt-handler-current-fg handler) (- p 30)))
-                  ;; Extended foreground (38;5;n or 38;2;r;g;b)
-                  ((= p 38)
+                  ((= p 4) (setf (style-underline style) t))
+                  ((= p 5) (setf (style-blink style) t))
+                  ((= p 7) (setf (style-reverse style) t))
+                  ((= p 8) (setf (style-invisible style) t))
+                  ((= p 9) (setf (style-strikethrough style) t))
+                  ;; 21 resets bold, as the first edition had it
+                  ((member p '(21 22)) (setf (style-bold style) nil))
+                  ((= p 24) (setf (style-underline style) nil))
+                  ((= p 25) (setf (style-blink style) nil))
+                  ((= p 27) (setf (style-reverse style) nil))
+                  ((= p 28) (setf (style-invisible style) nil))
+                  ((= p 29) (setf (style-strikethrough style) nil))
+                  ((<= 30 p 37) (setf (style-foreground style) (palette-colour (- p 30))))
+                  ((= p 39) (setf (style-foreground style) +default-colour+))
+                  ((<= 40 p 47) (setf (style-background style) (palette-colour (- p 40))))
+                  ((= p 49) (setf (style-background style) +default-colour+))
+                  ((= p 53) (setf (style-overline style) t))
+                  ((= p 55) (setf (style-overline style) nil))
+                  ((= p 59) (setf (style-underline-colour style) +default-colour+))
+                  ((<= 90 p 97) (setf (style-foreground style) (palette-colour (+ 8 (- p 90)))))
+                  ((<= 100 p 107) (setf (style-background style) (palette-colour (+ 8 (- p 100)))))
+                  ;; Extended colours: 38 foreground, 48 background, 58 lines
+                  ((member p '(38 48 58))
                    (multiple-value-bind (colour consumed) (%sgr-extended-colour params i)
                      (when colour
-                       (setf (vt-handler-current-fg handler) colour))
-                     (incf i consumed)))
-                  ;; Default foreground
-                  ((= p 39)
-                   (setf (vt-handler-current-fg handler) 7))
-                  ;; Background colors 40-47
-                  ((<= 40 p 47)
-                   (setf (vt-handler-current-bg handler) (- p 40)))
-                  ;; Extended background (48;5;n or 48;2;r;g;b)
-                  ((= p 48)
-                   (multiple-value-bind (colour consumed) (%sgr-extended-colour params i)
-                     (when colour
-                       (setf (vt-handler-current-bg handler) colour))
-                     (incf i consumed)))
-                  ;; Default background
-                  ((= p 49)
-                   (setf (vt-handler-current-bg handler) 0))
-                  ;; Bright foreground colors 90-97
-                  ((<= 90 p 97)
-                   (setf (vt-handler-current-fg handler) (+ 8 (- p 90))))
-                  ;; Bright background colors 100-107
-                  ((<= 100 p 107)
-                   (setf (vt-handler-current-bg handler) (+ 8 (- p 100)))))
-                (incf i)))))
+                       (case p
+                         (38 (setf (style-foreground style) colour))
+                         (48 (setf (style-background style) colour))
+                         (58 (setf (style-underline-colour style) colour))))
+                     (incf i consumed))))
+                (incf i)))
+    (%set-current-style handler style)))
 
 (defun %sgr-extended-colour (params i)
-  "Read the extended colour whose 38 or 48 is element I of the SGR PARAMS:
-   5;n, an index of the 256-colour palette, or 2;r;g;b, a 24-bit colour mapped
-   to the nearest index. Return the index, or NIL when the colour is incomplete
-   or out of range, and so is ignored (LEXTER-D68): an index above 255, or a
-   component above 255, outside the range xterm documents. The second value is
-   how many parameters after I the colour took."
+  "Read the extended colour whose 38, 48, or 58 is element I of the SGR
+   PARAMS: 5;n, an index of the 256-colour palette, or 2;r;g;b, a 24-bit
+   colour, kept as the host sent it (LEXTER-D125). Return the colour, or NIL
+   when it is incomplete or out of range, and so is ignored (LEXTER-D68): an
+   index above 255, or a component above 255, outside the range xterm
+   documents. The second value is how many parameters after I the colour
+   took."
   (let* ((remaining (- (length params) i 1))
          (kind (and (plusp remaining) (nth (1+ i) params))))
     (flet ((arg (k) (nth (+ i 1 k) params)))
       (case kind
         (5 (if (>= remaining 2)
                (let ((n (arg 1)))
-                 (values (and n (<= 0 n 255) n) 2))
+                 (values (and n (<= 0 n 255) (palette-colour n)) 2))
                (values nil remaining)))
         (2 (if (>= remaining 4)
                (let ((r (arg 1)) (g (arg 2)) (b (arg 3)))
                  (values (and r g b (<= 0 r 255) (<= 0 g 255) (<= 0 b 255)
-                              (rgb-to-256 r g b))
+                              (rgb-colour r g b))
                          4))
                (values nil remaining)))
         (otherwise (values nil 0))))))
 
-(defun rgb-to-256 (r g b)
-  "Convert 24-bit RGB, each component 0-255, to the nearest xterm 256-colour
-   index, which is always 16-255 (LEXTER-D68)."
-  ;; Check if it's a grayscale value
-  (if (and (= r g) (= g b))
-      (cond
-        ((< r 8) 16)        ; black
-        ((> r 248) 231)     ; white
-        ;; The greyscale ramp, 232-255, whose last entry is 238
-        (t (min 255 (+ 232 (floor (- r 8) 10)))))
-      ;; Map to 6x6x6 color cube
-      (let ((ri (floor r 51))
-            (gi (floor g 51))
-            (bi (floor b 51)))
-        (+ 16 (* 36 ri) (* 6 gi) bi))))
+(defun %set-current-style (handler style)
+  "Make STYLE the style of the text HANDLER writes next; it is interned when
+   the first character is written in it."
+  (setf (vt-handler-current-style handler) style
+        (vt-handler-current-style-id handler) nil))
+
+(defun %current-style-id (handler)
+  "The id, in the terminal's style table, of the current style."
+  (or (vt-handler-current-style-id handler)
+      (setf (vt-handler-current-style-id handler)
+            (intern-style (screen-styles (vt-handler-screen handler))
+                          (vt-handler-current-style handler)))))
 
 ;;; --------------------------------------------------------------------------
 ;;; DEC Private Mode handlers (DECSET/DECRST)
@@ -693,24 +633,20 @@
   (let ((screen (vt-handler-screen handler)))
     (setf (vt-handler-alt-saved-col   handler) (cursor-col screen)
           (vt-handler-alt-saved-row   handler) (cursor-row screen)
-          (vt-handler-alt-saved-fg    handler) (vt-handler-current-fg handler)
-          (vt-handler-alt-saved-bg    handler) (vt-handler-current-bg handler)
-          (vt-handler-alt-saved-attrs handler) (vt-handler-current-attrs handler))))
+          (vt-handler-alt-saved-style handler) (vt-handler-current-style handler))))
 
 (defun %restore-alt-cursor (handler)
   "Restore the cursor and SGR state saved by %SAVE-ALT-CURSOR onto the (now
    active) screen."
   (let ((screen (vt-handler-screen handler)))
-    (setf (vt-handler-current-fg handler)    (vt-handler-alt-saved-fg handler)
-          (vt-handler-current-bg handler)    (vt-handler-alt-saved-bg handler)
-          (vt-handler-current-attrs handler) (vt-handler-alt-saved-attrs handler))
+    (%set-current-style handler (vt-handler-alt-saved-style handler))
     (set-cursor-position screen
                          (min (vt-handler-alt-saved-col handler) (1- (screen-cols screen)))
                          (min (vt-handler-alt-saved-row handler) (1- (screen-rows screen))))))
 
 (defun %ensure-alt-screen (handler)
   "Lazily create the persistent alternate buffer, matching the primary's
-   dimensions and blank glyph. It shares the primary's swatch table
+   dimensions. It shares the primary's style and swatch tables
    (LEXTER-DRAFT-cell-model-revision-D24) and starts from a copy of the
    primary's palette, so that colours the host redefined before it existed
    hold in it too (LEXTER-D70). The alternate buffer carries no scrollback."
@@ -719,10 +655,9 @@
              (alt (make-screen :cols (screen-cols primary)
                                :rows (screen-rows primary)
                                :mode (screen-mode primary)
+                               :styles (screen-styles primary)
                                :swatches (screen-swatches primary)
                                :palette (screen-palette primary))))
-        (setf (screen-blank-glyph alt) (screen-blank-glyph primary))
-        (fill (lexter/model::screen-glyphs alt) (screen-blank-glyph primary))
         ;; Alternate screen has no scrollback (it is exactly viewport-sized).
         (setf (lexter/model::screen-scrollback-enabled alt) nil)
         (setf (vt-handler-alt-screen handler) alt))))
@@ -909,16 +844,12 @@
          (#x37 ; ESC 7 - DECSC (Save Cursor)
           (setf (vt-handler-saved-col handler) (cursor-col screen)
                 (vt-handler-saved-row handler) (cursor-row screen)
-                (vt-handler-saved-fg handler) (vt-handler-current-fg handler)
-                (vt-handler-saved-bg handler) (vt-handler-current-bg handler)
-                (vt-handler-saved-attrs handler) (vt-handler-current-attrs handler)))
+                (vt-handler-saved-style handler) (vt-handler-current-style handler)))
          (#x38 ; ESC 8 - DECRC (Restore Cursor)
           (set-cursor-position screen
                                (vt-handler-saved-col handler)
                                (vt-handler-saved-row handler))
-          (setf (vt-handler-current-fg handler) (vt-handler-saved-fg handler)
-                (vt-handler-current-bg handler) (vt-handler-saved-bg handler)
-                (vt-handler-current-attrs handler) (vt-handler-saved-attrs handler)))
+          (%set-current-style handler (vt-handler-saved-style handler)))
          (#x44 ; ESC D - IND (Index, line feed)
           (line-feed screen))
          (#x45 ; ESC E - NEL (Next Line)
@@ -1057,9 +988,7 @@
   "Reset handler to initial state."
   (let ((screen (vt-handler-screen handler)))
     ;; Reset SGR
-    (setf (vt-handler-current-fg handler) 7
-          (vt-handler-current-bg handler) 0
-          (vt-handler-current-attrs handler) 0)
+    (%set-current-style handler (make-style))
     ;; Reset modes
     (setf (vt-handler-autowrap handler) t)
     ;; Reset mouse reporting (RIS must release any application mouse grab)

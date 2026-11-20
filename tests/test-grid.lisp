@@ -1,9 +1,11 @@
 ;;;; tests/test-grid.lisp — The flush into the display grid, and its buffers.
 ;;;;
 ;;;; Pure: screens flushed into display grids in memory, and instance buffers
-;;;; built as byte arrays; nothing is uploaded, and no GL. Tests of LEXTER-O19,
-;;;; LEXTER-O26, LEXTER-O27, and LEXTER-O28 fail until Phase 1 repairs the
-;;;; flush, the cursor, and the grid's operations (LEXTER-D98, LEXTER-D101).
+;;;; built as byte arrays; nothing is uploaded, and no GL. They cover the
+;;;; flush, the cursor, and the grid's operations (LEXTER-O19, LEXTER-O26,
+;;;; LEXTER-O28; LEXTER-D98, LEXTER-D101). The tests of LEXTER-O27, of layered
+;;;; cells in a screen, were retired when screens stopped holding them
+;;;; (LEXTER-D124); their invariants return with the API's surfaces.
 
 (in-package #:lexter-tests)
 (in-suite grid)
@@ -63,43 +65,6 @@ cells that remain."
     (lexter/grid:resize-grid grid 12 2)
     (is-true (grid-wide-p grid 0 0))
     (is-true (grid-continuation-p grid 1 0))))
-
-;;; ------------------------------------------------------------
-;;; Layered cells  (LEXTER-O27)
-;;; ------------------------------------------------------------
-
-(def-test flush-removes-cleared-overlay-layer ()
-  "LEXTER-O27: an overlay layer cleared in the model is cleared in the grid at
-the next flush."
-  (with-clean-terminal ()
-    (lexter/model:set-layer *screen* 2 1 1 (glyph *atlas* #x42)
-                            :ink-slot 2 :transparent-side :bg)
-    (flush)
-    (lexter/model:clear-overlay-layers *screen* 2 1)
-    (flush)
-    (is (null (grid-layer *grid* 2 1 1)))))
-
-(def-test flush-gives-layered-cell-its-swatch ()
-  "LEXTER-O27: a layered cell written with a new swatch is drawn in that swatch
-after the flush."
-  (with-clean-terminal ()
-    (let ((swatch (lexter/model:intern-swatch
-                   (lexter/model::screen-swatches *screen*) 0 4 4 0)))
-      (lexter/model:set-layer *screen* 0 0 0 (glyph *atlas* #x41))
-      (lexter/model:write-char-at *screen* 0 0 (glyph *atlas* #x42) :swatch swatch)
-      (flush)
-      (is (eql swatch (grid-layered-swatch *grid* 0 0))))))
-
-(def-test cursor-on-layered-cell-keeps-it-layered ()
-  "LEXTER-O27: drawing the cursor on a layered cell leaves it layered in the
-grid, with its overlay layer."
-  (with-clean-terminal ()
-    (lexter/model:set-layer *screen* 0 0 1 (glyph *atlas* #x42)
-                            :ink-slot 2 :transparent-side :bg)
-    (lexter/model:set-cursor-position *screen* 0 0)
-    (flush :cursor-visible t)
-    (is-true (lexter/grid:cell-layered-p *grid* 0 0))
-    (is-true (grid-layer *grid* 0 0 1))))
 
 ;;; ------------------------------------------------------------
 ;;; Blanks  (LEXTER-O28)

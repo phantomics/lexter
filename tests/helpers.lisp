@@ -199,19 +199,13 @@ is true."
   (or (lexter/atlas:atlas-glyph-index atlas codepoint)
       (error "The test atlas has no glyph for U+~4,'0X" codepoint)))
 
-(defun make-test-screen (&key (cols 10) (rows 3) atlas store)
-  "A fresh screen of COLS by ROWS, whose blank glyph comes from ATLAS as a
-VT pane's does (src/panes/vt-pane.lisp:vt-pane-init-screen), with a swatch
-table of its own in STORE, as a terminal takes one from its compositor's
-store; without STORE, in a store of its own."
-  (let ((screen (lexter/model:make-screen
-                 :cols cols :rows rows
-                 :swatches (and store (lexter/swatches:make-swatch-table store)))))
-    (when atlas
-      (let ((space (lexter/atlas:atlas-glyph-index atlas #x20)))
-        (when space
-          (setf (lexter/model:screen-blank-glyph screen) space))))
-    screen))
+(defun make-test-screen (&key (cols 10) (rows 3) store)
+  "A fresh screen of COLS by ROWS, with a swatch table of its own in STORE, as
+a terminal takes one from its compositor's store; without STORE, in a store of
+its own."
+  (lexter/model:make-screen
+   :cols cols :rows rows
+   :swatches (and store (lexter/swatches:make-swatch-table store))))
 
 (defun make-test-grid (&key (cols 10) (rows 3))
   "A fresh display grid of COLS by ROWS."
@@ -247,7 +241,7 @@ of COLS by ROWS, as a VT pane assembles them, the screen's table taken from
 the store."
   `(let* ((*atlas*   (make-test-atlas))
           (*store*   (lexter/swatches:make-swatch-store))
-          (*screen*  (make-test-screen :cols ,cols :rows ,rows :atlas *atlas*
+          (*screen*  (make-test-screen :cols ,cols :rows ,rows
                                        :store *store*))
           (*handler* (lexter/vt-handler:make-vt-handler *screen* *atlas*))
           (*grid*    (make-test-grid :cols ,cols :rows ,rows)))
@@ -257,15 +251,16 @@ the store."
   "Process PARTS, bytes or strings, through *HANDLER* as output from a host."
   (lexter/vt-handler:process-output *handler* (apply #'octets parts)))
 
-(defun flush (&key (screen *screen*) (grid *grid*) (col-offset 0) (row-offset 0)
-                   (cursor-visible nil))
-  "Flush SCREEN into GRID as a VT pane does, with the cursor shown only when
-CURSOR-VISIBLE is true, so that tests of cells are not disturbed by it."
+(defun flush (&key (screen *screen*) (grid *grid*) (atlas *atlas*)
+                   (col-offset 0) (row-offset 0) (cursor-visible nil))
+  "Build SCREEN's rows into GRID with ATLAS's glyphs as a VT pane does, with
+the cursor shown only when CURSOR-VISIBLE is true, so that tests of cells are
+not disturbed by it."
   (lexter/model:set-cursor-visible screen cursor-visible)
   (lexter/model:flush-to-display screen grid
+                                 :atlas atlas
                                  :col-offset col-offset
-                                 :row-offset row-offset
-                                 :space-glyph (lexter/model:screen-blank-glyph screen)))
+                                 :row-offset row-offset))
 
 ;;; ============================================================
 ;;; Writing cells
@@ -273,25 +268,38 @@ CURSOR-VISIBLE is true, so that tests of cells are not disturbed by it."
 
 (defun write-wide (col row)
   "Write U+4E00 as a double-width character at COL, ROW of *SCREEN*."
-  (lexter/model:write-char-at *screen* col row (glyph *atlas* #x4E00) :wide t))
+  (lexter/model:write-char-at *screen* col row #x4E00 :wide t))
+
+(defun write-coloured (screen col row codepoint background foreground)
+  "Write CODEPOINT at COL, ROW of SCREEN in a style of the palette colours
+BACKGROUND and FOREGROUND, as a host's SGR sets them, and return the style's
+id."
+  (let ((style (lexter/model:intern-style
+                (lexter/model:screen-styles screen)
+                (lexter/model:make-style
+                 :background (lexter/model:palette-colour background)
+                 :foreground (lexter/model:palette-colour foreground)))))
+    (lexter/model:write-char-at screen col row codepoint :style style)
+    style))
 
 ;;; ============================================================
-;;; Inspecting first-edition state  (LEXTER-D106)
+;;; Inspecting screens and first-edition grids  (LEXTER-D106)
 ;;; ============================================================
 ;;;
-;;; These read the first edition's internal arrays; Phase 3 rewrites them for
-;;; the dense record.
+;;; A screen is read through the model's API. The grid's readers reach the
+;;; first edition's internal arrays; step 3 of Phase 3 rewrites them for the
+;;; record.
 
 (defun screen-wide-p (screen col row)
-  "True when the cell at COL, ROW of SCREEN is marked as the left half of a
-double-width character."
-  (= 1 (sbit (lexter/model::screen-wide-flags screen)
-             (+ (* row (lexter/model:screen-cols screen)) col))))
+  "True when the cell at COL, ROW of SCREEN is the left half of a double-width
+character."
+  (and (lexter/model:cell-wide-p screen col row)
+       (not (lexter/model:cell-continuation-p screen col row))))
 
-(defun screen-glyph (screen col row)
-  "The glyph stored at COL, ROW of SCREEN's simple cells."
-  (aref (lexter/model::screen-glyphs screen)
-        (+ (* row (lexter/model:screen-cols screen)) col)))
+(defun screen-char (screen col row)
+  "The content of the cell at COL, ROW of SCREEN: its first codepoint, 0 when
+it is empty, or the continuation marker."
+  (lexter/model:cell-content screen col row))
 
 (defun grid-index (grid col row)
   "The index of the cell at COL, ROW in GRID's per-cell arrays."

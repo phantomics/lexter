@@ -46,23 +46,22 @@ the GPU lacks."
   (with-clean-terminal ()
     (let ((gpu (make-test-gpu)))
       (dotimes (i 3) (frame gpu))
-      (let ((swatch (intern-colours *screen* 0 4)))
-        (lexter/model:write-char-at *screen* 1 0 (glyph *atlas* #x41) :swatch swatch)
-        (dotimes (i 4) (frame gpu))
-        (assert-that (gpu-swatch gpu swatch) (contains 0 4 4 0))))))
+      (write-coloured *screen* 1 0 #x41 0 4)
+      (dotimes (i 4) (frame gpu))
+      (assert-that (gpu-swatch gpu (grid-swatch *grid* 1 0)) (contains 0 4 4 0)))))
 
 (def-test panes-keep-their-own-colours ()
   "LEXTER-O22: two terminals' screens flushed into one grid each draw in their
 own colours, since each table hands out global indices in ranges of its own."
   (let* ((atlas (make-test-atlas))
          (store (lexter/swatches:make-swatch-store))
-         (a (make-test-screen :cols 5 :rows 1 :atlas atlas :store store))
-         (b (make-test-screen :cols 5 :rows 1 :atlas atlas :store store))
+         (a (make-test-screen :cols 5 :rows 1 :store store))
+         (b (make-test-screen :cols 5 :rows 1 :store store))
          (grid (make-test-grid :cols 10 :rows 1)))
-    (lexter/model:write-char-at a 0 0 (glyph atlas #x41) :swatch (intern-colours a 0 1))
-    (lexter/model:write-char-at b 0 0 (glyph atlas #x41) :swatch (intern-colours b 0 2))
-    (flush :screen a :grid grid :col-offset 0)
-    (flush :screen b :grid grid :col-offset 5)
+    (write-coloured a 0 0 #x41 0 1)
+    (write-coloured b 0 0 #x41 0 2)
+    (flush :screen a :grid grid :atlas atlas :col-offset 0)
+    (flush :screen b :grid grid :atlas atlas :col-offset 5)
     (assert-that (grid-cell-colours grid 0 0 store) (contains 0 1 1 0))
     (assert-that (grid-cell-colours grid 5 0 store) (contains 0 2 2 0))))
 
@@ -76,33 +75,33 @@ and reaches the GPU with its own colours, whatever the fixture before it drew."
     (flet ((fixture (colours)
              ;; As TERMINAL-RESET does: a new terminal's table, a fresh grid,
              ;; and the old table's ranges returned when it is replaced
-             (let* ((screen (make-test-screen :cols 4 :rows 1 :atlas atlas :store store))
-                    (grid (make-test-grid :cols 4 :rows 1))
-                    (swatches (loop :for fg :in colours
-                                    :for col :from 0
-                                    :for swatch = (intern-colours screen 0 fg)
-                                    :do (lexter/model:write-char-at
-                                         screen col 0 (glyph atlas #x41) :swatch swatch)
-                                    :collect swatch)))
-               (flush :screen screen :grid grid)
+             (let ((screen (make-test-screen :cols 4 :rows 1 :store store))
+                   (grid (make-test-grid :cols 4 :rows 1)))
+               (loop :for fg :in colours
+                     :for col :from 0
+                     :do (write-coloured screen col 0 #x41 0 fg))
+               (flush :screen screen :grid grid :atlas atlas)
                (gpu-upload gpu store)
                (lexter/swatches:release-swatch-table (lexter/model:screen-swatches screen))
-               swatches)))
+               (loop :for col :below (length colours)
+                     :collect (grid-swatch grid col 0)))))
       (let* ((first (fixture '(1 3 5)))
              (second (fixture '(2))))
         (is (= (first first) (first second)))
         (assert-that (gpu-swatch gpu (first second)) (contains 0 2 2 0))))))
 
 (def-test flush-survives-a-full-swatch-table ()
-  "LEXTER-O24: a screen that interns more distinct swatches than one range
-holds takes a second range, and its last swatch is still drawn in its own
-colours."
+  "LEXTER-O24: a terminal whose table holds more distinct swatches than one
+range takes a second range, and a cell built after it is still drawn in its
+own colours, from that range."
   (with-clean-terminal ()
-    (let ((last (fill-table (lexter/model:screen-swatches *screen*) 2100)))
-      (lexter/model:write-char-at *screen* 0 0 (glyph *atlas* #x41) :swatch last)
+    (let ((table (lexter/model:screen-swatches *screen*)))
+      (fill-table table 2100)
+      (write-coloured *screen* 0 0 #x41 1 2)
       (finishes (flush))
-      (assert-that (grid-cell-colours *grid* 0 0)
-                   (contains (mod 2099 256) (+ 16 (floor 2099 256)) 0 0)))))
+      (assert-that (grid-cell-colours *grid* 0 0) (contains 1 2 2 0))
+      (is (= (aref (lexter/swatches:swatch-table-ranges table) 1)
+             (range-of (grid-swatch *grid* 0 0)))))))
 
 ;;; ------------------------------------------------------------
 ;;; Ranges and global indices
@@ -120,21 +119,23 @@ because the store's display table takes range 0 when the store is made
 (def-test global-index-is-range-base-plus-offset ()
   "A table's swatches are numbered from its range's base: the first terminal
 table of a store takes range 1, so its default swatch is global 2048 and its
-next swatch 2049, and a fresh screen's cells are in that default swatch."
+next swatch 2049, and a fresh screen's cells are built in that default
+swatch."
   (let* ((store (lexter/swatches:make-swatch-store))
-         (screen (make-test-screen :cols 3 :rows 1 :store store)))
+         (screen (make-test-screen :cols 3 :rows 1 :store store))
+         (grid (make-test-grid :cols 3 :rows 1)))
     (is (= 2048 (lexter/model:default-swatch screen)))
-    (is (= 2048 (lexter/model:cell-swatch screen 2 0)))
+    (flush :screen screen :grid grid :atlas (make-test-atlas))
+    (is (= 2048 (grid-swatch grid 2 0)))
     (is (= 2049 (intern-colours screen 0 4)))))
 
 (def-test flush-copies-global-indices-unchanged ()
-  "The flush copies a cell's global swatch index into the grid unchanged
-(LEXTER-D100)."
+  "The flush gives a cell the global index its terminal's table holds for the
+swatch of its style, unchanged (LEXTER-D100, LEXTER-D124)."
   (with-clean-terminal ()
-    (let ((swatch (intern-colours *screen* 0 4)))
-      (lexter/model:write-char-at *screen* 0 0 (glyph *atlas* #x41) :swatch swatch)
-      (flush)
-      (is (= swatch (grid-swatch *grid* 0 0))))))
+    (write-coloured *screen* 0 0 #x41 0 4)
+    (flush)
+    (is (= (intern-colours *screen* 0 4) (grid-swatch *grid* 0 0)))))
 
 (def-test table-takes-another-range-when-it-fills ()
   "A table whose range is full takes the lowest free range for its next

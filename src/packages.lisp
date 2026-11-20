@@ -221,12 +221,12 @@
            #:insert-lines
            #:delete-lines
            ;; Scrolling
+           #:line-feed
+           #:reverse-line-feed
            #:scroll-up
            #:scroll-down
            #:set-scrolling-region
-           ;; Modes and state
-           #:set-mode
-           #:get-mode
+           ;; State
            #:resize-screen
            ;; Scrollback
            #:scrollback-lines

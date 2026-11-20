@@ -24,7 +24,7 @@ Table: Documents in the LEXTER namespace.
 | [LEXTER-0012](Log.CompassMigration.md) | Compass Migration: Development Log | Log | project | Implemented | — |
 | [LEXTER-0013](Survey.LayerMechanics.md) | Layer Mechanics: Survey | Survey | component | Accepted | renderer |
 | [LEXTER-0014](Eval.Critique.DataStructures1e.md) | Data Structures, First Edition: Critique | Eval (critique) | project | Accepted | — |
-| [LEXTER-0015](Plan.TerminalFixes1e.md) | Terminal Fixes, First Edition: Development Plan | Plan | project | Implemented | — |
+| [LEXTER-0015](Plan.TerminalFixes1e.md) | Terminal Fixes, First Edition: Development Plan | Plan | project | Accepted | — |
 | [LEXTER-0016](Arch.CellModel.md) | The Cell Model Architecture | Architecture | project | Accepted | — |
 | [LEXTER-0017](Plan.CellModelRevision.md) | Cell Model Revision: Development Plan | Plan | project | Accepted | — |
 | [LEXTER-0018](Eval.CellModels.PriorArt.md) | Cell Models: Prior-Art Evaluation | Eval (prior-art) | project | Accepted | — |
@@ -38,6 +38,7 @@ Table: Documents in the LEXTER namespace.
 | [LEXTER-0026](Log.WorkspaceRepaint.md) | The Workspace-Switch Repaint: Development Log | Log | project | Accepted | — |
 | [LEXTER-DRAFT-cell-field-format](Survey.CellFieldFormat.md) | Cell Field Format: Survey | Survey | component | Deprecated | renderer |
 | [LEXTER-DRAFT-data-structures-1e](Spec.DataStructures1e.md) | Data Structures, First Edition: Specification | Spec | project | Deprecated | — |
+| [LEXTER-DRAFT-handler-fixes](Log.HandlerFixes.md) | Host Input, the Scrolling Region, and Terminal Modes: Development Log | Log | project | Draft | — |
 | [LEXTER-DRAFT-mouse-reporting](Log.MouseReporting.md) | Mouse Reporting: Development Log | Log | component | Draft | vt |
 
 Table: Decision, open-question, and memo records in the LEXTER namespace.
@@ -111,19 +112,19 @@ Table: Decision, open-question, and memo records in the LEXTER namespace.
 | [LEXTER-D65](Log.CompassMigration.md#lexter-d65--a-stewards-answer-to-an-open-question-is-recorded-as-a-resolution) | Decision | A steward's answer to an open question is recorded as a Resolution | Implemented | LEXTER-0012 |
 | [LEXTER-D66](Plan.TerminalFixes1e.md#lexter-d66--the-plan-covers-the-first-editions-fixes-outside-the-cell-model) | Decision | The plan covers the first edition's fixes outside the cell model | Implemented | LEXTER-0015 |
 | [LEXTER-D67](Plan.TerminalFixes1e.md#lexter-d67--the-standalone-terminal-becomes-a-compositor-with-one-pane-and-this-comes-first) | Decision | The standalone terminal becomes a compositor with one pane, and this comes first | Implemented | LEXTER-0015 |
-| [LEXTER-D68](Plan.TerminalFixes1e.md#lexter-d68--host-input-is-checked-at-the-boundary-never-trusted-against-a-slots-type) | Decision | Host input is checked at the boundary, never trusted against a slot's type | Implemented | LEXTER-0015 |
-| [LEXTER-D69](Plan.TerminalFixes1e.md#lexter-d69--autowrap-and-line-feed-share-one-path-which-owns-the-scrolling-region) | Decision | Autowrap and line feed share one path, which owns the scrolling region | Implemented | LEXTER-0015 |
+| [LEXTER-D68](Plan.TerminalFixes1e.md#lexter-d68--host-input-is-checked-at-the-boundary-never-trusted-against-a-slots-type) | Decision | Host input is checked at the boundary, never trusted against a slot's type | Accepted | LEXTER-0015 |
+| [LEXTER-D69](Plan.TerminalFixes1e.md#lexter-d69--autowrap-and-line-feed-share-one-path-which-owns-the-scrolling-region) | Decision | Autowrap and line feed share one path, which owns the scrolling region | Accepted | LEXTER-0015 |
 | [LEXTER-D70](Plan.TerminalFixes1e.md#lexter-d70--every-reader-of-a-terminals-screen-goes-through-the-handler) | Decision | Every reader of a terminal's screen goes through the handler | Implemented | LEXTER-0015 |
 | [LEXTER-D71](Plan.TerminalFixes1e.md#lexter-d71--a-workspace-switch-marks-every-screen-and-its-decorations-dirty) | Decision | A workspace switch marks every screen and its decorations dirty | Implemented | LEXTER-0015 |
-| [LEXTER-D72](Plan.TerminalFixes1e.md#lexter-d72--the-tn3270-client-follows-rfc-2355-and-its-screen-is-sized-from-its-geometry) | Decision | The TN3270 client follows RFC 2355, and its screen is sized from its geometry | Implemented | LEXTER-0015 |
-| [LEXTER-D73](Plan.TerminalFixes1e.md#lexter-d73--the-telnet-client-encodes-before-escaping-and-keeps-option-state-by-the-q-method) | Decision | The telnet client encodes before escaping, and keeps option state by the Q method | Implemented | LEXTER-0015 |
-| [LEXTER-D74](Plan.TerminalFixes1e.md#lexter-d74--the-pty-separates-the-childs-life-from-the-descriptors) | Decision | The PTY separates the child's life from the descriptor's | Implemented | LEXTER-0015 |
-| [LEXTER-D75](Plan.TerminalFixes1e.md#lexter-d75--backends-are-sized-from-the-screen-the-handler-made) | Decision | Backends are sized from the screen the handler made | Implemented | LEXTER-0015 |
-| [LEXTER-D76](Plan.TerminalFixes1e.md#lexter-d76--exports-name-only-what-exists-and-packages-read-each-other-through-them) | Decision | Exports name only what exists, and packages read each other through them | Implemented | LEXTER-0015 |
-| [LEXTER-D77](Plan.TerminalFixes1e.md#lexter-d77--instance-state-leaves-the-globals) | Decision | Instance state leaves the globals | Implemented | LEXTER-0015 |
-| [LEXTER-D78](Plan.TerminalFixes1e.md#lexter-d78--mode-state-has-one-home-the-handler) | Decision | Mode state has one home, the handler | Implemented | LEXTER-0015 |
-| [LEXTER-D79](Plan.TerminalFixes1e.md#lexter-d79--keystrokes-are-encoded-without-babels-internals) | Decision | Keystrokes are encoded without babel's internals | Implemented | LEXTER-0015 |
-| [LEXTER-D80](Plan.TerminalFixes1e.md#lexter-d80--every-fix-gets-a-headless-regression-test) | Decision | Every fix gets a headless regression test | Implemented | LEXTER-0015 |
+| [LEXTER-D72](Plan.TerminalFixes1e.md#lexter-d72--the-tn3270-client-follows-rfc-2355-and-its-screen-is-sized-from-its-geometry) | Decision | The TN3270 client follows RFC 2355, and its screen is sized from its geometry | Accepted | LEXTER-0015 |
+| [LEXTER-D73](Plan.TerminalFixes1e.md#lexter-d73--the-telnet-client-encodes-before-escaping-and-keeps-option-state-by-the-q-method) | Decision | The telnet client encodes before escaping, and keeps option state by the Q method | Accepted | LEXTER-0015 |
+| [LEXTER-D74](Plan.TerminalFixes1e.md#lexter-d74--the-pty-separates-the-childs-life-from-the-descriptors) | Decision | The PTY separates the child's life from the descriptor's | Accepted | LEXTER-0015 |
+| [LEXTER-D75](Plan.TerminalFixes1e.md#lexter-d75--backends-are-sized-from-the-screen-the-handler-made) | Decision | Backends are sized from the screen the handler made | Accepted | LEXTER-0015 |
+| [LEXTER-D76](Plan.TerminalFixes1e.md#lexter-d76--exports-name-only-what-exists-and-packages-read-each-other-through-them) | Decision | Exports name only what exists, and packages read each other through them | Accepted | LEXTER-0015 |
+| [LEXTER-D77](Plan.TerminalFixes1e.md#lexter-d77--instance-state-leaves-the-globals) | Decision | Instance state leaves the globals | Accepted | LEXTER-0015 |
+| [LEXTER-D78](Plan.TerminalFixes1e.md#lexter-d78--mode-state-has-one-home-the-handler) | Decision | Mode state has one home, the handler | Accepted | LEXTER-0015 |
+| [LEXTER-D79](Plan.TerminalFixes1e.md#lexter-d79--keystrokes-are-encoded-without-babels-internals) | Decision | Keystrokes are encoded without babel's internals | Accepted | LEXTER-0015 |
+| [LEXTER-D80](Plan.TerminalFixes1e.md#lexter-d80--every-fix-gets-a-headless-regression-test) | Decision | Every fix gets a headless regression test | Accepted | LEXTER-0015 |
 | [LEXTER-D81](Arch.CellModel.md#lexter-d81--the-format-word-comes-first-with-one-job-for-each-of-its-bytes) | Decision | The format word comes first, with one job for each of its bytes | Accepted | LEXTER-0016 |
 | [LEXTER-D82](Arch.CellModel.md#lexter-d82--one-namespace-of-formats-names-every-cell) | Decision | One namespace of formats names every cell | Accepted | LEXTER-0016 |
 | [LEXTER-D83](Arch.CellModel.md#lexter-d83--a-glyph-format-gives-its-glyph-count-and-type-bits-in-the-format-word-and-they-are-authoritative) | Decision | A glyph format gives its glyph count and type bits in the format word, and they are authoritative | Accepted | LEXTER-0016 |
@@ -156,13 +157,13 @@ Table: Decision, open-question, and memo records in the LEXTER namespace.
 | [LEXTER-D110](Plan.CellModelRevision.md#lexter-d110--the-shaders-select-one-palette-entry-for-each-pixel-without-blending) | Decision | The shaders select one palette entry for each pixel, without blending | Accepted | LEXTER-0017 |
 | [LEXTER-D111](Plan.CellModelRevision.md#lexter-d111--a-renderer-on-the-cpu-draws-grids-as-the-gpu-does) | Decision | A renderer on the CPU draws grids as the GPU does | Accepted | LEXTER-0017 |
 | [LEXTER-D112](Plan.CellModelRevision.md#lexter-d112--pixel-checksums-are-produced-by-both-renderers-and-compared) | Decision | Pixel checksums are produced by both renderers and compared | Accepted | LEXTER-0017 |
-| [LEXTER-D113](Arch.CellModel.md#lexter-d113--each-grid-keeps-a-drawn-row-for-each-row-with-a-change-stamp-and-a-clock-mask-and-dirty-rows-are-told-apart-from-damaged-ones) | Decision | Each grid keeps a drawn row for each row, with a change stamp and a clock mask, and dirty rows are told apart from damaged ones | Proposed | LEXTER-0016 |
-| [LEXTER-D114](Arch.CellModel.md#lexter-d114--dec-double-size-lines-are-drawn-from-flags-in-each-cell-which-magnify-its-glyphs-two-times) | Decision | DEC double-size lines are drawn from flags in each cell, which magnify its glyphs two times | Proposed | LEXTER-0016 |
-| [LEXTER-D115](Arch.CellModel.md#lexter-d115--a-records-bits-are-spent-by-the-scope-of-what-they-hold) | Decision | A record's bits are spent by the scope of what they hold | Proposed | LEXTER-0016 |
-| [LEXTER-D116](Arch.CellModel.md#lexter-d116--bold-is-a-choice-of-glyph-from-a-bold-font-in-the-chain) | Decision | Bold is a choice of glyph, from a bold font in the chain | Proposed | LEXTER-0016 |
-| [LEXTER-D117](Plan.CellModelRevision.md#lexter-d117--a-characters-width-is-decided-by-the-path-that-writes-it-once-and-stored) | Decision | A character's width is decided by the path that writes it, once, and stored | Proposed | LEXTER-0017 |
-| [LEXTER-D118](Plan.CellModelRevision.md#lexter-d118--history-keeps-text-and-styles-and-records-exist-only-for-the-rows-on-screen) | Decision | History keeps text and styles, and records exist only for the rows on screen | Proposed | LEXTER-0017 |
-| [LEXTER-D119](Plan.CellModelRevision.md#lexter-d119--the-text-grid-marks-every-cell-a-character-covers-and-a-terminal-row-lies-beside-it) | Decision | The text grid marks every cell a character covers, and a terminal row lies beside it | Proposed | LEXTER-0017 |
+| [LEXTER-D113](Arch.CellModel.md#lexter-d113--each-grid-keeps-a-drawn-row-for-each-row-with-a-change-stamp-and-a-clock-mask-and-dirty-rows-are-told-apart-from-damaged-ones) | Decision | Each grid keeps a drawn row for each row, with a change stamp and a clock mask, and dirty rows are told apart from damaged ones | Accepted | LEXTER-0016 |
+| [LEXTER-D114](Arch.CellModel.md#lexter-d114--dec-double-size-lines-are-drawn-from-flags-in-each-cell-which-magnify-its-glyphs-two-times) | Decision | DEC double-size lines are drawn from flags in each cell, which magnify its glyphs two times | Accepted | LEXTER-0016 |
+| [LEXTER-D115](Arch.CellModel.md#lexter-d115--a-records-bits-are-spent-by-the-scope-of-what-they-hold) | Decision | A record's bits are spent by the scope of what they hold | Accepted | LEXTER-0016 |
+| [LEXTER-D116](Arch.CellModel.md#lexter-d116--bold-is-a-choice-of-glyph-from-a-bold-font-in-the-chain) | Decision | Bold is a choice of glyph, from a bold font in the chain | Accepted | LEXTER-0016 |
+| [LEXTER-D117](Plan.CellModelRevision.md#lexter-d117--a-characters-width-is-decided-by-the-path-that-writes-it-once-and-stored) | Decision | A character's width is decided by the path that writes it, once, and stored | Accepted | LEXTER-0017 |
+| [LEXTER-D118](Plan.CellModelRevision.md#lexter-d118--history-keeps-text-and-styles-and-records-exist-only-for-the-rows-on-screen) | Decision | History keeps text and styles, and records exist only for the rows on screen | Accepted | LEXTER-0017 |
+| [LEXTER-D119](Plan.CellModelRevision.md#lexter-d119--the-text-grid-marks-every-cell-a-character-covers-and-a-terminal-row-lies-beside-it) | Decision | The text grid marks every cell a character covers, and a terminal row lies beside it | Accepted | LEXTER-0017 |
 | [LEXTER-D120](Plan.CellModelRevision.md#lexter-d120--the-regression-suite-follows-square-and-stays-red-until-each-fix-lands) | Decision | The regression suite follows Square, and stays red until each fix lands | Accepted | LEXTER-0017 |
 | [LEXTER-D121](Plan.CellModelRevision.md#lexter-d121--the-atlass-packing-is-separated-from-its-upload-in-phase-0-with-a-column-count-the-caller-fixes) | Decision | The atlas's packing is separated from its upload in Phase 0, with a column count the caller fixes | Accepted | LEXTER-0017 |
 | [LEXTER-D122](Plan.CellModelRevision.md#lexter-d122--phase-1-takes-widths-from-unicode-170-draws-a-no-glyph-glyph-for-an-uncovered-codepoint-and-drops-zero-width-characters) | Decision | Phase 1 takes widths from Unicode 17.0, draws a "no glyph" glyph for an uncovered codepoint, and drops zero-width characters | Accepted | LEXTER-0017 |

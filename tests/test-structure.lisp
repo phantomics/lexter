@@ -86,3 +86,15 @@ incremental rebuild of dirty rows, since it rebuilds every instance."
   (is-false (search "dirty rows"
                     (or (documentation 'lexter/grid:build-render-data 'function) "")
                     :test #'char-equal)))
+
+(def-test terminal-modes-have-one-home ()
+  "LEXTER-D78: the VT handler is the one home of terminal modes, so the screen
+keeps no mode flags and the model exports no stubs that would set or read
+them."
+  (is (null (find-if (lambda (slot)
+                       (string= "MODE-FLAGS" (symbol-name (sb-mop:slot-definition-name slot))))
+                     (sb-mop:class-slots (find-class 'lexter/model:screen)))))
+  (dolist (name '("SET-MODE" "GET-MODE"))
+    (multiple-value-bind (symbol status) (find-symbol name '#:lexter/model)
+      (declare (ignore symbol))
+      (is (not (eq status :external))))))

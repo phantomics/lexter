@@ -43,6 +43,10 @@
 ;;; VT handler structure
 ;;; --------------------------------------------------------------------------
 
+(defconstant +max-osc-length+ 4096
+  "The longest operating-system command the handler keeps; the rest of a
+   longer one is dropped (LEXTER-D68).")
+
 (defstruct (vt-handler (:constructor %make-vt-handler))
   "Handler that connects cl-vt parser to terminal model."
   ;; The terminal screen model
@@ -83,8 +87,9 @@
   (callback        nil :type (or null function))
   ;; Tab stops (bit vector, 1 = tab stop at that column)
   (tab-stops       nil :type (or null simple-bit-vector))
-  ;; OSC string accumulator
-  (osc-string      ""  :type string)
+  ;; OSC string accumulator, which stops growing at +MAX-OSC-LENGTH+
+  (osc-string      (make-array 0 :element-type 'character :adjustable t :fill-pointer 0)
+                   :type string)
   ;; Window title (set via OSC)
   (window-title    ""  :type string)
   ;; UTF-8 decoding state
@@ -118,13 +123,20 @@
 ;;; Constructor
 ;;; --------------------------------------------------------------------------
 
+(defun %default-tab-stops (cols)
+  "A tab-stop vector for COLS columns, with a stop every eight columns."
+  (let ((tabs (make-array cols :element-type 'bit :initial-element 0)))
+    (loop :for i :from 0 :below cols :by 8
+          :do (setf (sbit tabs i) 1))
+    tabs))
+
 (defun make-vt-handler (screen atlas &key callback (encoding :utf8) bold-as-bright)
   "Create a VT handler for SCREEN using ATLAS for codepoint mapping.
    CALLBACK is called for unhandled sequences: (funcall callback :type data).
    ENCODING is :utf8 (default) or :cp437 (for BBS/DOS compatibility).
    BOLD-AS-BRIGHT when T promotes fg colors 0-7 to 8-15 when bold is set."
   (let* ((cols (screen-cols screen))
-         (tab-stops (make-array cols :element-type 'bit :initial-element 0))
+         (tab-stops (%default-tab-stops cols))
          (handler (%make-vt-handler :screen screen
                                     :primary-screen screen
                                     :atlas atlas
@@ -136,9 +148,6 @@
     ;; reserves for it, not the glyph of the space (LEXTER-D89, LEXTER-O28)
     (setf (screen-blank-glyph screen) lexter/atlas:+empty-glyph-position+)
     (fill (lexter/model::screen-glyphs screen) lexter/atlas:+empty-glyph-position+)
-    ;; Set default tab stops every 8 columns
-    (loop :for i :from 0 :below cols :by 8
-          :do (setf (sbit tab-stops i) 1))
     ;; Create parser with our dispatch function
     (setf (vt-handler-parser handler)
           (cl-vt:make-vt-parser (lambda (parser action byte)
@@ -207,10 +216,11 @@
     (:execute     (handle-execute handler byte))
     (:csi-dispatch (handle-csi-with-final handler byte))
     (:esc-dispatch (handle-esc handler byte))
-    (:osc-start   (setf (vt-handler-osc-string handler) ""))
-    (:osc-put     (setf (vt-handler-osc-string handler)
-                        (concatenate 'string (vt-handler-osc-string handler)
-                                     (string (code-char byte)))))
+    (:osc-start   (setf (fill-pointer (vt-handler-osc-string handler)) 0))
+    (:osc-put     (let ((osc (vt-handler-osc-string handler)))
+                    ;; The host cannot make it grow without bound (LEXTER-D68)
+                    (when (< (length osc) +max-osc-length+)
+                      (vector-push-extend (code-char byte) osc))))
     (:osc-end     (handle-osc handler))
     (otherwise    nil)))
 
@@ -219,14 +229,12 @@
 ;;; --------------------------------------------------------------------------
 
 (defun %wrap-to-next-line (handler)
-  "Move the cursor to the start of the next row, scrolling up at the bottom."
-  (let* ((screen (vt-handler-screen handler))
-         (row (cursor-row screen)))
-    (if (< row (1- (screen-rows screen)))
-        (set-cursor-position screen 0 (1+ row))
-        (progn
-          (scroll-up screen)
-          (set-cursor-position screen 0 row)))))
+  "Move the cursor to the start of the next row, as autowrap and NEL do: a
+   carriage return and a line feed, which applies the scrolling region
+   (LEXTER-D69)."
+  (let ((screen (vt-handler-screen handler)))
+    (set-cursor-position screen 0 (cursor-row screen))
+    (line-feed screen)))
 
 (defun %print-codepoint (handler codepoint)
   "Print a fully-decoded Unicode codepoint at the cursor. Its width comes from
@@ -331,9 +339,16 @@
                  (logior (ash (vt-handler-utf8-codepoint handler) 6)
                          (logand byte #x3F)))
            (decf (vt-handler-utf8-bytes-needed handler))
-           ;; If complete, print it
+           ;; If complete, print it: a value beyond Unicode or a surrogate is
+           ;; U+FFFD, so that no host reaches the values above U+10FFFF where
+           ;; Lexter names its generated glyphs (LEXTER-D68, LEXTER-D89)
            (when (zerop (vt-handler-utf8-bytes-needed handler))
-             (%print-codepoint handler (vt-handler-utf8-codepoint handler))))
+             (let ((codepoint (vt-handler-utf8-codepoint handler)))
+               (%print-codepoint handler
+                                 (if (or (> codepoint #x10FFFF)
+                                         (<= #xD800 codepoint #xDFFF))
+                                     #xFFFD
+                                     codepoint)))))
          ;; Unexpected continuation byte - skip it
          (when *debug-vt*
            (format t "~&[PRINT] Unexpected UTF-8 continuation byte~%"))))
@@ -382,16 +397,13 @@
        (let* ((col (cursor-col screen))
               (cols (screen-cols screen))
               (tabs (vt-handler-tab-stops handler))
-              (next-tab (loop :for i :from (1+ col) :below cols
+              (next-tab (loop :for i :from (1+ col) :below (min cols (length tabs))
                               :when (= 1 (sbit tabs i))
                               :return i
                               :finally (return (1- cols)))))
          (set-cursor-position screen next-tab (cursor-row screen))))
       ((#x0A #x0B #x0C) ; LF, VT, FF - line feed
-       (let ((row (cursor-row screen)))
-         (if (< row (lexter/model::screen-scroll-bottom screen))
-             (set-cursor-position screen (cursor-col screen) (1+ row))
-             (scroll-up screen))))
+       (line-feed screen))
       (#x0D ; CR - carriage return
        (set-cursor-position screen 0 (cursor-row screen)))
       (otherwise nil))))
@@ -465,10 +477,15 @@
               (set-cursor-position screen (cursor-col screen)
                                    (max 0 (min (1- (screen-rows screen)) (1- n))))))
            ;; Erase operations
+           ;; A mode xterm does not define is ignored (LEXTER-D68)
            (#x4A ; J - ED (Erase in Display)
-            (erase-in-display screen (param 0 0)))
+            (let ((mode (param 0 0)))
+              (when (<= 0 mode 3)
+                (erase-in-display screen mode))))
            (#x4B ; K - EL (Erase in Line)
-            (erase-in-line screen (param 0 0)))
+            (let ((mode (param 0 0)))
+              (when (<= 0 mode 2)
+                (erase-in-line screen mode))))
            (#x58 ; X - ECH (Erase Characters)
             (erase-chars screen (param 0)))
            ;; Insert/Delete
@@ -486,10 +503,16 @@
            (#x54 ; T - SD (Scroll Down)
             (scroll-down screen (param 0)))
            (#x72 ; r - DECSTBM (Set Top and Bottom Margins)
-            (let ((top (1- (param 0)))
-                  (bottom (1- (param 1 (screen-rows screen)))))
-              (set-scrolling-region screen top bottom)
-              (set-cursor-position screen 0 0)))
+            ;; A margin given as 0 takes its default, the window's edge; a
+            ;; region whose top is not above its bottom is ignored, as the
+            ;; VT100 requires the top margin to be less than the bottom
+            ;; (LEXTER-D68)
+            (let* ((rows (screen-rows screen))
+                   (top (let ((p (param 0 1))) (if (zerop p) 1 p)))
+                   (bottom (let ((p (param 1 rows))) (if (zerop p) rows (min p rows)))))
+              (when (< top bottom)
+                (set-scrolling-region screen (1- top) (1- bottom))
+                (set-cursor-position screen 0 0))))
            ;; SGR (Select Graphic Rendition)
            (#x6D ; m - SGR
             (handle-sgr handler))
@@ -587,24 +610,10 @@
                    (setf (vt-handler-current-fg handler) (- p 30)))
                   ;; Extended foreground (38;5;n or 38;2;r;g;b)
                   ((= p 38)
-                   (cond
-                     ((and (< (1+ i) (length params))
-                           (= (nth (1+ i) params) 5))
-                      ;; 256-color: 38;5;n
-                      (when (< (+ i 2) (length params))
-                        (setf (vt-handler-current-fg handler)
-                              (nth (+ i 2) params))
-                        (incf i 2)))
-                     ((and (< (1+ i) (length params))
-                           (= (nth (1+ i) params) 2))
-                      ;; 24-bit: 38;2;r;g;b - map to nearest 256 color
-                      (when (< (+ i 4) (length params))
-                        (let ((r (nth (+ i 2) params))
-                              (g (nth (+ i 3) params))
-                              (b (nth (+ i 4) params)))
-                          (setf (vt-handler-current-fg handler)
-                                (rgb-to-256 r g b))
-                          (incf i 4))))))
+                   (multiple-value-bind (colour consumed) (%sgr-extended-colour params i)
+                     (when colour
+                       (setf (vt-handler-current-fg handler) colour))
+                     (incf i consumed)))
                   ;; Default foreground
                   ((= p 39)
                    (setf (vt-handler-current-fg handler) 7))
@@ -613,22 +622,10 @@
                    (setf (vt-handler-current-bg handler) (- p 40)))
                   ;; Extended background (48;5;n or 48;2;r;g;b)
                   ((= p 48)
-                   (cond
-                     ((and (< (1+ i) (length params))
-                           (= (nth (1+ i) params) 5))
-                      (when (< (+ i 2) (length params))
-                        (setf (vt-handler-current-bg handler)
-                              (nth (+ i 2) params))
-                        (incf i 2)))
-                     ((and (< (1+ i) (length params))
-                           (= (nth (1+ i) params) 2))
-                      (when (< (+ i 4) (length params))
-                        (let ((r (nth (+ i 2) params))
-                              (g (nth (+ i 3) params))
-                              (b (nth (+ i 4) params)))
-                          (setf (vt-handler-current-bg handler)
-                                (rgb-to-256 r g b))
-                          (incf i 4))))))
+                   (multiple-value-bind (colour consumed) (%sgr-extended-colour params i)
+                     (when colour
+                       (setf (vt-handler-current-bg handler) colour))
+                     (incf i consumed)))
                   ;; Default background
                   ((= p 49)
                    (setf (vt-handler-current-bg handler) 0))
@@ -640,14 +637,39 @@
                    (setf (vt-handler-current-bg handler) (+ 8 (- p 100)))))
                 (incf i)))))
 
+(defun %sgr-extended-colour (params i)
+  "Read the extended colour whose 38 or 48 is element I of the SGR PARAMS:
+   5;n, an index of the 256-colour palette, or 2;r;g;b, a 24-bit colour mapped
+   to the nearest index. Return the index, or NIL when the colour is incomplete
+   or out of range, and so is ignored (LEXTER-D68): an index above 255, or a
+   component above 255, outside the range xterm documents. The second value is
+   how many parameters after I the colour took."
+  (let* ((remaining (- (length params) i 1))
+         (kind (and (plusp remaining) (nth (1+ i) params))))
+    (flet ((arg (k) (nth (+ i 1 k) params)))
+      (case kind
+        (5 (if (>= remaining 2)
+               (let ((n (arg 1)))
+                 (values (and n (<= 0 n 255) n) 2))
+               (values nil remaining)))
+        (2 (if (>= remaining 4)
+               (let ((r (arg 1)) (g (arg 2)) (b (arg 3)))
+                 (values (and r g b (<= 0 r 255) (<= 0 g 255) (<= 0 b 255)
+                              (rgb-to-256 r g b))
+                         4))
+               (values nil remaining)))
+        (otherwise (values nil 0))))))
+
 (defun rgb-to-256 (r g b)
-  "Convert 24-bit RGB to nearest xterm 256-color index."
+  "Convert 24-bit RGB, each component 0-255, to the nearest xterm 256-colour
+   index, which is always 16-255 (LEXTER-D68)."
   ;; Check if it's a grayscale value
   (if (and (= r g) (= g b))
       (cond
         ((< r 8) 16)        ; black
-        ((> r 248) 231)     ; white  
-        (t (+ 232 (floor (- r 8) 10)))) ; grayscale ramp
+        ((> r 248) 231)     ; white
+        ;; The greyscale ramp, 232-255, whose last entry is 238
+        (t (min 255 (+ 232 (floor (- r 8) 10)))))
       ;; Map to 6x6x6 color cube
       (let ((ri (floor r 51))
             (gi (floor g 51))
@@ -741,7 +763,9 @@
   (let ((primary (vt-handler-primary-screen handler))
         (alt (vt-handler-alt-screen handler)))
     (when primary (resize-screen primary new-cols new-rows))
-    (when alt (resize-screen alt new-cols new-rows))))
+    (when alt (resize-screen alt new-cols new-rows))
+    ;; The tab stops are rebuilt for the new width (LEXTER-D68)
+    (setf (vt-handler-tab-stops handler) (%default-tab-stops new-cols))))
 
 (defun handle-decset (handler mode)
   "Handle DECSET (CSI ? n h)."
@@ -893,22 +917,11 @@
                 (vt-handler-current-bg handler) (vt-handler-saved-bg handler)
                 (vt-handler-current-attrs handler) (vt-handler-saved-attrs handler)))
          (#x44 ; ESC D - IND (Index, line feed)
-          (let ((row (cursor-row screen)))
-            (if (< row (lexter/model::screen-scroll-bottom screen))
-                (set-cursor-position screen (cursor-col screen) (1+ row))
-                (scroll-up screen))))
+          (line-feed screen))
          (#x45 ; ESC E - NEL (Next Line)
-          (let ((row (cursor-row screen)))
-            (if (< row (lexter/model::screen-scroll-bottom screen))
-                (set-cursor-position screen 0 (1+ row))
-                (progn
-                  (scroll-up screen)
-                  (set-cursor-position screen 0 row)))))
+          (%wrap-to-next-line handler))
          (#x4D ; ESC M - RI (Reverse Index)
-          (let ((row (cursor-row screen)))
-            (if (> row (lexter/model::screen-scroll-top screen))
-                (set-cursor-position screen (cursor-col screen) (1- row))
-                (scroll-down screen))))
+          (reverse-line-feed screen))
          (#x63 ; ESC c - RIS (Reset to Initial State)
           (reset-handler handler))
          (otherwise
@@ -1060,10 +1073,7 @@
     ;; Show cursor
     (set-cursor-visible screen t)
     ;; Reset tab stops
-    (let ((tabs (vt-handler-tab-stops handler)))
-      (fill tabs 0)
-      (loop :for i :from 0 :below (length tabs) :by 8
-            :do (setf (sbit tabs i) 1)))
+    (setf (vt-handler-tab-stops handler) (%default-tab-stops (screen-cols screen)))
     ;; Reset parser
     (cl-vt:vt-parser-reset (vt-handler-parser handler))))
 

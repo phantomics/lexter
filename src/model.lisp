@@ -100,8 +100,6 @@
   ;; --- Scrolling region (VT only) ---
   (scroll-top    0    :type fixnum)
   (scroll-bottom 23   :type fixnum)  ; inclusive
-  ;; --- Mode flags ---
-  (mode-flags    0    :type (unsigned-byte 32))
   ;; --- Saved cursor (for DECSC/DECRC) ---
   (saved-cursor-col 0 :type fixnum)
   (saved-cursor-row 0 :type fixnum)
@@ -438,9 +436,7 @@
     (when (and wide (>= col (1- cols)) (> cols 1))
       (write-char-at screen col (screen-cursor-row screen)
                      (screen-blank-glyph screen) :swatch swatch)
-      (if (< (screen-cursor-row screen) (1- (screen-rows screen)))
-          (incf (screen-cursor-row screen))
-          (scroll-up screen))
+      (line-feed screen)
       (setf col 0))
     (write-char-at screen col (screen-cursor-row screen)
                    glyph-idx :swatch swatch :attrs attrs :wide wide)
@@ -704,10 +700,34 @@
         (setf (aref lines idx) line))
       (setf (screen-scrollback-count screen) (1+ count)))))
 
+(defun line-feed (screen)
+  "Move the cursor down one row, keeping its column, as a line feed does: on
+   the scrolling region's bottom margin the region scrolls up; elsewhere the
+   cursor moves down, stopping on the screen's last row. Every path that moves
+   to the next line, autowrap included, goes through here, so that the
+   region's rule has one home (LEXTER-D69)."
+  (let ((row (screen-cursor-row screen)))
+    (cond ((= row (screen-scroll-bottom screen))
+           (scroll-up screen))
+          ((< row (1- (screen-rows screen)))
+           (set-cursor-position screen (screen-cursor-col screen) (1+ row))))))
+
+(defun reverse-line-feed (screen)
+  "Move the cursor up one row, keeping its column, as a reverse index does: on
+   the scrolling region's top margin the region scrolls down; elsewhere the
+   cursor moves up, stopping on the screen's first row (LEXTER-D69)."
+  (let ((row (screen-cursor-row screen)))
+    (cond ((= row (screen-scroll-top screen))
+           (scroll-down screen))
+          ((plusp row)
+           (set-cursor-position screen (screen-cursor-col screen) (1- row))))))
+
 (defun scroll-up (screen &optional (n 1))
-  "Scroll the scrolling region up by N lines."
-  (let ((top (screen-scroll-top screen))
-        (bottom (screen-scroll-bottom screen)))
+  "Scroll the scrolling region up by N lines. More lines than the region holds
+   scroll it as its height does (LEXTER-D68)."
+  (let* ((top (screen-scroll-top screen))
+         (bottom (screen-scroll-bottom screen))
+         (n (min n (1+ (- bottom top)))))
     (loop :repeat n :do
       ;; Save top line to scrollback if at actual top
       (when (zerop top)
@@ -719,9 +739,11 @@
       (%clear-row screen bottom))))
 
 (defun scroll-down (screen &optional (n 1))
-  "Scroll the scrolling region down by N lines."
-  (let ((top (screen-scroll-top screen))
-        (bottom (screen-scroll-bottom screen)))
+  "Scroll the scrolling region down by N lines. More lines than the region
+   holds scroll it as its height does (LEXTER-D68)."
+  (let* ((top (screen-scroll-top screen))
+         (bottom (screen-scroll-bottom screen))
+         (n (min n (1+ (- bottom top)))))
     (loop :repeat n :do
       ;; Shift lines down
       (loop :for row :from bottom :above top
@@ -759,21 +781,6 @@
   "Set scrollback viewport offset. 0 = live screen, >0 = looking at history."
   (setf (screen-scrollback-viewport screen)
         (max 0 (min offset (scrollback-lines screen)))))
-
-;;; --------------------------------------------------------------------------
-;;; Modes
-;;; --------------------------------------------------------------------------
-
-(defun set-mode (screen flag value)
-  "Set a mode flag. FLAG is a keyword, VALUE is boolean."
-  (declare (ignore screen flag value))
-  ;; TODO: implement mode flag storage
-  nil)
-
-(defun get-mode (screen flag)
-  "Get a mode flag value."
-  (declare (ignore screen flag))
-  nil)
 
 ;;; --------------------------------------------------------------------------
 ;;; Resize

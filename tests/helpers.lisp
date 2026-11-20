@@ -286,9 +286,8 @@ id."
 ;;; Inspecting screens and first-edition grids  (LEXTER-D106)
 ;;; ============================================================
 ;;;
-;;; A screen is read through the model's API. The grid's readers reach the
-;;; first edition's internal arrays; step 3 of Phase 3 rewrites them for the
-;;; record.
+;;; A screen is read through the model's API, and a grid through its record
+;;; accessors.
 
 (defun screen-wide-p (screen col row)
   "True when the cell at COL, ROW of SCREEN is the left half of a double-width
@@ -301,40 +300,31 @@ character."
 it is empty, or the continuation marker."
   (lexter/model:cell-content screen col row))
 
-(defun grid-index (grid col row)
-  "The index of the cell at COL, ROW in GRID's per-cell arrays."
-  (+ (* row (lexter/grid:display-grid-cols grid)) col))
-
 (defun grid-glyph (grid col row)
-  "The glyph of the simple cell at COL, ROW of GRID."
-  (aref (lexter/grid::display-grid-glyphs grid) (grid-index grid col row)))
+  "The atlas position of the first glyph of the record at COL, ROW of GRID, or
+0 when it has none."
+  (lexter/grid:cell-glyph grid col row))
 
 (defun grid-wide-p (grid col row)
   "True when the cell at COL, ROW of GRID is the left half of a wide glyph."
-  (= 1 (sbit (lexter/grid::display-grid-wide-flags grid) (grid-index grid col row))))
+  (lexter/grid:wide-left-p grid col row))
 
 (defun grid-continuation-p (grid col row)
   "True when the cell at COL, ROW of GRID is the right half of a wide glyph."
-  (= 1 (sbit (lexter/grid::display-grid-continuation-flags grid)
-             (grid-index grid col row))))
-
-(defun grid-layer (grid col row layer)
-  "The CELL-LAYER at LAYER of the layered cell at COL, ROW of GRID, or NIL."
-  (let ((loc (gethash (cons col row) (lexter/grid::display-grid-layered-cells grid))))
-    (and loc (aref (lexter/grid::cell-location-layers loc) layer))))
-
-(defun grid-layered-swatch (grid col row)
-  "The swatch index of the layered cell at COL, ROW of GRID, or NIL."
-  (let ((loc (gethash (cons col row) (lexter/grid::display-grid-layered-cells grid))))
-    (and loc (lexter/grid::cell-location-swatch-idx loc))))
+  (lexter/grid:continuation-p grid col row))
 
 (defun grid-swatch (grid col row)
-  "The global swatch index of the simple cell at COL, ROW of GRID."
-  (aref (lexter/grid::display-grid-swatch-indices grid) (grid-index grid col row)))
+  "The global swatch index of the record at COL, ROW of GRID."
+  (lexter/grid:cell-swatch grid col row))
+
+(defun grid-record (grid col row)
+  "The record at COL, ROW of GRID, read in full as a plist."
+  (lexter/manifests:read-plain-record (lexter/grid:display-grid-records grid)
+                                      (+ (* row (lexter/grid:display-grid-cols grid)) col)))
 
 (defun grid-cell-colours (grid col row &optional (store *store*))
-  "The four palette indices that the simple cell at COL, ROW of GRID is drawn
-in, its global swatch index read through STORE."
+  "The four palette indices of the swatch of the record at COL, ROW of GRID,
+its global swatch index read through STORE."
   (multiple-value-list (lexter/swatches:store-swatch store (grid-swatch grid col row))))
 
 ;;; ============================================================

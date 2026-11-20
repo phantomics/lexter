@@ -318,7 +318,7 @@
     ;; the layout. Everything is marked dirty so it gets redrawn.
     (when (compositor-layout-fn comp)
       (funcall (compositor-layout-fn comp) comp new-cols new-rows))
-    (lexter/grid:mark-all-dirty (compositor-display comp))))
+    (lexter/grid:touch-all-rows (compositor-display comp))))
 
 ;;; --------------------------------------------------------------------------
 ;;; Main loop

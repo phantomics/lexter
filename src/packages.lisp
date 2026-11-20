@@ -56,37 +56,9 @@
            #:+no-glyph-glyph+
            #:+empty-glyph-position+
            #:+replacement-glyph-position+
-           #:+no-glyph-position+))
-
-(defpackage #:lexter/grid
-  (:use #:cl)
-  (:export ;; Grid creation and access
-           #:make-display-grid
-           #:display-grid
-           #:display-grid-cols
-           #:display-grid-rows
-           #:resize-grid
-           ;; Simple cell API
-           #:set-simple-cell
-           ;; Layered cell API
-           #:set-cell-swatch
-           #:set-cell-layer
-           #:clear-cell-layers
-           #:cell-layered-p
-           #:continuation-p
-           #:exchange-cell-slots
-           ;; Dirty tracking
-           #:mark-row-dirty
-           #:mark-all-dirty
-           #:clear-dirty-flags
-           #:row-dirty-p
-           ;; Render data
-           #:build-render-data
-           ;; Constants
-           #:+max-layers+
-           #:+swatch-slots+
-           #:+simple-stride+
-           #:+layered-stride+))
+           #:+no-glyph-position+
+           #:+underline-glyph+
+           #:line-glyph-position))
 
 (defpackage #:lexter/manifests
   (:use #:cl)
@@ -114,6 +86,9 @@
            ;; Glyph words by number
            #:record-glyph
            #:record-ink-slot
+           #:record-selector
+           #:record-mask
+           #:record-type-bits
            #:record-layer-p
            #:record-topmost-layer
            ;; Invariants
@@ -139,6 +114,49 @@
            #:read-swatch-texel
            #:write-palette-texel
            #:read-palette-texel))
+
+(defpackage #:lexter/grid
+  (:use #:cl)
+  (:import-from #:lexter/manifests
+                #:record-array #:make-record-array #:+plain-glyph-words+
+                #:write-plain-record #:patch-plain-record #:read-plain-record
+                #:read-record-common #:patch-record-common #:record-format
+                #:copy-records #:clear-records
+                #:record-glyph #:record-ink-slot #:record-selector #:record-mask
+                #:record-type-bits #:record-layer-p #:record-topmost-layer)
+  (:export ;; Grid creation and access
+           #:make-display-grid
+           #:display-grid
+           #:display-grid-cols
+           #:display-grid-rows
+           #:display-grid-records
+           #:resize-grid
+           ;; Records
+           #:write-text-record
+           #:clear-cell
+           #:cell-glyph
+           #:cell-swatch
+           #:continuation-p
+           #:wide-left-p
+           #:exchange-cell-slots
+           ;; The first edition's writers, over records
+           #:set-simple-cell
+           #:set-cell-swatch
+           #:set-cell-layer
+           #:clear-cell-layers
+           #:cell-layered-p
+           ;; Change stamps (LEXTER-D113)
+           #:next-change-stamp
+           #:row-stamp
+           #:touch-row
+           #:touch-all-rows
+           ;; Render data
+           #:build-render-data
+           ;; Constants
+           #:+max-layers+
+           #:+swatch-slots+
+           #:+simple-stride+
+           #:+layered-stride+))
 
 (defpackage #:lexter/swatches
   (:use #:cl)

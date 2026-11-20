@@ -1,22 +1,27 @@
 (in-package #:lexter/grid)
 
-;;;; Display grid for GPU rendering.
+;;;; The composed grid (LEXTER-D107)
 ;;;;
-;;;; This is the lowest-level display abstraction — it holds cell data in
-;;;; a format ready for GPU upload.  The terminal model writes to this grid
-;;;; via a flush operation.
+;;;; One grid of records holds every text pane and its chrome. Its records are
+;;;; a Lisp array of bytes, 32 to a record, row by row, read and written only
+;;;; through the accessors over the record's manifests (LEXTER-D129,
+;;;; LEXTER-D130). Beside them the grid keeps a drawn row for each row: so far
+;;;; its change stamp, taken from one counter global to Lexter whenever a
+;;;; record in the row is written (LEXTER-D113). A reader that remembers the
+;;;; stamps it took finds the rows changed since.
 ;;;;
-;;;; Key features:
-;;;;   - Per-row dirty tracking for incremental updates
-;;;;   - Simple path (1 layer) and layered path (up to 3 layers)
-;;;;
-;;;; Cells hold global swatch indices into the store whose ranges the swatch
+;;;; Records hold global swatch indices into the store whose ranges the swatch
 ;;;; tables own (swatches.lisp); the grid keeps no swatches of its own
 ;;;; (LEXTER-D99, LEXTER-D100). Swatch slots by convention:
 ;;;;   Slot 0 = background
 ;;;;   Slot 1 = foreground
 ;;;;   Slot 2 = primary overlay (cursor, layer 1)
 ;;;;   Slot 3 = secondary overlay (selection, layer 2)
+;;;;
+;;;; Until the renderer draws records (step 6 of Phase 3), BUILD-RENDER-DATA
+;;;; turns them into the first edition's instances, and the first edition's
+;;;; writers reach the grid through SET-SIMPLE-CELL and SET-CELL-LAYER, which
+;;;; write records.
 
 ;;; --------------------------------------------------------------------------
 ;;; Constants
@@ -28,55 +33,40 @@
 (defconstant +simple-stride+  12)
 ;; Layered instance: col(2) row(2) glyph(4) ink(1) bg(1) ts(1) pad(1) swatch(2) pad(2) = 16
 (defconstant +layered-stride+ 16)
-(defconstant +max-layers+ 3)
+(defconstant +max-layers+ 3
+  "The layers the first edition's layered instances draw.")
 (defconstant +swatch-slots+ 4)
 
 ;;; --------------------------------------------------------------------------
-;;; Structures
+;;; Change stamps
 ;;; --------------------------------------------------------------------------
 
-(defstruct cell-layer
-  "One layer within a layered cell. Its slot names are the model's
-   (MODEL-LAYER), so that one name means one thing in both (LEXTER-O36)."
-  (glyph-idx        0    :type (unsigned-byte 32))
-  (ink-slot         0    :type (unsigned-byte 2))   ; swatch slot for ink
-  (bg-slot          0    :type (unsigned-byte 2))   ; swatch slot for bg (layer 0 only)
-  ;; :none = fully opaque both sides (layer 0)
-  ;; :bg   = mask=0 pixels transparent, mask=1 uses ink
-  ;; :fg   = mask=1 pixels transparent, mask=0 uses ink
-  (transparent-side :none :type keyword))
+(declaim (type (unsigned-byte 62) *change-counter*))
+(defvar *change-counter* 0
+  "The last change stamp taken: one counter global to Lexter, so that a stamp
+   orders every write to every grid (LEXTER-D113).")
 
-(defstruct cell-location
-  "A cell using the layered rendering path."
-  ;; Global swatch index (same as simple cells)
-  (swatch-idx 0 :type (unsigned-byte 16))
-  ;; Layers 0-2; NIL = empty/inactive
-  (layers (make-array +max-layers+ :initial-element nil) :type simple-vector))
+(declaim (inline next-change-stamp))
+(defun next-change-stamp ()
+  "Take a new change stamp."
+  (incf *change-counter*))
+
+;;; --------------------------------------------------------------------------
+;;; The grid
+;;; --------------------------------------------------------------------------
 
 (defstruct (display-grid (:constructor %make-display-grid))
-  "GPU display grid with dirty tracking, holding global swatch indices."
+  "The composed grid: its records, row by row, and a drawn row for each row."
   (cols          80  :type fixnum)
   (rows          24  :type fixnum)
-  ;; --- Simple path storage (per-cell) ---
-  (glyphs        #() :type (simple-array (unsigned-byte 32) (*)))
-  (swatch-indices #() :type (simple-array (unsigned-byte 16) (*)))
-  ;; --- Wide character support ---
-  (wide-flags    #*  :type simple-bit-vector)    ; 1 = left half of wide char
-  (continuation-flags #* :type simple-bit-vector) ; 1 = right half (skip during render)
-  ;; --- Layered path storage (sparse) ---
-  (layered-cells (make-hash-table :test 'equal) :type hash-table)
-  (layered-flags #*  :type simple-bit-vector)
-  ;; --- Dirty tracking (per-row) ---
-  (row-dirty     #*  :type simple-bit-vector)
-  ;; --- Cached render buffers (persistent, updated incrementally) ---
+  (records (make-record-array 0) :type record-array)
+  ;; The drawn rows' change stamps (LEXTER-D113)
+  (stamps  (make-array 0 :element-type '(unsigned-byte 64)) :type (simple-array (unsigned-byte 64) (*)))
+  ;; --- The first edition's instance buffers, built from the records ---
   (simple-buffer   nil)
   (simple-count    0   :type fixnum)
   (layered-buffer  nil)
   (layered-counts  nil))  ; (simple-array fixnum (3))
-
-;;; --------------------------------------------------------------------------
-;;; Constructor
-;;; --------------------------------------------------------------------------
 
 (defun %allocate-render-buffers (grid)
   "Allocate or reallocate render buffers for GRID's current size."
@@ -93,175 +83,276 @@
           (display-grid-layered-counts grid)
           (make-array +max-layers+ :element-type 'fixnum :initial-element 0))))
 
+(defun %stamp-array (rows)
+  (make-array rows :element-type '(unsigned-byte 64) :initial-element (next-change-stamp)))
+
 (defun make-display-grid (&key (cols 80) (rows 24))
-  "Create a display grid with COLS columns and ROWS rows, every cell in global
-   swatch 0, the default colours."
-  (let* ((n (* cols rows))
-         (grid (%make-display-grid
-                :cols           cols
-                :rows           rows
-                :glyphs         (make-array n :element-type '(unsigned-byte 32) :initial-element 0)
-                :swatch-indices (make-array n :element-type '(unsigned-byte 16) :initial-element 0)
-                :wide-flags     (make-array n :element-type 'bit :initial-element 0)
-                :continuation-flags (make-array n :element-type 'bit :initial-element 0)
-                :layered-cells  (make-hash-table :test 'equal :size 64)
-                :layered-flags  (make-array n :element-type 'bit :initial-element 0)
-                :row-dirty      (make-array rows :element-type 'bit :initial-element 1)
-                :simple-buffer  nil
-                :simple-count   0
-                :layered-buffer nil
-                :layered-counts (make-array +max-layers+ :element-type 'fixnum :initial-element 0))))
+  "Create a display grid with COLS columns and ROWS rows, every cell a record
+   of zeros, a blank in global swatch 0, the default colours (LEXTER-D83).
+   Every row is newer than any stamp a reader took before."
+  (let ((grid (%make-display-grid :cols cols :rows rows
+                                  :records (make-record-array (* cols rows))
+                                  :stamps (%stamp-array rows))))
     (%allocate-render-buffers grid)
     grid))
 
-;;; --------------------------------------------------------------------------
-;;; Dirty tracking
-;;; --------------------------------------------------------------------------
-
-(declaim (inline %idx mark-row-dirty))
-
+(declaim (inline %idx))
 (defun %idx (grid col row)
   (+ (* row (display-grid-cols grid)) col))
 
-(defun mark-row-dirty (grid row)
-  "Mark ROW as needing re-render."
-  (setf (sbit (display-grid-row-dirty grid) row) 1))
+(defun row-stamp (grid row)
+  "The change stamp of ROW of GRID: the stamp taken when a record in it was
+   last written."
+  (aref (display-grid-stamps grid) row))
 
-(defun mark-all-dirty (grid)
-  "Mark all rows dirty (for full redraw after resize etc.)."
-  (fill (display-grid-row-dirty grid) 1))
+(defun touch-row (grid row)
+  "Give ROW of GRID a new change stamp, so that every reader takes it again."
+  (setf (aref (display-grid-stamps grid) row) (next-change-stamp)))
 
-(defun clear-dirty-flags (grid)
-  "Clear all dirty flags after a successful render."
-  (fill (display-grid-row-dirty grid) 0))
-
-(defun row-dirty-p (grid row)
-  (= 1 (sbit (display-grid-row-dirty grid) row)))
-
-;;; --------------------------------------------------------------------------
-;;; Simple path API
-;;; --------------------------------------------------------------------------
-
-(defun set-simple-cell (grid col row glyph-idx swatch-idx &key wide)
-  "Set a simple (single-layer) cell at (COL, ROW).
-   If the cell was layered, that state is cleared.
-   WIDE when true marks the cell as double-width: sets the wide flag on this cell,
-   marks (COL+1, ROW) as a continuation cell, and clears any existing state there."
-  (let ((i (%idx grid col row))
-        (cols (display-grid-cols grid)))
-    ;; If this cell was the continuation of a wide char to the left, clear that wide char
-    (when (= 1 (sbit (display-grid-continuation-flags grid) i))
-      (when (> col 0)
-        (let ((left-i (%idx grid (1- col) row)))
-          (setf (sbit (display-grid-wide-flags grid) left-i) 0))))
-    ;; If this cell was wide, clear its old continuation
-    (when (= 1 (sbit (display-grid-wide-flags grid) i))
-      (let ((next-col (1+ col)))
-        (when (< next-col cols)
-          (let ((next-i (%idx grid next-col row)))
-            (setf (sbit (display-grid-continuation-flags grid) next-i) 0)))))
-    ;; Set cell data
-    (setf (aref (display-grid-glyphs grid) i) glyph-idx
-          (aref (display-grid-swatch-indices grid) i) swatch-idx
-          (sbit (display-grid-layered-flags grid) i) 0
-          (sbit (display-grid-wide-flags grid) i) (if wide 1 0)
-          (sbit (display-grid-continuation-flags grid) i) 0)
-    (remhash (cons col row) (display-grid-layered-cells grid))
-    ;; Handle wide: mark continuation cell
-    (when wide
-      (let ((next-col (1+ col)))
-        (when (< next-col cols)
-          (let ((next-i (%idx grid next-col row)))
-            (setf (aref (display-grid-glyphs grid) next-i) 0
-                  (aref (display-grid-swatch-indices grid) next-i) swatch-idx
-                  (sbit (display-grid-layered-flags grid) next-i) 0
-                  (sbit (display-grid-wide-flags grid) next-i) 0
-                  (sbit (display-grid-continuation-flags grid) next-i) 1)
-            (remhash (cons next-col row) (display-grid-layered-cells grid))))))
-    (mark-row-dirty grid row)))
+(defun touch-all-rows (grid)
+  "Give every row of GRID a new change stamp, as replacing the grid, changing
+   the workspace, or resizing does (LEXTER-D113)."
+  (fill (display-grid-stamps grid) (next-change-stamp))
+  grid)
 
 ;;; --------------------------------------------------------------------------
-;;; Layered path API
+;;; Writing records
 ;;; --------------------------------------------------------------------------
 
-(defun %ensure-layered (grid col row)
-  "Return the CELL-LOCATION for (COL, ROW), creating if necessary.
-   A new location copies the cell's current swatch index."
-  (let ((key (cons col row)))
-    (or (gethash key (display-grid-layered-cells grid))
-        (let* ((i   (%idx grid col row))
-               (loc (make-cell-location))
-               (sw-idx (aref (display-grid-swatch-indices grid) i)))
-          ;; Copy the swatch index (as simple cells hold it)
-          (setf (cell-location-swatch-idx loc) sw-idx)
-          ;; Bootstrap layer 0 with current glyph
-          (setf (aref (cell-location-layers loc) 0)
-                (make-cell-layer :glyph-idx (aref (display-grid-glyphs grid) i)
-                                 :ink-slot  1   ; fg = slot 1
-                                 :bg-slot   0   ; bg = slot 0
-                                 :transparent-side :none))
-          (setf (sbit (display-grid-layered-flags grid) i) 1
-                (gethash key (display-grid-layered-cells grid)) loc)
-          (mark-row-dirty grid row)
-          loc))))
+(defun write-text-record (grid col row &key (glyph 0) (visible t) (swatch 0)
+                                            (palette-slot 0) (background-slot 0)
+                                            (ink-slot 1) underline-glyph
+                                            wide right-half blink)
+  "Write the cell at COL, ROW of GRID as a cell of text, in the plain format:
+   GLYPH as one layer in INK-SLOT, cut by UNDERLINE-GLYPH as a union mask when
+   it is given, so that the underline takes the text's colour (LEXTER-D88);
+   no glyphs at all when VISIBLE is false or GLYPH is 0. SWATCH, PALETTE-SLOT,
+   and BACKGROUND-SLOT are the header word's; WIDE and RIGHT-HALF place the
+   cell in a double-width character, and BLINK sets its blink flag."
+  (let ((records (display-grid-records grid))
+        (index (%idx grid col row))
+        (wide (if wide 1 0))
+        (right-half (if right-half 1 0))
+        (blink (if blink 1 0)))
+    (cond ((or (not visible) (and (zerop glyph) (null underline-glyph)))
+           (write-plain-record records index
+             :wide wide :right-half right-half :blink blink
+             :swatch swatch :palette-slot palette-slot :background-slot background-slot))
+          ((null underline-glyph)
+           (write-plain-record records index
+             :glyph-count 1 :wide wide :right-half right-half :blink blink
+             :swatch swatch :palette-slot palette-slot :background-slot background-slot
+             :g0 (:glyph glyph :ink-slot ink-slot)))
+          (t
+           (write-plain-record records index
+             :glyph-count 2 :type-1 1 :wide wide :right-half right-half :blink blink
+             :swatch swatch :palette-slot palette-slot :background-slot background-slot
+             :g0 (:glyph glyph :ink-slot ink-slot)
+             :g1 (:glyph underline-glyph :operation :union))))
+    (touch-row grid row)))
 
-(defun set-cell-swatch (grid col row swatch-idx)
-  "Set the swatch index for a layered cell.
-   SWATCH-IDX is a global swatch index (same as simple cells).
-   The cell is promoted to layered mode if not already."
-  (%ensure-layered grid col row)
-  (let ((loc (gethash (cons col row) (display-grid-layered-cells grid))))
-    (setf (cell-location-swatch-idx loc) swatch-idx)
-    (mark-row-dirty grid row)))
+(defun clear-cell (grid col row)
+  "Make the cell at COL, ROW of GRID a record of zeros."
+  (clear-records (display-grid-records grid) (%idx grid col row) 1)
+  (touch-row grid row))
 
-(defun set-cell-layer (grid col row layer-num glyph-idx ink-slot
-                       &key (bg-slot 0) (transparent-side :none))
-  "Define layer LAYER-NUM (0-2) at (COL, ROW).
-   INK-SLOT/BG-SLOT are swatch slot indices (0-3).
-   TRANSPARENT-SIDE: :none (opaque), :bg (ink on mask=1), :fg (ink on mask=0)."
-  (assert (<= 0 layer-num (1- +max-layers+)) (layer-num)
-          "Layer number must be 0-~d" (1- +max-layers+))
-  (%ensure-layered grid col row)
-  (let ((loc (gethash (cons col row) (display-grid-layered-cells grid))))
-    (setf (aref (cell-location-layers loc) layer-num)
-          (make-cell-layer :glyph-idx        glyph-idx
-                           :ink-slot         ink-slot
-                           :bg-slot          bg-slot
-                           :transparent-side transparent-side))
-    (mark-row-dirty grid row)))
-
-(defun clear-cell-layers (grid col row)
-  "Return the cell at (COL, ROW) to simple mode."
-  (let ((i (%idx grid col row)))
-    (setf (sbit (display-grid-layered-flags grid) i) 0)
-    (remhash (cons col row) (display-grid-layered-cells grid))
-    (mark-row-dirty grid row)))
-
-(defun cell-layered-p (grid col row)
-  (= 1 (sbit (display-grid-layered-flags grid) (%idx grid col row))))
+;;; --------------------------------------------------------------------------
+;;; Reading records
+;;; --------------------------------------------------------------------------
 
 (defun continuation-p (grid col row)
   "True when the cell at COL, ROW is the right half of a double-width glyph."
-  (= 1 (sbit (display-grid-continuation-flags grid) (%idx grid col row))))
+  (multiple-value-bind (wide right-half)
+      (read-record-common (display-grid-records grid) (%idx grid col row) :wide :right-half)
+    (and (= wide 1) (= right-half 1))))
 
-(defun exchange-cell-slots (grid col row)
-  "Draw the cell at COL, ROW with the ink and background slots of its layer 0
-   exchanged, as the first edition draws the cursor (LEXTER-D101): a simple
-   cell becomes a layered cell whose one layer inks in slot 0 over slot 1, and
-   a layered cell's layer 0 has its slots exchanged. The cell's swatch and wide
-   flag are kept, so no reversed swatch is interned and a pair stays a pair."
-  (let* ((loc (%ensure-layered grid col row))
-         (layer (aref (cell-location-layers loc) 0)))
-    (when layer
-      (setf (aref (cell-location-layers loc) 0)
-            (make-cell-layer :glyph-idx (cell-layer-glyph-idx layer)
-                             :ink-slot (cell-layer-bg-slot layer)
-                             :bg-slot (cell-layer-ink-slot layer)
-                             :transparent-side (cell-layer-transparent-side layer))))
-    (mark-row-dirty grid row)))
+(defun wide-left-p (grid col row)
+  "True when the cell at COL, ROW is the left half of a double-width glyph."
+  (multiple-value-bind (wide right-half)
+      (read-record-common (display-grid-records grid) (%idx grid col row) :wide :right-half)
+    (and (= wide 1) (= right-half 0))))
+
+(defun cell-glyph (grid col row &optional (i 0))
+  "The atlas position of glyph I of the plain record at COL, ROW, or 0 when it
+   has fewer glyphs."
+  (let ((records (display-grid-records grid))
+        (index (%idx grid col row)))
+    (if (< i (read-plain-record records index :glyph-count))
+        (record-glyph records index i)
+        0)))
+
+(defun cell-swatch (grid col row)
+  "The global swatch index of the cell at COL, ROW."
+  (read-record-common (display-grid-records grid) (%idx grid col row) :swatch))
+
+(defun %first-edition-layers (records index)
+  "The layers the first edition draws for record INDEX of RECORDS, a plain
+   record, as a list of (glyph selector ink-slot): each layer, and after it a
+   layer in its ink for each union mask that cuts it alone, which draws the
+   same pixels. Other masks are not drawn until the renderer draws records."
+  (multiple-value-bind (n types) (record-type-bits records index)
+    (let ((layers '()))
+      (dotimes (i (min n +plain-glyph-words+) (nreverse layers))
+        (if (or (zerop i) (not (logbitp (1- i) types)))
+            (push (list (record-glyph records index i)
+                        (record-selector records index i)
+                        (record-ink-slot records index i))
+                  layers)
+            (multiple-value-bind (operation reach) (record-mask records index i)
+              (when (and (eq operation :union) (zerop reach) layers)
+                (push (list (record-glyph records index i)
+                            (record-selector records index i)
+                            (third (first layers)))
+                      layers))))))))
+
+(defun cell-layered-p (grid col row)
+  "True when the first edition draws the cell at COL, ROW with layers: when it
+   is more than one glyph layer in ink slot 1 over background slot 0."
+  (let ((records (display-grid-records grid))
+        (index (%idx grid col row)))
+    (and (eq (record-format records index) :plain)
+         (not (%simple-record-p records index)))))
+
+(defun %simple-record-p (records index)
+  (and (zerop (read-plain-record records index :background-slot))
+       (let ((layers (%first-edition-layers records index)))
+         (or (null layers)
+             (and (null (rest layers))
+                  (equal '(0 1) (rest (first layers))))))))
 
 ;;; --------------------------------------------------------------------------
-;;; Render data builder
+;;; The interim cursor
+;;; --------------------------------------------------------------------------
+
+(defun exchange-cell-slots (grid col row)
+  "Draw the cell at COL, ROW as the block cursor until the overlay list draws
+   it (LEXTER-D101, LEXTER-D93): its background slot exchanged with its
+   topmost layer's ink slot, in both halves of a double-width glyph so that
+   the halves still match (LEXTER-D126). A cell with no layer takes slot 1,
+   the foreground, as its background. Its swatch is kept, so no reversed
+   swatch is interned."
+  (let ((records (display-grid-records grid)))
+    (flet ((exchange (c)
+             (let* ((index (%idx grid c row))
+                    (top (and (eq (record-format records index) :plain)
+                              (record-topmost-layer records index)))
+                    (background (read-record-common records index :background-slot)))
+               (if top
+                   (let ((ink (record-ink-slot records index top)))
+                     (setf (record-ink-slot records index top) background)
+                     (patch-record-common records index :background-slot ink))
+                   (patch-record-common records index :background-slot 1)))))
+      (exchange col)
+      (cond ((and (wide-left-p grid col row) (< (1+ col) (display-grid-cols grid)))
+             (exchange (1+ col)))
+            ((and (continuation-p grid col row) (plusp col))
+             (exchange (1- col)))))
+    (touch-row grid row)))
+
+;;; --------------------------------------------------------------------------
+;;; The first edition's writers, over records
+;;; --------------------------------------------------------------------------
+;;;
+;;; The function pane, the workspace's decorations, the 3270 pane, and the
+;;; demo write the grid through these until steps 4 and 5 of Phase 3 move
+;;; them to records. A layer's transparent side maps as LEXTER-D86 has it:
+;;; :BG is a selector of 0, :FG a selector of 1, and :NONE on layer 0 gives
+;;; the cell its background slot.
+
+(defun %unpair (grid col row)
+  "Before the cell at COL, ROW is written, break the double-width pair it is
+   half of: a left half keeps its glyph, narrow, and a right half is emptied."
+  (let ((records (display-grid-records grid))
+        (cols (display-grid-cols grid)))
+    (cond ((and (continuation-p grid col row) (plusp col))
+           (patch-record-common records (%idx grid (1- col) row) :wide 0 :right-half 0))
+          ((and (wide-left-p grid col row) (< (1+ col) cols))
+           (let ((right (%idx grid (1+ col) row)))
+             (write-plain-record records right
+               :swatch (read-record-common records right :swatch)))))))
+
+(defun set-simple-cell (grid col row glyph-idx swatch-idx &key wide)
+  "Set the cell at (COL, ROW) to GLYPH-IDX in ink slot 1 over background slot
+   0 of SWATCH-IDX. WIDE marks a double-width glyph: the cell is its left half,
+   and (COL+1, ROW) its right half, naming the glyph's second column
+   (LEXTER-D126)."
+  (let ((cols (display-grid-cols grid)))
+    (%unpair grid col row)
+    (when (and wide (< (1+ col) cols))
+      (%unpair grid (1+ col) row))
+    (write-text-record grid col row :glyph glyph-idx :swatch swatch-idx
+                                    :wide (and wide (< (1+ col) cols)))
+    (when (and wide (< (1+ col) cols))
+      (write-text-record grid (1+ col) row :glyph (1+ glyph-idx) :swatch swatch-idx
+                                           :wide t :right-half t))))
+
+(defun %layers (records index)
+  "The glyph words of record INDEX of RECORDS, a plain record of layers, as a
+   list of (glyph selector ink-slot), and its background slot."
+  (values (loop :for i :below (min (read-plain-record records index :glyph-count)
+                                   +plain-glyph-words+)
+                :when (record-layer-p records index i)
+                  :collect (list (record-glyph records index i)
+                                 (record-selector records index i)
+                                 (record-ink-slot records index i)))
+          (read-plain-record records index :background-slot)))
+
+(defun %write-layers (grid col row layers background)
+  "Write the cell at COL, ROW as a plain record of LAYERS, each (glyph
+   selector ink-slot), over BACKGROUND, keeping its swatch, palette slot, and
+   drawing flags."
+  (let* ((records (display-grid-records grid))
+         (index (%idx grid col row)))
+    (multiple-value-bind (swatch palette wide right-half blink)
+        (read-record-common records index :swatch :palette-slot :wide :right-half :blink)
+      (write-plain-record records index
+        :glyph-count (length layers) :swatch swatch :palette-slot palette
+        :background-slot background :wide wide :right-half right-half :blink blink)
+      (loop :for (glyph selector ink) :in layers
+            :for i :from 0
+            :do (setf (record-glyph records index i) glyph
+                      (record-selector records index i) selector
+                      (record-ink-slot records index i) ink))
+      (touch-row grid row))))
+
+(defun set-cell-swatch (grid col row swatch-idx)
+  "Set the swatch index of the cell at (COL, ROW)."
+  (patch-record-common (display-grid-records grid) (%idx grid col row) :swatch swatch-idx)
+  (touch-row grid row))
+
+(defun set-cell-layer (grid col row layer-num glyph-idx ink-slot
+                       &key (bg-slot 0) (transparent-side :none))
+  "Define layer LAYER-NUM (0-2) at (COL, ROW) as the first edition's layered
+   cells had it: INK-SLOT and BG-SLOT are swatch slots, and TRANSPARENT-SIDE
+   is :none (opaque), :bg (ink on the glyph's pixels), or :fg (ink off them).
+   Layers between those defined are empty."
+  (assert (<= 0 layer-num (1- +max-layers+)) (layer-num)
+          "Layer number must be 0-~d" (1- +max-layers+))
+  (let ((records (display-grid-records grid))
+        (index (%idx grid col row)))
+    (multiple-value-bind (layers background) (%layers records index)
+      (when (null layers)
+        (setf layers (list (list 0 0 1))))
+      (loop :while (<= (length layers) layer-num)
+            :do (setf layers (append layers (list (list 0 0 ink-slot)))))
+      (setf (nth layer-num layers)
+            (list glyph-idx (if (eq transparent-side :fg) 1 0) ink-slot))
+      (when (and (zerop layer-num) (eq transparent-side :none))
+        (setf background bg-slot))
+      (%write-layers grid col row layers background))))
+
+(defun clear-cell-layers (grid col row)
+  "Return the cell at (COL, ROW) to its first layer alone, in ink slot 1 over
+   background slot 0."
+  (let ((records (display-grid-records grid))
+        (index (%idx grid col row)))
+    (let ((layers (%layers records index)))
+      (%write-layers grid col row
+                     (if layers (list (list (first (first layers)) 0 1)) '())
+                     0))))
+
+;;; --------------------------------------------------------------------------
+;;; The first edition's instances, built from the records
 ;;; --------------------------------------------------------------------------
 
 (declaim (inline %u16-lo %u16-hi %u32-b0 %u32-b1 %u32-b2 %u32-b3))
@@ -276,13 +367,19 @@
 (defun %u32-b3 (v) (ldb (byte 8 24) v))
 
 (defun build-render-data (grid)
-  "Build GPU instance buffers using pre-allocated storage, from every cell of
-   GRID; the row dirty flags are cleared, and kept for the second edition to
-   upload by (LEXTER-O40).
+  "Build the first edition's instance buffers from every record of GRID, until
+   the renderer draws records. A right half is passed over, its left half
+   drawn as the whole glyph; a cell of one glyph layer in ink slot 1 over
+   background slot 0 is a simple instance, and any other plain cell layered
+   instances: its first layer opaque over its background slot, the rest
+   transparent where their selectors leave them, each union mask that cuts
+   one layer drawn as a layer in that layer's ink, and other masks and blink
+   not drawn. A record of another format is a blank.
    Returns (values simple-buffer simple-byte-count layered-buffer layered-layer-counts).
    The returned buffers are the grid's cached buffers - do NOT modify them."
   (let* ((cols   (display-grid-cols grid))
          (rows   (display-grid-rows grid))
+         (records (display-grid-records grid))
          (sbuf   (display-grid-simple-buffer grid))
          (lbuf   (display-grid-layered-buffer grid))
          (lc     (display-grid-layered-counts grid))
@@ -291,81 +388,84 @@
          ;; Layer write indices: one per layer, offset into lbuf
          (li     (make-array +max-layers+ :element-type 'fixnum :initial-element 0)))
     (declare (type fixnum si sc)
+             (type record-array records)
              (type (simple-array (unsigned-byte 8) (*)) sbuf lbuf)
              (type (simple-array fixnum (*)) lc li))
-    ;; Reset layer counts
     (dotimes (i +max-layers+) (setf (aref lc i) 0))
-    ;; Calculate layer base offsets in the merged buffer
-    ;; Each layer gets cols*rows*stride bytes max, but we write compactly
-    ;; and track actual counts. We'll compact at the end.
     (let ((layer-base (* cols rows +layered-stride+)))
       (dotimes (ln +max-layers+)
         (setf (aref li ln) (* ln layer-base))))
-    ;; Iterate all cells
-    (dotimes (row rows)
-      (dotimes (col cols)
-        (let ((i (%idx grid col row)))
-          ;; Skip continuation cells (right half of wide characters)
-          (unless (= 1 (sbit (display-grid-continuation-flags grid) i))
-          (if (zerop (sbit (display-grid-layered-flags grid) i))
-              ;; --- Simple cell: write swatch index directly ---
-              (let* ((sw-idx (aref (display-grid-swatch-indices grid) i))
-                     ;; Set bit 15 of swatch for wide glyphs
-                     (sw-gpu (if (= 1 (sbit (display-grid-wide-flags grid) i))
-                                 (logior sw-idx #x8000)
-                                 sw-idx)))
-                ;; i_cell (col,row int16) at 0-3
-                (setf (aref sbuf si)       (%u16-lo col)
-                      (aref sbuf (+ si 1)) (%u16-hi col)
-                      (aref sbuf (+ si 2)) (%u16-lo row)
-                      (aref sbuf (+ si 3)) (%u16-hi row))
-                ;; i_glyph (uint32) at 4-7
-                (let ((glyph (aref (display-grid-glyphs grid) i)))
-                  (setf (aref sbuf (+ si 4)) (%u32-b0 glyph)
-                        (aref sbuf (+ si 5)) (%u32-b1 glyph)
-                        (aref sbuf (+ si 6)) (%u32-b2 glyph)
-                        (aref sbuf (+ si 7)) (%u32-b3 glyph)))
-                ;; i_swatch (uint16, wide flag in bit 15) at 8-9; bytes 10-11 pad
-                (setf (aref sbuf (+ si 8)) (%u16-lo sw-gpu)
-                      (aref sbuf (+ si 9)) (%u16-hi sw-gpu))
-                (incf si +simple-stride+)
-                (incf sc))
-              ;; --- Layered cell ---
-              (let ((loc (gethash (cons col row) (display-grid-layered-cells grid))))
-                (when loc
-                  (let* ((raw-sw (cell-location-swatch-idx loc))
-                         (sw-idx (if (= 1 (sbit (display-grid-wide-flags grid) i))
-                                     (logior raw-sw #x8000)
-                                     raw-sw)))
-                    (dotimes (ln +max-layers+)
-                      (let ((layer (aref (cell-location-layers loc) ln)))
-                        (when layer
-                          (let* ((idx (aref li ln))
-                                 (ts  (ecase (cell-layer-transparent-side layer)
-                                        (:none 2) (:bg 0) (:fg 1)))
-                                 (glyph (cell-layer-glyph-idx layer)))
-                             (setf ;; i_cell (col,row int16) at 0-3
-                                   (aref lbuf idx)       (%u16-lo col)
-                                   (aref lbuf (+ idx 1)) (%u16-hi col)
-                                   (aref lbuf (+ idx 2)) (%u16-lo row)
-                                   (aref lbuf (+ idx 3)) (%u16-hi row)
-                                   ;; i_glyph (uint32) at 4-7
-                                   (aref lbuf (+ idx 4)) (%u32-b0 glyph)
-                                   (aref lbuf (+ idx 5)) (%u32-b1 glyph)
-                                   (aref lbuf (+ idx 6)) (%u32-b2 glyph)
-                                   (aref lbuf (+ idx 7)) (%u32-b3 glyph)
-                                   ;; i_ink_bg (uint8 x2) at 8-9, i_ts (uint8) at 10, pad 11
-                                   (aref lbuf (+ idx 8)) (cell-layer-ink-slot layer)
-                                   (aref lbuf (+ idx 9)) (cell-layer-bg-slot layer)
-                                   (aref lbuf (+ idx 10)) ts
-                                   (aref lbuf (+ idx 11)) 0
-                                   ;; i_swatch (uint16) at 12-13; bytes 14-15 pad
-                                   (aref lbuf (+ idx 12)) (%u16-lo sw-idx)
-                                   (aref lbuf (+ idx 13)) (%u16-hi sw-idx))
-                            (incf (aref li ln) +layered-stride+)
-                            (incf (aref lc ln))))))))))))))
+    (labels ((simple (col row glyph swatch)
+               (setf (aref sbuf si)       (%u16-lo col)
+                     (aref sbuf (+ si 1)) (%u16-hi col)
+                     (aref sbuf (+ si 2)) (%u16-lo row)
+                     (aref sbuf (+ si 3)) (%u16-hi row)
+                     (aref sbuf (+ si 4)) (%u32-b0 glyph)
+                     (aref sbuf (+ si 5)) (%u32-b1 glyph)
+                     (aref sbuf (+ si 6)) (%u32-b2 glyph)
+                     (aref sbuf (+ si 7)) (%u32-b3 glyph)
+                     (aref sbuf (+ si 8)) (%u16-lo swatch)
+                     (aref sbuf (+ si 9)) (%u16-hi swatch))
+               (incf si +simple-stride+)
+               (incf sc))
+             (layer (ln col row glyph ink bg ts swatch)
+               (let ((idx (aref li ln)))
+                 (setf (aref lbuf idx)       (%u16-lo col)
+                       (aref lbuf (+ idx 1)) (%u16-hi col)
+                       (aref lbuf (+ idx 2)) (%u16-lo row)
+                       (aref lbuf (+ idx 3)) (%u16-hi row)
+                       (aref lbuf (+ idx 4)) (%u32-b0 glyph)
+                       (aref lbuf (+ idx 5)) (%u32-b1 glyph)
+                       (aref lbuf (+ idx 6)) (%u32-b2 glyph)
+                       (aref lbuf (+ idx 7)) (%u32-b3 glyph)
+                       (aref lbuf (+ idx 8)) ink
+                       (aref lbuf (+ idx 9)) bg
+                       (aref lbuf (+ idx 10)) ts
+                       (aref lbuf (+ idx 11)) 0
+                       (aref lbuf (+ idx 12)) (%u16-lo swatch)
+                       (aref lbuf (+ idx 13)) (%u16-hi swatch))
+                 (incf (aref li ln) +layered-stride+)
+                 (incf (aref lc ln))))
+             (layered (index col row sw background)
+               ;; Any other plain cell: layered instances, the first layer
+               ;; opaque over the background slot
+               (let ((layers (%first-edition-layers records index)))
+                 (if (and (zerop background) (null (rest layers))
+                          (or (null layers) (equal '(0 1) (rest (first layers)))))
+                     (simple col row (if layers (first (first layers)) 0) sw)
+                     (progn
+                       (destructuring-bind (&optional (glyph 0) (selector 0) (ink background))
+                           (first layers)
+                         ;; Layer 0 is opaque: its ink where it covers, the
+                         ;; background slot elsewhere
+                         (if (zerop selector)
+                             (layer 0 col row glyph ink background 2 sw)
+                             (layer 0 col row glyph background ink 2 sw)))
+                       (loop :for (glyph selector ink) :in (rest layers)
+                             :for ln :from 1 :below +max-layers+
+                             :do (layer ln col row glyph ink 0
+                                        (if (zerop selector) 0 1) sw)))))))
+      (dotimes (row rows)
+        (dotimes (col cols)
+          (let ((index (%idx grid col row)))
+            (multiple-value-bind (format wide right-half swatch background)
+                (read-record-common records index :format :wide :right-half :swatch :background-slot)
+              (unless (and (= wide 1) (= right-half 1))
+                ;; The wide flag rides in bit 15 of the swatch
+                (let ((sw (if (= wide 1) (logior swatch #x8000) swatch)))
+                  (if (not (eq format :plain))
+                      (simple col row 0 sw)
+                      ;; Most cells are text: no glyph, or one layer in ink
+                      ;; slot 1 over background slot 0, drawn simple
+                      (multiple-value-bind (n glyph selector ink)
+                          (read-plain-record records index :glyph-count
+                                             (:g0 :glyph) (:g0 :selector) (:g0 :ink-slot))
+                        (cond ((and (zerop background) (zerop n))
+                               (simple col row 0 sw))
+                              ((and (zerop background) (= n 1) (zerop selector) (= ink 1))
+                               (simple col row glyph sw))
+                              (t (layered index col row sw background))))))))))))
     ;; Compact layered data: move each layer's data to be contiguous
-    ;; Layer 0 is already at offset 0, so we only need to move layers 1+
     (let ((layer-max (* cols rows +layered-stride+))
           (dst (* (aref lc 0) +layered-stride+)))
       (loop :for ln :from 1 :below +max-layers+
@@ -376,10 +476,7 @@
                     (replace lbuf lbuf :start1 dst :end1 (+ dst len)
                                        :start2 src :end2 (+ src len))
                     (incf dst len))))
-    ;; Store counts and clear dirty flags
     (setf (display-grid-simple-count grid) sc)
-    (clear-dirty-flags grid)
-    ;; Return buffers and counts
     (values sbuf (* sc +simple-stride+) lbuf lc)))
 
 ;;; --------------------------------------------------------------------------
@@ -387,50 +484,27 @@
 ;;; --------------------------------------------------------------------------
 
 (defun resize-grid (grid new-cols new-rows &key (blank-glyph 0))
-  "Resize the grid to NEW-COLS x NEW-ROWS. Existing content is preserved
-   where possible; new cells are initialized to swatch 0 and BLANK-GLYPH."
+  "Resize the grid to NEW-COLS x NEW-ROWS. Existing records are kept where
+   they fit; new cells are BLANK-GLYPH in global swatch 0, and every row takes
+   a new change stamp."
   (let* ((old-cols (display-grid-cols grid))
          (old-rows (display-grid-rows grid))
-         (new-n    (* new-cols new-rows))
-         (new-glyphs (make-array new-n :element-type '(unsigned-byte 32) :initial-element blank-glyph))
-         (new-swatch-indices (make-array new-n :element-type '(unsigned-byte 16) :initial-element 0))
-         (new-wide-flags (make-array new-n :element-type 'bit :initial-element 0))
-         (new-continuation-flags (make-array new-n :element-type 'bit :initial-element 0))
-         (new-layered-flags  (make-array new-n :element-type 'bit :initial-element 0))
-         (new-row-dirty (make-array new-rows :element-type 'bit :initial-element 1))
-         (new-layered-cells (make-hash-table :test 'equal :size 64)))
-    ;; Copy existing simple data
-    (dotimes (row (min old-rows new-rows))
-      (dotimes (col (min old-cols new-cols))
-        (let ((old-i (+ (* row old-cols) col))
-              (new-i (+ (* row new-cols) col)))
-          (setf (aref new-glyphs new-i) (aref (display-grid-glyphs grid) old-i)
-                (aref new-swatch-indices new-i) (aref (display-grid-swatch-indices grid) old-i)
-                (sbit new-wide-flags new-i) (sbit (display-grid-wide-flags grid) old-i)
-                (sbit new-continuation-flags new-i)
-                (sbit (display-grid-continuation-flags grid) old-i)))))
+         (old (display-grid-records grid))
+         (new (make-record-array (* new-cols new-rows))))
+    (setf (display-grid-cols grid) new-cols
+          (display-grid-rows grid) new-rows
+          (display-grid-records grid) new
+          (display-grid-stamps grid) (%stamp-array new-rows))
+    (dotimes (row new-rows)
+      (dotimes (col new-cols)
+        (if (and (< row old-rows) (< col old-cols))
+            (copy-records old (+ (* row old-cols) col) new (%idx grid col row) 1)
+            (unless (zerop blank-glyph)
+              (write-text-record grid col row :glyph blank-glyph)))))
     ;; A pair cut by a narrower right edge loses its left half's flag (LEXTER-O26)
     (when (< new-cols old-cols)
       (dotimes (row (min old-rows new-rows))
-        (setf (sbit new-wide-flags (+ (* row new-cols) (1- new-cols))) 0)))
-    ;; Copy existing layered cells that still fit
-    (maphash (lambda (key loc)
-               (destructuring-bind (col . row) key
-                 (when (and (< col new-cols) (< row new-rows))
-                   (let ((new-i (+ (* row new-cols) col)))
-                     (setf (sbit new-layered-flags new-i) 1
-                           (gethash key new-layered-cells) loc)))))
-             (display-grid-layered-cells grid))
-    ;; Update struct
-    (setf (display-grid-cols grid) new-cols
-          (display-grid-rows grid) new-rows
-          (display-grid-glyphs grid) new-glyphs
-          (display-grid-swatch-indices grid) new-swatch-indices
-          (display-grid-wide-flags grid) new-wide-flags
-          (display-grid-continuation-flags grid) new-continuation-flags
-          (display-grid-layered-flags grid) new-layered-flags
-          (display-grid-row-dirty grid) new-row-dirty
-          (display-grid-layered-cells grid) new-layered-cells)
-    ;; Reallocate render buffers for new size
+        (when (wide-left-p grid (1- new-cols) row)
+          (patch-record-common new (%idx grid (1- new-cols) row) :wide 0))))
     (%allocate-render-buffers grid)
-    grid))
+    (touch-all-rows grid)))

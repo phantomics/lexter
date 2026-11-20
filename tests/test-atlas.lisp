@@ -129,6 +129,19 @@ replacement glyph and the \"no glyph\" glyph differ from each other."
     (is-false (equalp (gethash 5 pixels) (gethash 6 pixels)))
     (is-true (some #'plusp (gethash 6 pixels)))))
 
+(def-test the-single-underline-is-line-glyph-9 ()
+  "The single underline is generated at atlas position 9, line style 0 with
+the underline flag, named 0x110009 beyond Unicode: rows of ink just below the
+baseline, across the whole cell, and nothing above it (LEXTER-D89)."
+  (let* ((atlas (make-test-atlas))
+         (pixels (atlas-pixels atlas 9))
+         (width *test-cell-width*)
+         (ascent (1- *test-cell-height*)))
+    (is (= 9 (lexter/atlas:line-glyph-position 0 1)))
+    (is (eql 9 (lexter/atlas:atlas-glyph-index atlas lexter/atlas:+underline-glyph+)))
+    (is-true (every #'plusp (subseq pixels (* ascent width) (* (1+ ascent) width))))
+    (is-true (every #'zerop (subseq pixels 0 (* ascent width))))))
+
 ;;; ------------------------------------------------------------
 ;;; Fitting glyphs to widths  (LEXTER-D117)
 ;;; ------------------------------------------------------------

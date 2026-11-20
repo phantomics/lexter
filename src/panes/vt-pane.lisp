@@ -236,6 +236,8 @@
       (lexter/model:flush-to-display
        screen grid
        :atlas (and handler (lexter/vt-handler:vt-handler-atlas handler))
+       :palette-slot (or (vt-pane-palette-slot pane)
+                         lexter/renderer:+default-pane-palette-slot+)
        :col-offset (pane-col pane)
        :row-offset (content-row pane)
        :cursor-blink-on *cursor-blink-on*))))

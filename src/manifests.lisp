@@ -236,6 +236,28 @@
     (patch-plain-record records index (word :ink-slot) slot))
   slot)
 
+(defun record-selector (records index i)
+  "The selector of glyph I of record INDEX of RECORDS, a plain record: 0 when
+   its glyph's inked pixels cover, or cut, and 1 when its uninked pixels do."
+  (%case-glyph-word i (word)
+    (read-plain-record records index (word :selector))))
+
+(defun (setf record-selector) (selector records index i)
+  (%case-glyph-word i (word)
+    (patch-plain-record records index (word :selector) selector))
+  selector)
+
+(defun record-mask (records index i)
+  "The operation and the reach field of glyph I of record INDEX of RECORDS, a
+   plain record; glyph I must be a mask, as glyph 0 never is."
+  (%case-glyph-word i (word :from 1)
+    (read-plain-record records index (word :operation) (word :reach))))
+
+(defun record-type-bits (records index)
+  "The glyph count of record INDEX of RECORDS, a plain record, and its type
+   bits as an integer whose bit I-1 is set when glyph I is a mask."
+  (%type-bits records index))
+
 (defun %type-bits (records index)
   "The glyph count of record INDEX of RECORDS, and its type bits as an integer
    whose bit I-1 is set when glyph I is a mask."

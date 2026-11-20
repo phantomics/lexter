@@ -9,12 +9,14 @@
 ;;;; The fixtures are .ptyb blobs (LEXTER-0010); the checksums are literals
 ;;;; here, kept apart from the blobs. They were taken in Phase 2 of the
 ;;;; cell-model revision on an NVIDIA GL 4.6 driver (LEXTER-DRAFT-swatch-ranges),
-;;;; and hold for that driver: from Phase 3 the fixtures are re-authored on a
-;;;; pinned llvmpipe with a cell checksum beside each (LEXTER-D108,
-;;;; LEXTER-D112). Each font replays the fixtures in order and then in reverse,
-;;;; so that a checksum that depends on the fixture before it is found, and
-;;;; after each replay compares the GPU's stores with their sources
-;;;; (LEXTER/TEST:CHECK-GPU-STORES).
+;;;; and hold for that driver. Step 3 of Phase 3 changed those of "colours" and
+;;;; "palette", whose reverse video the record draws through its background
+;;;; slot (LEXTER-D86) where the first edition drew none. Step 7 re-authors
+;;;; the fixtures on a pinned llvmpipe, with a cell checksum beside each
+;;;; (LEXTER-D108, LEXTER-D112). Each font replays the fixtures in order and
+;;;; then in reverse, so that a checksum that depends on the fixture before it
+;;;; is found, and after each replay compares the GPU's stores with their
+;;;; sources (LEXTER/TEST:CHECK-GPU-STORES).
 ;;;;
 ;;;; The fixtures:
 ;;;;
@@ -34,11 +36,11 @@
 
 (defparameter *fonts*
   '(("../terminus-18n.pcf"
-     ("colours" . #x0AA0C7479DECC3D4) ("palette" . #x6F228D86413D573C)
+     ("colours" . #xF6B81E21B5962094) ("palette" . #x59BB514478D43E6C)
      ("cjk" . #xD3758C95BC11B3B5) ("alt" . #x1E7393F293E8303D)
      ("many" . #xFF822E35378CA846))
     ("../unifont-17.0.04.pcf.gz"
-     ("colours" . #xA1BF8B8BFCDCDFFA) ("palette" . #xC03D510C21B0C7FD)
+     ("colours" . #x1606A08F3D7D35BA) ("palette" . #x406471A041046D3D)
      ("cjk" . #xE04CD998C68F6774) ("alt" . #xF4D9A7010B64A71F)
      ("many" . #xD790B48E4BBF36CD)))
   "For each font, the path of its file and the checksum of each fixture in a

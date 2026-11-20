@@ -13,7 +13,8 @@
 ;;;;   5      the replacement glyph: a wide glyph whose ink cannot fit one cell
 ;;;;   6      the "no glyph" glyph: a character no font in the chain covers
 ;;;;   7      reserved
-;;;;   8-63   line glyphs, generated from Phase 3 on
+;;;;   8-63   line glyphs, at 8 + 8 x style + flags; style 0 with flag 1, the
+;;;;          single underline at 9, is the one generated so far
 ;;;;
 ;;;; Generated glyph K is named by the value #x110000 + K in the codepoint
 ;;;; table, beyond Unicode, so that no host can print one and no font can
@@ -47,6 +48,13 @@
 (defconstant +empty-glyph-position+       0 "Atlas position of the empty glyph.")
 (defconstant +replacement-glyph-position+ 5 "Atlas position of the replacement glyph.")
 (defconstant +no-glyph-position+          6 "Atlas position of the \"no glyph\" glyph.")
+
+(defconstant +underline-glyph+          #x110009 "Name of the single underline, position 9.")
+
+(defun line-glyph-position (style flags)
+  "The atlas position of the line glyph of line STYLE, 0-6, and FLAGS, 1-7:
+   bit 0 underline, bit 1 strikethrough, bit 2 overline (LEXTER-D89)."
+  (+ 8 (* 8 style) flags))
 
 (defstruct atlas
   "GPU glyph atlas."
@@ -161,7 +169,19 @@
                   (if (evenp (+ row col)) 255 0)))))
       pixels)))
 
-(defun %generated-glyphs (cell-w cell-h)
+(defun %make-underline (cell-w cell-h ascent)
+  "Generate the single underline: rows beginning just below the baseline, at
+   row ASCENT, max(1, CELL-H / 16) thick, and inside the cell. The font's XLFD
+   UNDERLINE_POSITION and UNDERLINE_THICKNESS are not read yet (LEXTER-D89)."
+  (let* ((pixels (%blank-pixels cell-w cell-h))
+         (thickness (max 1 (floor cell-h 16)))
+         (top (max 0 (min ascent (- cell-h thickness)))))
+    (loop :for row :from top :below (min cell-h (+ top thickness))
+          :do (loop :for col :from 0 :below cell-w
+                    :do (setf (aref pixels (+ (* row cell-w) col)) 255)))
+    pixels))
+
+(defun %generated-glyphs (cell-w cell-h ascent)
   "The generated glyphs, as a list of (position pixels)."
   (list (list 0 (%blank-pixels cell-w cell-h))
         (list 1 (%make-block-cursor cell-w cell-h))
@@ -169,7 +189,8 @@
         (list 3 (%make-bar-cursor cell-w cell-h))
         (list 4 (%make-outline-cursor cell-w cell-h))
         (list 5 (%make-replacement-glyph cell-w cell-h))
-        (list 6 (%make-no-glyph-glyph cell-w cell-h))))
+        (list 6 (%make-no-glyph-glyph cell-w cell-h))
+        (list (line-glyph-position 0 1) (%make-underline cell-w cell-h ascent))))
 
 ;;;; Builder
 ;;;;
@@ -301,8 +322,8 @@
   "Pack a glyph atlas from an ordered list of BITMAP-FONT structs, with COLS
    atlas columns, fitting glyphs to WIDTH-POLICY, without touching GL. Returns
    an ATLAS struct whose texture-id is 0; UPLOAD-ATLAS gives it a texture.
-   The generated glyphs take positions 0-6, and font glyphs begin at position
-   64. Double-wide glyphs occupy 2 adjacent atlas columns, on one row, and are
+   The generated glyphs take positions 0-6 and 9, and font glyphs begin at
+   position 64. Double-wide glyphs occupy 2 adjacent atlas columns, on one row, and are
    tracked in wide-set."
   (check-type cols (integer 2))
   (multiple-value-bind (plan cell-w cell-h) (%plan-atlas fonts width-policy)
@@ -312,7 +333,9 @@
           (pos-pixels (make-hash-table :test 'eql))
           (cur-col (mod +first-font-position+ cols))
           (cur-row (floor +first-font-position+ cols)))
-      (loop :for (position pixels) :in (%generated-glyphs cell-w cell-h)
+      (loop :for (position pixels) :in (%generated-glyphs cell-w cell-h
+                                                          (lexter/pcf:bitmap-font-ascent
+                                                           (first fonts)))
             :do (setf (gethash position pos-pixels) pixels
                       (gethash (+ +generated-glyph-base+ position) codepoint-table) position))
       (dolist (entry plan)

@@ -183,4 +183,4 @@ private profile PROFILE-PARENT as its parent, when one is given."
     (dotimes (row rows)
       (dotimes (col cols)
         (lexter/grid:set-simple-cell grid col row glyph swatch)))
-    (lexter/grid:mark-all-dirty grid)))
+    (lexter/grid:touch-all-rows grid)))

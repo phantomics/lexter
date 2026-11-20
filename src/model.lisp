@@ -708,51 +708,74 @@
 ;;; One function builds every terminal row, of the screen and of its history,
 ;;; from text cells, their styles, and the terminal's settings, so that a
 ;;; fault found on either path is repaired for both (LEXTER-D124). What a cell
-;;; is drawn with is decided here: its glyph, from the atlas, by its codepoint
-;;; and width; and its swatch, from its style under the presentation rules
-;;; (LEXTER-D125). Until the record arrives (step 3 of Phase 3), the rows are
-;;; built into the first edition's display grid.
+;;; is drawn with is decided here, as a record of the plain format: its glyph,
+;;; from the atlas, by its codepoint and width; its swatch, from its style
+;;; under the presentation rules (LEXTER-D125); reverse video through the
+;;; background slot (LEXTER-D86); invisible text as no glyphs; the underline
+;;; as a mask of the line glyph in the text's colour (LEXTER-D88); and blink
+;;; as the blink flag (LEXTER-D94).
 
 (defun %cell-glyph (atlas content width space-glyph)
   "The atlas position of a cell whose content word is CONTENT and whose
    character is WIDTH columns wide: SPACE-GLYPH for an empty cell, and the
-   \"no glyph\" glyph for a character no font covers (LEXTER-D122)."
+   \"no glyph\" glyph for a character no font covers (LEXTER-D122). The
+   second value is true when the position begins a wide entry of the atlas,
+   whose second column a right half names (LEXTER-D126)."
   (cond ((zerop content) space-glyph)
-        ((and atlas (lexter/atlas:atlas-glyph-index atlas content width)))
+        ((and atlas (lexter/atlas:atlas-glyph-index atlas content width))
+         (values (lexter/atlas:atlas-glyph-index atlas content width) (= width 2)))
         (t lexter/atlas:+no-glyph-position+)))
 
-(defun %build-row (screen display-grid text start count grid-row col-offset atlas space-glyph)
+(defun %build-row (screen display-grid text start count grid-row col-offset atlas
+                   space-glyph palette-slot)
   "Build the COUNT text cells of TEXT from cell START, one terminal row, into
    GRID-ROW of DISPLAY-GRID from column COL-OFFSET, as SCREEN's terminal draws
-   them. Cells that continue a character are passed over, so that a row of
-   the screen and a row of history, which keeps none, are built alike; a row
-   shorter than the screen, as history leaves it after a resize, is filled
-   with empty cells in style 0. A double-width pair whose right half would
-   fall past the grid's right edge is clipped to its left half."
-  (let ((styles (screen-styles screen))
-        (swatches (screen-swatches screen))
-        (palette (screen-palette screen))
-        (cols (screen-cols screen))
-        (grid-cols (lexter/grid:display-grid-cols display-grid))
-        (col 0))
-    (flet ((put (col glyph swatch wide)
-             (let ((grid-col (+ col col-offset)))
+   them, in PALETTE-SLOT. Cells that continue a character are passed over, so
+   that a row of the screen and a row of history, which keeps none, are built
+   alike; a row shorter than the screen, as history leaves it after a resize,
+   is filled with empty cells in style 0. A double-width pair whose right half
+   would fall past the grid's right edge is clipped to its left half."
+  (let* ((styles (screen-styles screen))
+         (swatches (screen-swatches screen))
+         (palette (screen-palette screen))
+         (cols (screen-cols screen))
+         (grid-cols (lexter/grid:display-grid-cols display-grid))
+         (underline (lexter/atlas:line-glyph-position 0 1))
+         (col 0))
+    (flet ((put (col glyph style-id &key wide right-half)
+             (let ((grid-col (+ col col-offset))
+                   (style (table-style styles style-id)))
                (when (< grid-col grid-cols)
-                 (lexter/grid:clear-cell-layers display-grid grid-col grid-row)
-                 (lexter/grid:set-simple-cell display-grid grid-col grid-row glyph swatch
-                                              :wide (and wide (< (1+ grid-col) grid-cols)))))))
+                 (lexter/grid:write-text-record
+                  display-grid grid-col grid-row
+                  :glyph glyph
+                  :visible (not (style-invisible style))
+                  :swatch (style-swatch styles swatches style-id palette)
+                  :palette-slot palette-slot
+                  ;; Reverse video exchanges the slots within the swatch
+                  :background-slot (if (style-reverse style) 1 0)
+                  :ink-slot (if (style-reverse style) 0 1)
+                  :underline-glyph (and (style-underline style)
+                                        (+ underline (* 8 (style-line-style style))))
+                  :wide wide :right-half right-half
+                  :blink (style-blink style))))))
       (loop :for i :from start :below (+ start count)
             :while (< col cols)
             :do (multiple-value-bind (content style wide)
                     (read-text-cell text i :content :style :wide)
                   (unless (= content +continuation-marker+)
                     (let ((width (if (and (= wide 1) (< (1+ col) cols)) 2 1)))
-                      (put col (%cell-glyph atlas content width space-glyph)
-                           (style-swatch styles swatches style palette)
-                           (= width 2))
+                      (multiple-value-bind (glyph wide-entry)
+                          (%cell-glyph atlas content width space-glyph)
+                        (if (and (= width 2) (< (+ col col-offset 1) grid-cols))
+                            (progn
+                              (put col glyph style :wide t)
+                              (put (1+ col) (if wide-entry (1+ glyph) glyph) style
+                                   :wide t :right-half t))
+                            (put col glyph style)))
                       (incf col width)))))
       (loop :for c :from col :below cols
-            :do (put c space-glyph (style-swatch styles swatches 0 palette) nil)))))
+            :do (put c space-glyph 0)))))
 
 (defun %check-row-pairs (screen row)
   "Blank either half of a pair in ROW of SCREEN that has lost the other: a left
@@ -770,11 +793,13 @@
 
 (defun flush-to-display (screen display-grid &key (atlas nil)
                                                    (space-glyph lexter/atlas:+empty-glyph-position+)
+                                                   (palette-slot 0)
                                                    (cursor-blink-on t)
                                                    (col-offset 0) (row-offset 0))
   "Build SCREEN's rows into the display grid for rendering.
    ATLAS gives each character's glyph, by its codepoint and width.
    SPACE-GLYPH is the atlas position drawn in an empty cell.
+   PALETTE-SLOT is the terminal's palette slot, which its records name.
    CURSOR-BLINK-ON controls whether a blinking cursor is currently visible.
    COL-OFFSET and ROW-OFFSET position the screen within the grid (for panes).
    While the screen's scrollback viewport is above 0, the grid shows history
@@ -806,21 +831,21 @@
                     (let* ((history (scrollback-line screen history-line))
                            (text (if history (history-row-text history) (make-text-array 0))))
                       (%build-row screen display-grid text 0 (text-array-count text)
-                                  grid-row col-offset atlas space-glyph))
+                                  grid-row col-offset atlas space-glyph palette-slot))
                     (let ((source-row (- row viewport)))
                       (%check-row-pairs screen source-row)
                       (%build-row screen display-grid (screen-text screen)
                                   (%idx screen 0 source-row) cols
-                                  grid-row col-offset atlas space-glyph)))))
+                                  grid-row col-offset atlas space-glyph palette-slot)))))
     ;; No cursor is drawn while the view is scrolled back into the history.
     (when (plusp (screen-scrollback-viewport screen))
       (fill (screen-row-dirty screen) 0)
       (return-from flush-to-display nil))
-    ;; The cursor is drawn by exchanging the ink and background slots of its
-    ;; cell's layer 0 in the grid, keeping the cell's swatch, layers, and wide
-    ;; flag, so that it interns no swatch and breaks no pair (LEXTER-D101). The
-    ;; cursor's row is built at every flush, which removes it from where it
-    ;; was.
+    ;; The cursor is drawn by exchanging its cell's background slot with its
+    ;; topmost layer's ink slot in the grid, keeping the cell's swatch and both
+    ;; halves of a pair, so that it interns no swatch and breaks no pair, until
+    ;; the overlay list draws it (LEXTER-D101, LEXTER-D93). The cursor's row is
+    ;; built at every flush, which removes it from where it was.
     (let ((cursor-visible (and (screen-cursor-visible screen)
                                (or (not (screen-cursor-blink screen))
                                    cursor-blink-on)))

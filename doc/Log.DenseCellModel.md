@@ -8,7 +8,7 @@ language:      en
 status:        Draft
 provenance:
   assistant:   opencode
-  session:     "Phase 3, step 1: the manifests and their accessors (2026-11-20); step 2: the screen as text and styles (2026-11-20); step 3: records in the composed grid (2026-11-20)"
+  session:     "Phase 3, step 1: the manifests and their accessors (2026-11-20); step 2: the screen as text and styles (2026-11-20); step 3: records in the composed grid (2026-11-20); step 4: the API and surfaces (2026-11-20)"
 relates-to:
   - LEXTER-0017
   - LEXTER-0016
@@ -590,21 +590,25 @@ Choices made while building:
 
 - **`src/grid.lisp`**, rewritten:
   - the grid holds `records` and `stamps`;
-  - `write-text-record` writes a cell of text, `clear-cell` a record of
-    zeros, and `exchange-cell-slots` draws the interim cursor;
+  - `src/grid.lisp:write-text-record@3371b1b` writes a cell of text,
+    `clear-cell` a record of zeros, and
+    `src/grid.lisp:exchange-cell-slots@3371b1b` draws the interim cursor;
   - `cell-glyph`, `cell-swatch`, `wide-left-p`, and `continuation-p` read
     the records;
   - the first edition's writers write records;
-  - `build-render-data` builds the first edition's instances from the
-    records;
+  - `src/grid.lisp:build-render-data@3371b1b` builds the first edition's
+    instances from the records;
   - `resize-grid` copies records;
-  - `row-stamp`, `touch-row`, and `touch-all-rows` replace the dirty bits.
-- **`src/model.lisp`:** `%build-row` writes text records with the
-  presentation rules, and `flush-to-display` takes the palette slot.
-- **`src/atlas.lisp`:** the single underline at position 9, named
-  `+underline-glyph+`, and `line-glyph-position`.
-- **`src/manifests.lisp`:** `record-selector`, `record-mask`, and
-  `record-type-bits`.
+  - `src/grid.lisp:row-stamp@3371b1b`, `touch-row`, and `touch-all-rows`
+    replace the dirty bits.
+- **`src/model.lisp`:** `src/model.lisp:%build-row@3371b1b` writes text
+  records with the presentation rules, and `flush-to-display` takes the
+  palette slot.
+- **`src/atlas.lisp`:** the single underline at position 9, made by
+  `src/atlas.lisp:%make-underline@3371b1b`, named `+underline-glyph+`, and
+  `src/atlas.lisp:line-glyph-position@3371b1b`.
+- **`src/manifests.lisp`:** `src/manifests.lisp:record-selector@3371b1b`,
+  `record-mask`, and `record-type-bits`.
 - **`src/packages.lisp`:** `lexter/manifests` is defined before
   `lexter/grid`, which imports its accessors; the grid's dirty-bit
   functions are gone.
@@ -682,13 +686,190 @@ Table: Files changed by step 3.
 - **Uploads by stamp, clock masks, and blink,** with the renderer of step 6,
   which also removes the adapter and the first edition's instances.
 - **The underline from XLFD properties,** when the PCF loader reads them.
-- **Assertions in debugging builds** of the invariants, which the built
-  records already keep (the test of step 3), with the API's writers of
-  step 4.
-- **An opaque layer above the first.** `set-cell-layer` maps `:none` on a
-  layer above the first to a layer whose glyph covers, where the first
-  edition drew it opaque, hiding the layers beneath. No caller writes one:
-  the demo, the only caller of `set-cell-layer`, uses `:none` on layer 0
-  alone. The API of step 4 replaces it.
+- **Assertions in debugging builds** of the invariants. Done in step 4
+  (the update below).
+- **An opaque layer above the first.** Done: `set-cell-layer` is removed in
+  step 4, its one caller, the demo, moved to the API.
+- **Code references.** Done: the update's references are pinned to
+  `3371b1b`, the commit that holds it.
+
+## Update 2026-11-20 — Step 4: the API and surfaces
+
+Step 4 gives Lexter's own writers an API that writes records. Those writers
+are chrome, decorators, function panes, and Common Lisp applications.
+
+- **The calls** take characters, or atlas positions, and write records of
+  the plain format. On a surface they write the text cells beside them
+  (LEXTER-D124).
+- **Wide glyphs** are written as two halves, so that no caller writes
+  halves by hand (LEXTER-D126).
+- **A surface** keeps records, text, and change stamps, and is copied into
+  the composed grid at its place (LEXTER-D107).
+- **The writers move.** The function pane, the workspace's decorations,
+  `clear-grid`, and the demo now write through the API.
+- **The old API goes.** The first edition's layered API is removed.
+  `set-simple-cell` and the cursor exchange stay for the 3270 pane, which
+  step 5 rewrites.
+
+### Problem
+
+Lexter's own writers reached the composed grid through the first edition's
+API, by atlas position, and kept nothing of what they wrote. A function
+pane drew straight into the grid. Its helper, `write-pane-string`, passed
+each character's code as an atlas position, though fonts' glyphs begin at
+position 64 (LEXTER-D89); nothing called it, so the fault had no effect.
+LEXTER-D124 has these writers keep their records and the text beside them,
+and LEXTER-D126 has the API split a wide character into its halves.
+
+### Design Decisions
+
+The decisions are the plan's: LEXTER-D107, LEXTER-D117, LEXTER-D124,
+LEXTER-D126, and LEXTER-D130. The steward settled five more before this
+step was built:
+
+- **A surface is records, text, and stamps.** It is a rectangle of records,
+  with text cells beside them and a change stamp for each row, written only
+  through the API. A function pane owns one, which its render function
+  writes and its flush copies into the composed grid.
+- **Decorators write the composed grid through the API.** The grid keeps
+  no text, so chrome is not copyable text. A surface for chrome can follow
+  if chrome needs text.
+- **A surface's text cells carry style 0.** The record alone says how a cell
+  looks, and the text serves selection, copying, search, and screen
+  readers.
+- **Debugging builds check records through a variable.** `*check-records*`
+  is true when Lexter is compiled with the `:lexter-debug` feature, and the
+  API checks every record it writes while it is true. Tests bind it.
+- **The layered API is removed now.** `set-cell-layer`, `set-cell-swatch`,
+  `clear-cell-layers`, and `cell-layered-p` go. `set-simple-cell` and the
+  cursor exchange stay for the 3270 pane until step 5.
+
+Choices made while building:
+
+- **A surface is a grid.** The surface structure includes the display grid's,
+  so the grid's readers, stamps, and copies serve both. The grid gains an
+  atlas, which the API looks codepoints up in, and a palette slot, which
+  the API's records draw in. The compositor gives its grid its atlas.
+- **Widths.** A character is drawn at its glyph's natural width unless the
+  caller asks for one (LEXTER-D117). A character that no font covers is the
+  "no glyph" glyph (LEXTER-D122).
+- **Halves.** In the right half of a cell, each glyph word that names a wide
+  atlas entry names its second column, and a narrow glyph names itself, so
+  that each half draws the narrow glyph whole (LEXTER-D126). Writing over
+  either half of a pair empties the other half, in its record and its text.
+- **One call for cells of several glyphs.** `put-cell` takes glyph words in
+  order, each layer followed by the masks that cut it (LEXTER-D85). Each
+  word names its glyph by a character or an atlas position, with its
+  selector and ink slot, or its operation and reach. The cell's text is the
+  character of its last layer named by one, unless the caller gives it.
+- **Copying a surface.** `compose-surface` copies the records of every row
+  as they are, stamping each row of the grid it writes. A wide glyph whose
+  right half falls outside the copy loses its pair. A function pane writes
+  and copies its surface only when it is dirty; switching workspaces marks
+  every pane dirty (LEXTER-D71).
+- **The demo.** The demo's scene is written through the API. Rendered on the
+  GPU before and after, it is the same pixel for pixel but in its first row.
+  The old scene wrote "Hello from lexter!" and then filled the grid with
+  spaces over it; the scene now fills first.
+
+### Implementation
+
+- **`src/surface.lisp`**, new, the package `lexter/surface`:
+  - `put-char`, `put-string`, `put-glyph`, and `put-cell` write cells;
+  - `fill-cells` and `clear-cells` fill and clear them;
+  - `char-glyph` looks a character's glyph up in the atlas;
+  - `surface-char` and `surface-string` read a surface's text;
+  - `compose-surface` copies a surface into the composed grid.
+- **`src/grid.lisp`:** the `surface` structure, which includes the display
+  grid's, with `make-surface` and `resize-surface`; the grid's `atlas` and
+  `palette-slot`; `cell-index`; and the layered API removed.
+- **`src/manifests.lisp`:** `*check-records*` and `check-record`.
+- **`src/panes/function-pane.lisp`:** the pane keeps its atlas and a surface
+  of its size. Its render function is called with the pane and the surface,
+  in the pane's own coordinates, and its flush copies the surface into the
+  grid. `write-pane-string` and `clear-pane-region` write the surface.
+- **`src/panes/workspace.lisp`:** the decoration list is written with
+  `put-glyph`, and `clear-grid` with `fill-cells`.
+- **`src/panes/compositor.lisp`:** the composed grid is made with the atlas.
+- **`src/demo.lisp`:** the scenes are written through the API.
+- **`src/packages.lisp`** and **`lexter.asd`:** the new package and file.
+
+### Tests
+
+A new suite, `surfaces`, in `tests/test-surfaces.lisp`, has 17 tests, with a
+fixture, `with-clean-surface`:
+
+- **Characters:**
+  - a character written with its text;
+  - a character's natural width, and its halves;
+  - an uncovered character;
+  - a string advancing by widths;
+  - an underline.
+- **Cells:**
+  - layers and masks written in order;
+  - a narrow glyph over a wide one, split half to half;
+  - writing over half a pair;
+  - a filled cell.
+- **Composing:**
+  - a surface copied into the grid at its place, with stamps;
+  - a pair cut by the grid's edge;
+  - the two invariants of LEXTER-O27, a cleared layer and a new swatch, as
+    tests of surfaces.
+- **Checks:** a record that breaks an invariant refused while checking, and
+  written without.
+- **Writers:**
+  - a function pane writing and copying its surface;
+  - a pane's string written by codepoint;
+  - the grid keeping no layered API.
+
+The test of the first edition's transparent sides is removed with
+`set-cell-layer`. The scrollback test that a cursor is not drawn now checks
+the cell's background slot, where it checked that the cell was layered.
+
+### Verification
+
+- **The suite.** `(asdf:test-system :lexter)` runs 198 tests and 588 checks:
+  575 pass and 13 fail. The failures are the same as before, those of
+  LEXTER-D72, LEXTER-D73, and LEXTER-D74.
+- **Pixels.** `tools/check-pixel-fixtures.lisp` reproduces every checksum,
+  in both fonts and both orders, and the GPU's stores match.
+- **The demo** runs on the display without error, and its scene, rendered
+  offscreen on the GPU, is the same as at `3371b1b` but in its first row,
+  as above.
+- **The other test systems.** `lexter/mouse-tests` passes, 32 checks;
+  `lexter/origin-tests` gives its same 23 passes and 28 failures.
+- **Loading.** Every system loads with the same style warnings as before.
+
+### Files
+
+Table: Files changed by step 4.
+
+| File | Action | Description |
+|---|---|---|
+| `src/surface.lisp` | **New** | The API, and surfaces composed into the grid |
+| `tests/test-surfaces.lisp` | **New** | The `surfaces` suite |
+| `src/grid.lisp` | Modified | Surfaces; the grid's atlas and palette slot; the layered API removed |
+| `src/manifests.lisp` | Modified | The checks of debugging builds |
+| `src/panes/function-pane.lisp` | Modified | A surface, written by the render function and copied |
+| `src/panes/workspace.lisp` | Modified | Decorations and clears through the API |
+| `src/panes/compositor.lisp` | Modified | The grid made with its atlas |
+| `src/panes/packages.lisp` | Modified | The function pane's surface exported |
+| `src/demo.lisp` | Modified | The scenes through the API |
+| `src/packages.lisp` | Modified | `lexter/surface`; the grid's exports |
+| `lexter.asd` | Modified | The new source and test files |
+| `tests/helpers.lisp` | Modified | The `surfaces` suite and its fixture |
+| `tests/test-grid.lisp` | Modified | The test of transparent sides removed |
+| `tests/test-scrollback.lisp` | Modified | No cursor, by the background slot |
+
+### Outstanding Work
+
+- **A function pane's render function** now takes the pane's surface, in the
+  pane's coordinates, where it took the composed grid. Lexter has no other
+  callers; code outside it that wrote function panes must follow.
+- **Copying by stamp.** `compose-surface` copies every row it is given. A
+  surface's stamps would let it copy only the rows changed since the copy
+  before, if the copies are measured to cost.
+- **Chrome as text,** if selection or screen readers come to need it.
+- **The 3270 pane's writer** and the cursor exchange, which step 5 replaces.
 - **Code references.** The update's references name files and functions
   without a revision; they are pinned once it is committed.

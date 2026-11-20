@@ -356,7 +356,7 @@ that is the pane's backend methods, which already do.
 
 ### LEXTER-D75 — Backends are sized from the screen the handler made
 
-**Status:** Implemented
+**Status:** Accepted
 
 **Context:** `vt-pane-init-screen` sizes the screen from the content area,
 but the PTY and the telnet client are opened at the pane's full size
@@ -372,7 +372,7 @@ but the PTY and the telnet client are opened at the pane's full size
 
 ### LEXTER-D76 — Exports name only what exists, and packages read each other through them
 
-**Status:** Implemented
+**Status:** Accepted
 
 **Context:** Seven exported symbols name nothing, and the model and the VT
 handler read other packages' internals with `::`
@@ -393,7 +393,7 @@ use as keywords in a protocol.
 
 ### LEXTER-D77 — Instance state leaves the globals
 
-**Status:** Implemented
+**Status:** Accepted
 
 **Context:** The compositor copies its `prefix-key` slot into `*prefix-key*`
 and its blink state into `*cursor-blink-on*` on every tick, and the VT
@@ -420,7 +420,7 @@ LEXTER-O42.
 
 ### LEXTER-D78 — Mode state has one home, the handler
 
-**Status:** Implemented
+**Status:** Accepted
 
 **Context:** The screen has a `mode-flags` slot with `set-mode` and
 `get-mode` stubs, while the VT handler keeps the real modes in its own slots
@@ -437,7 +437,7 @@ LEXTER-O42.
 
 ### LEXTER-D79 — Keystrokes are encoded without babel's internals
 
-**Status:** Implemented
+**Status:** Accepted
 
 **Context:** The key path encodes each character through
 `babel::lookup-mapping`, `babel::*string-vector-mappings*`, and
@@ -453,7 +453,7 @@ into the pane's write buffer. It needs no allocation and no library.
 
 ### LEXTER-D80 — Every fix gets a headless regression test
 
-**Status:** Implemented
+**Status:** Accepted
 
 **Context:** The critique reproduced its findings in SBCL with no display,
 and the cell plan's LEXTER-D106 makes the same rule

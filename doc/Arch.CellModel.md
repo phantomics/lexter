@@ -1081,7 +1081,7 @@ it would with grouping off.
 
 ### LEXTER-D113 — Each grid keeps a drawn row for each row, with a change stamp and a clock mask, and dirty rows are told apart from damaged ones
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:** The plan uploads a grid's rows when they change, and records
 which grid it uploaded by an identity or an epoch from one global counter
@@ -1158,7 +1158,7 @@ Table: The fields of a drawn row.
 
 ### LEXTER-D114 — DEC double-size lines are drawn from flags in each cell, which magnify its glyphs two times
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:** DECDWL (`ESC # 6`) makes a line double width, and DECDHL
 (`ESC # 3` and `ESC # 4`) makes it the top or bottom half of double height,
@@ -1223,7 +1223,7 @@ the magnified half, in every format (LEXTER-D81).
 
 ### LEXTER-D115 — A record's bits are spent by the scope of what they hold
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:** After the line size (LEXTER-D114), the common
 flags of byte 2 have bits 22 and 23 left, and tiles claim bit 23
@@ -1264,7 +1264,7 @@ Table: Where a new field belongs, by what it applies to.
 
 ### LEXTER-D116 — Bold is a choice of glyph, from a bold font in the chain
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:** The first edition records SGR 1 as an attribute
 (`src/model.lisp:+attr-bold+@2d4d743`) and offers bold-as-bright, which turns

@@ -38,6 +38,7 @@ Table: Documents in the LEXTER namespace.
 | [LEXTER-0026](Log.WorkspaceRepaint.md) | The Workspace-Switch Repaint: Development Log | Log | project | Accepted | — |
 | [LEXTER-DRAFT-cell-field-format](Survey.CellFieldFormat.md) | Cell Field Format: Survey | Survey | component | Deprecated | renderer |
 | [LEXTER-DRAFT-data-structures-1e](Spec.DataStructures1e.md) | Data Structures, First Edition: Specification | Spec | project | Deprecated | — |
+| [LEXTER-DRAFT-dense-cell-model](Log.DenseCellModel.md) | The Dense Cell Model (Phase 3): Development Log | Log | project | Draft | — |
 | [LEXTER-DRAFT-handler-fixes](Log.HandlerFixes.md) | Host Input, the Scrolling Region, and Terminal Modes: Development Log | Log | project | Draft | — |
 | [LEXTER-DRAFT-mouse-reporting](Log.MouseReporting.md) | Mouse Reporting: Development Log | Log | component | Draft | vt |
 

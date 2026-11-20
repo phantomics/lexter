@@ -601,8 +601,7 @@ can be made there; a workaround in Lexter would duplicate the parser's work.
 
 **Resolution:** 2026-11-20 — accepted, recorded at the steward's direction:
 fixed in cl-vt, which ends an OSC string on BEL as on ST and now exports its
-OSC accessors
-([CLVT-DRAFT-osc-strings](../../../lisp/cl-vt/doc/Log.OscStrings.md)).
+OSC accessors ([CLVT-0001](../../../lisp/cl-vt/doc/Log.OscStrings.md)).
 Lexter has no workaround; its handler reads the OSC string from cl-vt
 ([LEXTER-DRAFT-handler-fixes](Log.HandlerFixes.md)).
 

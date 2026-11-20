@@ -15,7 +15,7 @@ relates-to:
   - LEXTER-0014
   - LEXTER-0020
   - LEXTER-0016
-  - CLVT-DRAFT-osc-strings
+  - CLVT-0001
 cites:
   - title:    "XTerm Control Sequences"
     locator:  "Moy, Gildea, Dickey; https://invisible-island.net/xterm/ctlseqs/ctlseqs.txt, updated for patch #411 (2026-08-23): SGR's indexed and direct colour, ED, EL, TBC, DECSTBM, and Operating System Commands"
@@ -233,7 +233,7 @@ Table: Files changed by the three fixes.
 
 The steward fixed the cl-vt fault that the first Outstanding Work item
 recorded, and cl-vt now exports its OSC accessors
-([CLVT-DRAFT-osc-strings](../../../lisp/cl-vt/doc/Log.OscStrings.md)). This
+([CLVT-0001](../../../lisp/cl-vt/doc/Log.OscStrings.md)). This
 update records Lexter's side: a test of the BEL form, and the handler reading
 the OSC string from cl-vt rather than collecting a copy of its own. It
 answers LEXTER-O44 of the terminal-fixes plan: the fault is fixed in cl-vt,
@@ -245,11 +245,11 @@ Two things in Lexter followed from cl-vt's faults:
 
 - **BEL.** An OSC string ended by BEL was never dispatched, and the output
   after it was taken into the OSC string until the next ESC. cl-vt now ends
-  the string on BEL as on ST (CLVT-DRAFT-osc-strings-D1).
+  the string on BEL as on ST (CLVT-D1).
 - **Bytes above 0x7F.** cl-vt dropped them from OSC strings, so a title
   holding a character beyond ASCII lost it. cl-vt now collects them
-  (CLVT-DRAFT-osc-strings-D2), and leaves their decoding to the consumer
-  (CLVT-DRAFT-osc-strings-D3).
+  (CLVT-D2), and leaves their decoding to the consumer
+  (CLVT-D3).
 
 Lexter's own copy of the OSC string, built from `:osc-put` bytes as Latin-1
 characters, would have shown a UTF-8 character as its bytes, one character
@@ -258,7 +258,7 @@ for each.
 ### Design Decisions
 
 - **cl-vt's buffer, not a copy.** The handler reads the OSC string when it
-  ends, with `cl-vt:vt-parser-osc-bytes` (CLVT-DRAFT-osc-strings-D4), and no
+  ends, with `cl-vt:vt-parser-osc-bytes` (CLVT-D4), and no
   longer collects `:osc-put` bytes. The parser already bounds its buffer, so
   a second bound in Lexter is redundant, and LEXTER-D76's rule against `::`
   is kept.
@@ -282,25 +282,31 @@ for each.
 In `src/vt-handler.lisp`:
 
 - **The accumulator is removed:** the handler's `osc-string` slot and
-  `+max-osc-length+`. `dispatch-action` passes `:osc-start` and `:osc-put`
-  by, and on `:osc-end` calls `handle-osc` with the decoded string.
-- **`%utf8-step`** takes one byte into a UTF-8 decoder whose state it is
-  given, and returns the codepoint the byte completes, if any, with the new
-  state. `handle-print` keeps its state in the handler as before.
-- **`%osc-text`** decodes an OSC string's bytes, through the CP437 table or
-  with `%utf8-step` and a state of its own.
-- **`handle-osc`** takes the decoded string as an argument.
+  `+max-osc-length+`. `src/vt-handler.lisp:dispatch-action@158933b` passes
+  `:osc-start` and `:osc-put` by, and on `:osc-end` calls `handle-osc` with
+  the decoded string.
+- **`src/vt-handler.lisp:%utf8-step@158933b`** takes one byte into a UTF-8
+  decoder whose state it is given, and returns the codepoint the byte
+  completes, if any, with the new state.
+  `src/vt-handler.lisp:handle-print@158933b` keeps its state in the handler
+  as before.
+- **`src/vt-handler.lisp:%osc-text@158933b`** decodes an OSC string's bytes,
+  through the CP437 table or with `%utf8-step` and a state of its own.
+- **`src/vt-handler.lisp:handle-osc@158933b`** takes the decoded string as an
+  argument.
 
 In `tests/test-handler.lisp`, three tests are new and one is changed:
 
-- **`osc-ended-by-bel-is-applied`** (LEXTER-O44): after `ESC ] 0 ; two BEL
-  AB`, the title is `two`, and `A` and `B` are drawn.
-- **`osc-string-is-decoded-as-printed-text-is`:** a title holding U+00E9
-  reads as the host sent it.
-- **`osc-string-cut-within-a-character-drops-it`:** a title of one `x` and
-  600 copies of U+00E9 keeps the 254 that fit in 512 bytes after `0;x`, and
-  drops the one whose second byte is cut.
-- **`long-osc-string-is-bounded`** now asserts the 512-byte limit.
+- **`tests/test-handler.lisp:osc-ended-by-bel-is-applied@158933b`**
+  (LEXTER-O44): after `ESC ] 0 ; two BEL AB`, the title is `two`, and `A`
+  and `B` are drawn.
+- **`tests/test-handler.lisp:osc-string-is-decoded-as-printed-text-is@158933b`:**
+  a title holding U+00E9 reads as the host sent it.
+- **`tests/test-handler.lisp:osc-string-cut-within-a-character-drops-it@158933b`:**
+  a title of one `x` and 600 copies of U+00E9 keeps the 254 that fit in 512
+  bytes after `0;x`, and drops the one whose second byte is cut.
+- **`tests/test-handler.lisp:long-osc-string-is-bounded@158933b`** now
+  asserts the 512-byte limit.
 
 The two decoding tests failed on the handler before the change, with cl-vt's
 fix in place; the BEL test passes on either, since the fix is cl-vt's.
@@ -338,6 +344,5 @@ Table: Files changed by the OSC update.
   build of it, so Lexter loaded the old tables, without the high bytes,
   until cl-vt was rebuilt with `(asdf:load-system :cl-vt :force t)`. A
   machine that built cl-vt during the change may need the same.
-- **Code references.** The update's references name files and functions
-  without a revision; they are pinned to the commit that holds it once it is
-  made.
+- **Code references.** Done: the update's references are pinned to
+  `158933b`, the commit that holds it.

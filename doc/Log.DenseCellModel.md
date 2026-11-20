@@ -8,7 +8,7 @@ language:      en
 status:        Draft
 provenance:
   assistant:   opencode
-  session:     "Phase 3, step 1: the manifests and their accessors (2026-11-20); step 2: the screen as text and styles (2026-11-20); step 3: records in the composed grid (2026-11-20); step 4: the API and surfaces (2026-11-20); step 5: the 3270 pane on a Lexter screen (2026-11-20)"
+  session:     "Phase 3, step 1: the manifests and their accessors (2026-11-20); step 2: the screen as text and styles (2026-11-20); step 3: records in the composed grid (2026-11-20); step 4: the API and surfaces (2026-11-20); step 5: the 3270 pane on a Lexter screen (2026-11-20); step 6: the renderer of records (2026-11-20)"
 relates-to:
   - LEXTER-0017
   - LEXTER-0016
@@ -683,8 +683,8 @@ Table: Files changed by step 3.
 
 - **Stamps on screens** (LEXTER-D113), when partial redraw or a second
   reader needs them.
-- **Uploads by stamp, clock masks, and blink,** with the renderer of step 6,
-  which also removes the adapter and the first edition's instances.
+- **Uploads by stamp, clock masks, and blink.** Done in step 6, which also
+  removes the adapter and the first edition's instances.
 - **The underline from XLFD properties,** when the PCF loader reads them.
 - **Assertions in debugging builds** of the invariants. Done in step 4
   (the update below).
@@ -953,24 +953,29 @@ Choices made while building:
 ### Implementation
 
 - **`src/tn3270/screen.lisp`**, rewritten:
-  - the screen holds `model`, a Lexter screen, beside `field-attrs`,
-    `colors`, and `highlights`;
+  - the screen, `src/tn3270/screen.lisp:tn3270-screen@76ea0b6`, holds `model`,
+    a Lexter screen, beside `field-attrs`, `colors`, and `highlights`;
   - every write goes through the model;
-  - `screen-restyle` gives every cell its style;
+  - `src/tn3270/screen.lisp:screen-restyle@76ea0b6` gives every cell its
+    style;
   - `screen-cursor-address`, `screen-dirty`, and `screen-get-char` read the
     Lexter screen;
   - `screen-erase-char` and `screen-set-field-attr` are new;
   - the colour map moved here from the pane.
 - **`src/tn3270/parser.lisp`:** EUA, Erase All Unprotected, and MF write
-  through the screen's functions, and each stream ends with a restyle.
+  through the screen's functions, and each stream ends with a restyle
+  (`src/tn3270/parser.lisp:process-3270-stream@76ea0b6`).
 - **`src/tn3270/client.lisp`:** Read Modified reads each field's characters
-  from the Lexter screen.
-- **`src/tn3270-pane/tn3270-pane.lisp`:** the flush builds the Lexter screen
+  from the Lexter screen
+  (`src/tn3270/client.lisp:write-modified-fields@76ea0b6`).
+- **`src/tn3270-pane/tn3270-pane.lisp`:** the flush builds the pane's
+  Lexter screen, which
+  `src/tn3270-pane/tn3270-pane.lisp:tn3270-pane-screen@76ea0b6` finds,
   through `flush-to-display`; the pane marks its screen dirty when asked;
   and its keys write through the screen's functions.
 - **`src/model.lisp`:** `make-screen` takes `:scrollback-enabled` and
   `:cursor-blink`, which the VT handler's alternate screen now uses in place
-  of `::`, and `set-cell-style` restyles a cell.
+  of `::`, and `src/model.lisp:set-cell-style@76ea0b6` restyles a cell.
 - **`src/grid.lisp`:** `set-simple-cell` is removed.
 - **`lexter.asd`:** `lexter/tn3270` depends on `lexter`, and `lexter/tests`
   on `lexter/tn3270-pane`.
@@ -1029,7 +1034,214 @@ Table: Files changed by step 5.
 - **Background colours** (XA X'45'), and the character set attribute.
 - **Erase/Write Alternate** still clears without switching to the alternate
   geometry, and double-byte characters are not yet two cells (LEXTER-D117).
-- **The pane's palette slot.** The 3270 pane draws in the default pane
-  slot, as before, until the allocator of step 6 gives it one.
+- **The pane's palette slot.** Done in step 6: the 3270 pane draws in slot
+  0, the default palette (the update below).
+- **Code references.** Done: the update's references are pinned to
+  `76ea0b6`, the commit that holds it.
+
+## Update 2026-11-20 — Step 6: the renderer of records
+
+Step 6 draws the composed grid from its records:
+- **One draw.** The grid is drawn in one instanced call: each instance is one
+  cell, its record the instance's two `uvec4` attributes, and the grid's
+  array of records is the upload buffer (LEXTER-D107, LEXTER-D129).
+- **The shader** follows Drawing a Pixel. It is written by hand and checked
+  against the manifests, pixel for pixel, on the NVIDIA driver and on
+  llvmpipe (LEXTER-D130).
+- **Uploads by stamp.** Only the rows whose change stamps are newer than
+  those the renderer took are uploaded, and each row's clock mask is derived
+  from its records as it is taken (LEXTER-D113).
+- **Palette slots** come from one allocator, and each cell draws in the slot
+  its header word names (LEXTER-D92).
+
+The first edition's instances, its simple and layered shaders, the adapter
+of step 3, and the palette slot that every cell shared are gone.
+
+### Problem
+
+Until this step, the records were turned into the first edition's
+instances each frame and drawn by its two paths: a simple path, and a
+layered one of up to three blended draws. That conversion drew no mask but
+a union cutting one layer, no blink, and no line size. It rebuilt every
+instance every frame, and drew every cell in one palette slot, the focused
+pane's. Terminals took palette slots by hand, or all took slot 1.
+
+### Design Decisions
+
+The decisions are the plan's and the architecture's: LEXTER-D92,
+LEXTER-D94, LEXTER-D107, LEXTER-D110, LEXTER-D113, LEXTER-D114, and
+LEXTER-D130. The steward settled three more before this step was built:
+
+- **A full store gives slot 0.** When every palette slot is taken, a
+  terminal draws in slot 0, the default palette, and its palette changes are
+  not shown until a slot frees. This is an interim rule; what a full store
+  does is the open LEXTER-O50.
+- **Panes with no palette draw in slot 0.** Function panes, chrome, and the
+  3270 pane never change their palette, so they draw in slot 0 and take no
+  slot.
+- **The shader is checked against a reference, pixel by pixel.** A Lisp
+  reference of Drawing a Pixel decides every pixel of a grid of records, and
+  the test rig compares it with the GPU's frame exactly.
+
+Choices made while building:
+
+- **The instance.** Each instance is one record: words 0–3 at location 1
+  and words 4–7 at location 2, read as unsigned integers. The vertex shader
+  places the cell by its instance number in the grid's columns, and passes
+  the record flat. The fragment shader takes the pixel's place in the cell
+  in the atlas's pixels, so that pixel scale is a matter of the quad's size
+  alone.
+- **The shader.** It reads glyphs with `texelFetch`, from the atlas column
+  each glyph word names. It applies the glyph count, the type bits, each
+  mask's operation and reach, each glyph's selector, the blink phase, and
+  the line size with its magnified half, which no writer sets yet
+  (LEXTER-D114). It then takes the topmost covered layer's ink slot, or the
+  background slot, through the swatch and the cell's palette slot. A
+  palette slot beyond the store draws in slot 0. A record of another
+  format, none of which is built yet, is drawn in its background slot
+  (LEXTER-D82).
+- **Uploads.** `plan-record-uploads` decides, without GL, which runs of rows
+  a renderer must upload. It uploads the whole grid when the grid is not the
+  one last drawn or its size has changed, and otherwise the rows whose
+  stamps are newer than those it took. Each renderer keeps its own record of
+  what it took, so readers never clear each other's work. It derives each
+  row's clock mask as it takes the row, so far only the blink bit; writers
+  never write the mask.
+- **The blink phase** is the compositor's cursor clock (LEXTER-D94), given
+  to each frame; the capture of the test rig draws in the on phase.
+- **The allocator** lives with the swatch store, in `lexter/swatches`, and
+  the compositor keeps one the size of its renderer's palette store. A
+  terminal pane takes a slot when its screen is made and gives it back with
+  its swatch range. A pane that names a slot draws in it and takes none.
+  The compositor uploads, by owner, the palette of every pane of the
+  workspace drawn, not only the focused pane's.
+- **The store's size has one home.** `+default-palette-slots+` moves from
+  the renderer to `lexter/swatches`, beside the allocator, and the renderer
+  imports it.
+
+### The shader, checked
+
+`check-record-drawing`, in the test rig, draws a grid of 16 by 3 records in
+a hidden window and compares every pixel, in both blink phases, with
+`reference-pixel-slot` through the swatch and palette stores. The reference
+reads each record through its manifests, not by the shader's arithmetic on
+its words. The grid holds:
+- the worked records of the architecture's Appendices in the plain format;
+- each of the four mask operations, a reach of two layers, and both
+  selectors;
+- a blinking cell;
+- a wide glyph's two halves with a narrow glyph over both;
+- the bottom of a double-height line;
+- an empty solid cell, and a format the renderer does not draw;
+- cells in palette slot 1, with a palette of its own, and in a slot beyond
+  the store;
+- text through the API, and the interim cursor.
+
+In Unifont, it compares 12,288 pixels at pixel scale 1 and 49,152 at scale
+2. All agree on the NVIDIA driver, and on llvmpipe, Mesa 20.3.5 under Xvfb,
+with floating-point traps masked. A reference made to ignore the blink phase
+is caught at the blinking cell, so the comparison is not vacuous. The
+reference is the seed of the CPU renderer of Phase 5 (LEXTER-D111).
+
+### Implementation
+
+- **`src/shaders.lisp`**, rewritten: `+cell-vert+` and `+cell-frag+` replace
+  the simple and layered shaders.
+- **`src/renderer.lisp`:**
+  - one program, and a vertex array of the record's two halves;
+  - `render-frame` takes the blink phase, uploads the records by plan, and
+    draws once;
+  - `upload-palette` takes the slot it uploads to;
+  - `set-active-palette-slot` and the default pane slot are removed.
+- **`src/grid.lisp`:**
+  - `record-upload-state` and `plan-record-uploads`;
+  - the grid's `clock-masks`, and `+clock-blink+`;
+  - the adapter, the instance buffers, and their constants removed.
+- **`src/swatches.lisp`:** `make-palette-slots`, `allocate-palette-slot`,
+  `release-palette-slot`, and `palette-slot-owner`, with
+  `+default-palette-slots+`.
+- **`src/panes/vt-pane.lisp`:** the allocated slot, taken with the screen
+  and given back with the swatch table; `vt-pane-drawn-palette-slot`, which
+  the flush and `pane-palette` report.
+- **`src/panes/compositor.lisp`:** the compositor's `palette-slots` and
+  `palette-slots-of`; `%upload-pane-palettes` for every pane drawn; and the
+  blink phase given to each frame.
+- **`src/tn3270-pane/tn3270-pane.lisp`:** the pane draws in slot 0.
+- **`src/unix-term.lisp`** and **`src/test-rig.lisp`:** the terminal's drawn
+  slot, for the reset's upload and the check of the GPU's stores; the
+  shader's check and its reference.
+- **`tools/check-pixel-fixtures.lisp`:** the new checksum of "cjk" in
+  Terminus.
+
+### Tests
+
+- **Retired:** the grid's two tests of the first edition's instances, and
+  the structural test of LEXTER-O40 that read `build-render-data`.
+- **New in `grid`, 4 tests:**
+  - a new or resized grid taken whole;
+  - only the rows written uploaded again, a test of LEXTER-O40;
+  - two renderers each keeping their own stamps;
+  - a row's clock mask derived from its records.
+- **New in `swatches`, 5 tests:**
+  - slots handed out from 1;
+  - a full store giving slot 0;
+  - a terminal taking and returning its slot;
+  - a pane that names a slot taking none;
+  - a terminal's records naming its slot.
+- **New in `structure`:** the first edition's renderer gone.
+
+### Verification
+
+- **The suite.** `(asdf:test-system :lexter)` runs 213 tests and 645 checks:
+  637 pass and 8 fail. The failures are the same as before, those of
+  LEXTER-D72's negotiation and framing, LEXTER-D73, and LEXTER-D74.
+- **The shader,** checked as above on both drivers and at both scales.
+- **Pixels.** On the NVIDIA driver every fixture keeps its checksum in
+  Unifont, so the new renderer draws what the old one drew, wide glyphs
+  included. In Terminus, "cjk" changes, and only it. Terminus covers no
+  ideographs, and the old renderer stretched the narrow "no glyph" glyph
+  over each one's two cells, drawing the box in the left and the empty
+  reserved column 7 in the right. Each half now names the "no glyph" glyph
+  itself, so the box is drawn in both cells, as LEXTER-D122 and LEXTER-D126
+  have it. The new checksum is recorded with the reason, and the GPU's
+  stores match everywhere.
+- **The demo and the live terminal** run on the display without error, the
+  terminal through its frame loop with an OSC 4 palette change and blinking
+  text.
+- **The other test systems.** `lexter/mouse-tests` passes, 32 checks;
+  `lexter/origin-tests` gives its same 23 passes and 28 failures.
+- **Loading.** Every system loads with the same style warnings as before.
+
+### Files
+
+Table: Files changed by step 6.
+
+| File | Action | Description |
+|---|---|---|
+| `src/shaders.lisp` | Modified | The shader of Drawing a Pixel, in place of the simple and layered shaders |
+| `src/renderer.lisp` | Modified | One draw of the records, uploaded by stamp; palettes by slot |
+| `src/grid.lisp` | Modified | The plan of uploads and clock masks; the adapter removed |
+| `src/swatches.lisp` | Modified | The palette slot allocator and the store's size |
+| `src/panes/vt-pane.lisp` | Modified | A palette slot taken and given back, and drawn in |
+| `src/panes/compositor.lisp` | Modified | The allocator; every pane's palette uploaded; the blink phase |
+| `src/panes/packages.lisp` | Modified | The panes' new exports |
+| `src/tn3270-pane/tn3270-pane.lisp` | Modified | Slot 0 |
+| `src/unix-term.lisp` | Modified | The drawn slot uploaded on reset |
+| `src/test-rig.lisp` | Modified | The shader's check and its reference; the drawn slot |
+| `src/packages.lisp` | Modified | The renderer's, grid's, shaders', and swatches' exports |
+| `tools/check-pixel-fixtures.lisp` | Modified | The new checksum of "cjk" in Terminus |
+| `tests/test-grid.lisp` | Modified | Uploads and clocks, in place of the first edition's instances |
+| `tests/test-swatches.lisp` | Modified | Palette slots |
+| `tests/test-structure.lisp` | Modified | The first edition's renderer gone |
+
+### Outstanding Work
+
+- **LEXTER-O50,** what a full palette store does; slot 0 is the interim
+  rule.
+- **Damage.** Clock masks are derived, but every frame still draws every
+  row; drawing by damage is partial redraw, Phase 6 of the plan.
+- **The cell checksum and the fixtures re-authored** on llvmpipe, step 7.
+  The check of the shader already runs there.
+- **Formats beyond the plain format** in the shader, with Later Formats.
 - **Code references.** The update's references name files and functions
   without a revision; they are pinned once it is committed.

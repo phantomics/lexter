@@ -834,7 +834,7 @@ disagree point to one of them, the shaders, or the uploads.
 
 ### LEXTER-D117 — A character's width is decided by the path that writes it, once, and stored
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:** LEXTER-D98 has the VT handler ask the atlas whether a glyph is
 wide (`src/atlas.lisp:atlas-glyph-wide-p@2d4d743`), and the atlas's wide set
@@ -933,7 +933,7 @@ handler's wide writes (LEXTER-O19) uses them.
 
 ### LEXTER-D118 — History keeps text and styles, and records exist only for the rows on screen
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:** Phase 3 kept scrollback as rows of records. At 32 bytes a cell,
 100,000 lines of 200 columns are about 640 MB; Ghostty compresses pages of
@@ -1017,7 +1017,7 @@ scrollback of records.
 
 ### LEXTER-D119 — The text grid marks every cell a character covers, and a terminal row lies beside it
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:** The characters each cell shows are kept apart from the record,
 in a text grid whose form is LEXTER-O63. The first

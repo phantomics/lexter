@@ -5,7 +5,7 @@ genre:         Plan
 scope:         project
 project:       Lexter
 language:      en
-status:        Implemented
+status:        Accepted
 authors:
   - Andrew Sengul
 approved-by:   Andrew Sengul
@@ -195,7 +195,7 @@ excluded for the single-terminal path.
 
 ### LEXTER-D68 — Host input is checked at the boundary, never trusted against a slot's type
 
-**Status:** Implemented
+**Status:** Accepted
 
 **Context:** `rgb-to-256` returns 256 for the grey (248, 248, 248), SGR
 `38;5;n` stores any n, and `tab-stops` keeps its original length when the
@@ -220,7 +220,7 @@ built.
 
 ### LEXTER-D69 — Autowrap and line feed share one path, which owns the scrolling region
 
-**Status:** Implemented
+**Status:** Accepted
 
 **Context:** Line feed scrolls within the scrolling region, but autowrap
 tests the screen's last row, so wrapping inside a region that ends above it
@@ -278,7 +278,7 @@ of the cell plan's Phase 3.
 
 ### LEXTER-D72 — The TN3270 client follows RFC 2355, and its screen is sized from its geometry
 
-**Status:** Implemented
+**Status:** Accepted
 
 **Context:** The client tests for `DEVICE-TYPE SEND` where RFC 2355 has the
 server send `SEND DEVICE-TYPE`, and answers with `IS`, which only the server
@@ -309,7 +309,7 @@ than the receive buffer does is LEXTER-O43.
 
 ### LEXTER-D73 — The telnet client encodes before escaping, and keeps option state by the Q method
 
-**Status:** Implemented
+**Status:** Accepted
 
 **Context:** `telnet-write-string` masks each character to seven bits before
 testing it for 255, so code 255 goes out as `7F FF`, and the client answers
@@ -334,7 +334,7 @@ request that changes it.
 
 ### LEXTER-D74 — The PTY separates the child's life from the descriptor's
 
-**Status:** Implemented
+**Status:** Accepted
 
 **Context:** `pty-close` does nothing once `alive-p` is false, which
 `pty-read` sets at end of file, so the descriptor is never closed and the
